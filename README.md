@@ -1,7 +1,7 @@
-## nestjs-routing-authorization
+# nestjs-routing-authorization
 A template for basic routing and authorization.
 
-# 📄 Example environment file (.env)
+## 📄 Example environment file (.env)
 ```env
 DB_TYPE='postgres'
 DB_HOST='localhost'
