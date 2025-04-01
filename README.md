@@ -1,4 +1,4 @@
-# nestjs-routing-authorization
+## nestjs-routing-authorization
 A template for basic routing and authorization.
 
 # 📄 Example environment file (.env)
@@ -9,7 +9,7 @@ DB_PORT=5432
 DB_NAME='nestjs-routing-authorization'
 DB_SCHEMA='nestjs-routing-authorization'
 DB_USERNAME='postgres'
-DB_PASSWORD='DB_PASSWORD'
+DB_PASSWORD='password'
 DB_TYPEORM_SYNC=true
 
 SERVER_PORT=4444
