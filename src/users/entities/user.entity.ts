@@ -36,20 +36,20 @@ export class User {
   })
   updatedAt: Date;
 
-  @IsString()
-  @Length(2, 200)
   @IsNotEmpty()
+  @IsString()
+  @Length(2, 50)
   @Column({ unique: true })
   nickname: string;
 
-  @IsEmail()
   @IsNotEmpty()
+  @IsEmail()
   @Column({ unique: true })
   email: string;
 
-  @IsString()
-  @MinLength(8)
   @IsNotEmpty()
+  @IsString()
+  @Length(6, 100)
   @Column({ select: false }) // Исключает поле из выборок по умолчанию (безопасность)
   password: string;
 }
