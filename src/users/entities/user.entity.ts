@@ -52,4 +52,9 @@ export class User {
   @Length(6, 100)
   @Column({ select: false }) // Исключает поле из выборок по умолчанию (безопасность)
   password: string;
+
+  @BeforeInsert()
+  async hashPassword() {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
 }
