@@ -5,6 +5,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { isUniqueConstraintError } from '../utils/isUniqueConstraintError';
 import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -24,8 +25,8 @@ export class UsersService {
       const user = this.usersRepository.create({ ...createUserDto });
       const createdUser = await this.usersRepository.save(user);
       return createdUser;
-    } catch (err) {
-      if (err?.code === '23505') {
+    } catch (err: unknown) {
+      if (isUniqueConstraintError(err)) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
       } else {
         throw new InternalServerErrorException(
@@ -50,12 +51,12 @@ export class UsersService {
       const updatedUser = await queryRunner.manager.save(User, user);
       await queryRunner.commitTransaction();
       return updatedUser;
-    } catch (err) {
+    } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
       }
-      if (err.code === '23505') {
+      if (isUniqueConstraintError(err)) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
       }
       throw new InternalServerErrorException(
@@ -77,7 +78,7 @@ export class UsersService {
       await queryRunner.manager.delete(User, { id: userId });
       await queryRunner.commitTransaction();
       return user;
-    } catch (err) {
+    } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
@@ -94,7 +95,7 @@ export class UsersService {
     try {
       const users = await this.usersRepository.find();
       return users;
-    } catch (err) {
+    } catch {
       throw new InternalServerErrorException(
         ErrTextUsers.INTERNAL_SERVER_ERROR,
       );
@@ -106,7 +107,7 @@ export class UsersService {
       return await this.usersRepository.findOneOrFail({
         where: { id: userId },
       });
-    } catch (err) {
+    } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
       }
@@ -121,7 +122,7 @@ export class UsersService {
       return await this.usersRepository.findOneOrFail({
         where: { nickname: nickname },
       });
-    } catch (err) {
+    } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
       }
