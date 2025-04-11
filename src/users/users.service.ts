@@ -131,4 +131,20 @@ export class UsersService {
       );
     }
   }
+
+  async findUserByEmail(email: string): Promise<User> {
+    try {
+      return await this.usersRepository.findOneOrFail({
+        where: { email: email },
+        select: ['id', 'email', 'password', 'nickname'],
+      });
+    } catch (err: unknown) {
+      if (err instanceof EntityNotFoundError) {
+        throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
+      }
+      throw new InternalServerErrorException(
+        ErrTextUsers.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
