@@ -12,7 +12,7 @@ import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
-    ConfigModule, 
+    ConfigModule,
     UsersModule,
     PassportModule,
     JwtModule.registerAsync({
