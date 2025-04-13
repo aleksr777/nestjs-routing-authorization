@@ -43,9 +43,9 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('nickname/:nickname')
-  async getUserByNickname(@Param('nickname') nickname: string) {
-    return this.usersService.findUserByNickname(nickname);
+  @Get('name/:name')
+  async getUserByname(@Param('name') name: string) {
+    return this.usersService.findUserByname(name);
   }
 
   @UseGuards(JwtAuthGuard)

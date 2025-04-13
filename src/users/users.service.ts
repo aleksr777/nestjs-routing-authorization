@@ -117,10 +117,10 @@ export class UsersService {
     }
   }
 
-  async findUserByNickname(nickname: string): Promise<User> {
+  async findUserByname(name: string): Promise<User> {
     try {
       return await this.usersRepository.findOneOrFail({
-        where: { nickname: nickname },
+        where: { name: name },
       });
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
@@ -136,7 +136,7 @@ export class UsersService {
     try {
       return await this.usersRepository.findOneOrFail({
         where: { email: email },
-        select: ['id', 'email', 'password', 'nickname'],
+        select: ['id', 'email', 'password', 'name'],
       });
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {

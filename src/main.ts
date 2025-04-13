@@ -21,7 +21,7 @@ async function bootstrap() {
 
   const serverPort = configService.get<number>('SERVER_PORT');
   if (!serverPort) {
-    throw new Error('Server port is not defined!');
+    throw new Error('❌ SERVER_PORT is not defined!');
   }
 
   // Запуск приложения

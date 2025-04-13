@@ -35,7 +35,7 @@ export class User {
   @IsString()
   @Length(2, 50)
   @Column({ unique: true })
-  nickname: string;
+  name: string;
 
   @IsNotEmpty()
   @IsEmail()
