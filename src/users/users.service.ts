@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
-  ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -57,7 +56,12 @@ export class UsersService {
       });
       const updatedUser = await queryRunner.manager.save(User, user);
       await queryRunner.commitTransaction();
-      return updatedUser;
+      const result = {
+        id: updatedUser.id,
+        nickname: updatedUser.nickname,
+        email: user.email,
+      };
+      return result;
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       if (err instanceof EntityNotFoundError) {
@@ -76,9 +80,6 @@ export class UsersService {
 
   async removeUser(userId: number, ownId: number) {
     verifyOwner(userId, ownId, ErrTextUsers.ACCESS_DENIED);
-    if (userId !== ownId) {
-      throw new ForbiddenException('You can only update your own profile');
-    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
