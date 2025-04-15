@@ -1,6 +1,6 @@
 import { QueryFailedError } from 'typeorm';
 
-export function isUniqueConstraintError(
+export function isUniqueError(
   error: unknown,
 ): error is QueryFailedError & { code: string } {
   return (

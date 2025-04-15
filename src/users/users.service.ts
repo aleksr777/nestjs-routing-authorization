@@ -2,15 +2,17 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { isUniqueConstraintError } from '../utils/isUniqueConstraintError';
+import { isUniqueError } from '../utils/is-unique-error';
 import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 import { ErrTextUsers } from '../constants/error-messages';
+import { verifyOwner } from '../utils/verify-owner';
 
 @Injectable()
 export class UsersService {
@@ -26,7 +28,7 @@ export class UsersService {
       const createdUser = await this.usersRepository.save(user);
       return createdUser;
     } catch (err: unknown) {
-      if (isUniqueConstraintError(err)) {
+      if (isUniqueError(err)) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
       } else {
         throw new InternalServerErrorException(
@@ -36,7 +38,12 @@ export class UsersService {
     }
   }
 
-  async updateUser(userId: number, updateUserDto: UpdateUserDto) {
+  async updateUser(
+    userId: number,
+    ownId: number,
+    updateUserDto: UpdateUserDto,
+  ) {
+    verifyOwner(userId, ownId, ErrTextUsers.ACCESS_DENIED);
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -56,7 +63,7 @@ export class UsersService {
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
       }
-      if (isUniqueConstraintError(err)) {
+      if (isUniqueError(err)) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
       }
       throw new InternalServerErrorException(
@@ -67,17 +74,20 @@ export class UsersService {
     }
   }
 
-  async removeUser(userId: number) {
+  async removeUser(userId: number, ownId: number) {
+    verifyOwner(userId, ownId, ErrTextUsers.ACCESS_DENIED);
+    if (userId !== ownId) {
+      throw new ForbiddenException('You can only update your own profile');
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      const user = await queryRunner.manager.findOneOrFail(User, {
+      await queryRunner.manager.findOneOrFail(User, {
         where: { id: userId },
       });
       await queryRunner.manager.delete(User, { id: userId });
       await queryRunner.commitTransaction();
-      return user;
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       if (err instanceof EntityNotFoundError) {
@@ -93,7 +103,9 @@ export class UsersService {
 
   async findAllUsers(): Promise<User[]> {
     try {
-      const users = await this.usersRepository.find();
+      const users = await this.usersRepository.find({
+        select: ['id', 'nickname'],
+      });
       return users;
     } catch {
       throw new InternalServerErrorException(
@@ -104,9 +116,11 @@ export class UsersService {
 
   async findUserById(userId: number): Promise<User> {
     try {
-      return await this.usersRepository.findOneOrFail({
+      const user = await this.usersRepository.findOneOrFail({
         where: { id: userId },
+        select: ['id', 'nickname'],
       });
+      return user;
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
@@ -117,11 +131,13 @@ export class UsersService {
     }
   }
 
-  async findUserByname(name: string): Promise<User> {
+  async findUserByNickname(nickname: string): Promise<User> {
     try {
-      return await this.usersRepository.findOneOrFail({
-        where: { name: name },
+      const user = await this.usersRepository.findOneOrFail({
+        where: { nickname: nickname },
+        select: ['id', 'nickname'],
       });
+      return user;
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
@@ -134,10 +150,11 @@ export class UsersService {
 
   async findUserByEmail(email: string): Promise<User> {
     try {
-      return await this.usersRepository.findOneOrFail({
+      const user = await this.usersRepository.findOneOrFail({
         where: { email: email },
-        select: ['id', 'email', 'password', 'name'],
+        select: ['id', 'email', 'password', 'nickname'],
       });
+      return user;
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
