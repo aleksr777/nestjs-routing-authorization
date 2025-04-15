@@ -34,7 +34,6 @@ export class UsersController {
     @Param('id') userId: string,
     @Request() req: { user: JwtPayload },
   ) {
-    console.log(req.user);
     const ownId = req.user.sub;
     return this.usersService.removeUser(+userId, ownId);
   }

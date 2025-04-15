@@ -31,7 +31,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: { id: payload.sub },
       select: ['id', 'email'],
     });
-    console.log(user);
     if (!user) {
       throw new UnauthorizedException(ErrTextUsers.UNAUTHORIZED_MESSAGE);
     }
