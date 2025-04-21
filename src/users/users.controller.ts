@@ -5,11 +5,13 @@ import {
   Request,
   Patch,
   Param,
+  Query,
   Delete,
   UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtPayload } from '../types/jwt-payload.type';
 
@@ -38,20 +40,13 @@ export class UsersController {
     return this.usersService.removeUser(+userId, ownId);
   }
 
-  @Get('all')
-  async getAllUsers() {
-    return this.usersService.findAllUsers();
-  }
-
   @UseGuards(JwtAuthGuard)
-  @Get(':id')
-  async getUserById(@Param('id') userId: string) {
-    return this.usersService.findUserById(+userId);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('nickname/:nickname')
-  async getUserByNickname(@Param('nickname') nickname: string) {
-    return this.usersService.findUserByNickname(nickname);
+  @Get()
+  async getUsersQuery(@Query() query: GetUsersQueryDto) {
+    return this.usersService.getUsersQuery(
+      query.limit,
+      query.offset,
+      query.nickname,
+    );
   }
 }

@@ -107,47 +107,25 @@ export class UsersService {
     }
   }
 
-  async findAllUsers(): Promise<User[]> {
+  async getUsersQuery(
+    limit: number,
+    offset: number,
+    nickname?: string,
+  ): Promise<User[]> {
     try {
-      const users = await this.usersRepository.find({
-        select: ['id', 'nickname'],
-      });
+      const query = this.usersRepository
+        .createQueryBuilder('user')
+        .select(['user.id', 'user.nickname'])
+        .take(limit)
+        .skip(offset);
+      if (nickname) {
+        query.where('user.nickname ILIKE :nickname', {
+          nickname: `%${nickname}%`,
+        });
+      }
+      const users = await query.getMany();
       return users;
     } catch {
-      throw new InternalServerErrorException(
-        ErrTextUsers.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  async findUserById(userId: number): Promise<User> {
-    try {
-      const user = await this.usersRepository.findOneOrFail({
-        where: { id: userId },
-        select: ['id', 'nickname'],
-      });
-      return user;
-    } catch (err: unknown) {
-      if (err instanceof EntityNotFoundError) {
-        throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
-      }
-      throw new InternalServerErrorException(
-        ErrTextUsers.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  async findUserByNickname(nickname: string): Promise<User> {
-    try {
-      const user = await this.usersRepository.findOneOrFail({
-        where: { nickname: nickname },
-        select: ['id', 'nickname'],
-      });
-      return user;
-    } catch (err: unknown) {
-      if (err instanceof EntityNotFoundError) {
-        throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
-      }
       throw new InternalServerErrorException(
         ErrTextUsers.INTERNAL_SERVER_ERROR,
       );
