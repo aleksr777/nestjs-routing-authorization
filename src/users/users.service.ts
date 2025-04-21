@@ -3,7 +3,9 @@ import {
   NotFoundException,
   ConflictException,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUniqueError } from '../utils/is-unique-error';
 import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
@@ -50,6 +52,9 @@ export class UsersService {
       await queryRunner.manager.findOneOrFail(User, {
         where: { id: userId },
       });
+      if (updateUserDto.password) {
+        updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
+      }
       const user = this.usersRepository.create({
         id: userId,
         ...updateUserDto,
@@ -149,7 +154,7 @@ export class UsersService {
     }
   }
 
-  async findUserByEmail(email: string): Promise<User> {
+  async checkUserByEmail(email: string): Promise<User> {
     try {
       const user = await this.usersRepository.findOneOrFail({
         where: { email: email },
@@ -158,7 +163,7 @@ export class UsersService {
       return user;
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
-        throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
+        throw new UnauthorizedException(ErrTextUsers.AUTH_FAILED_EMAIL);
       }
       throw new InternalServerErrorException(
         ErrTextUsers.INTERNAL_SERVER_ERROR,

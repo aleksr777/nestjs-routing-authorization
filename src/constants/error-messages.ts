@@ -4,4 +4,5 @@ export enum ErrTextUsers {
   INTERNAL_SERVER_ERROR = 'Internal server error!',
   ACCESS_DENIED = 'The current user has insufficient access rights!',
   UNAUTHORIZED_MESSAGE = 'User is not authorized',
+  AUTH_FAILED_EMAIL = 'Incorrect email or password',
 }
