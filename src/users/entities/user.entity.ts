@@ -1,4 +1,3 @@
-import * as bcrypt from 'bcrypt';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -6,12 +5,21 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { IsEmail, IsString, Length, IsNotEmpty } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  Length,
+  IsNotEmpty,
+  IsOptional,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 
 @Entity()
 export class User {
   @PrimaryGeneratedColumn()
-  // Автоинкрементный первичный ключ (стандартный подход для ID)
+  // Автоинкрементный первичный ключ
   id: number;
 
   @CreateDateColumn({
@@ -48,7 +56,21 @@ export class User {
   @Column({ select: false }) // Исключает поле из выборок по умолчанию (безопасность)
   password: string;
 
-  async validatePassword(password: string): Promise<boolean> {
-    return bcrypt.compare(password, this.password);
-  }
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(150)
+  @Column({ nullable: true }) // В БД запишется NULL, если значение не указано
+  age: number;
+
+  @IsOptional()
+  @IsString()
+  @Column({ nullable: true })
+  gender: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  @Column({ nullable: true })
+  about: string;
 }

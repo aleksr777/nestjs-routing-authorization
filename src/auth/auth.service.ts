@@ -4,7 +4,6 @@ import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
-import { PublicUser } from '../types/public-user.type';
 import { ErrTextUsers } from '../constants/error-messages';
 
 @Injectable()
@@ -14,7 +13,7 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(email: string, pass: string): Promise<PublicUser | null> {
+  async validateUser(email: string, pass: string) {
     const user = await this.usersService.checkUserByEmail(email);
     const isPasswordValid = await bcrypt.compare(pass, user.password);
     if (!isPasswordValid) {
@@ -22,8 +21,6 @@ export class AuthService {
     }
     return {
       id: user.id,
-      nickname: user.nickname,
-      email: user.email,
     };
   }
 

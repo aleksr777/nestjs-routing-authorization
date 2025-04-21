@@ -14,6 +14,10 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 import { ErrTextUsers } from '../constants/error-messages';
 import { verifyOwner } from '../utils/verify-owner';
+import {
+  USER_PUBLIC_FIELDS,
+  USER_AUTH_FIELDS,
+} from '../constants/user-select-fields';
 
 @Injectable()
 export class UsersService {
@@ -115,7 +119,7 @@ export class UsersService {
     try {
       const query = this.usersRepository
         .createQueryBuilder('user')
-        .select(['user.id', 'user.nickname'])
+        .select(USER_PUBLIC_FIELDS.map((f) => `user.${f}`))
         .take(limit)
         .skip(offset);
       if (nickname) {
@@ -136,7 +140,7 @@ export class UsersService {
     try {
       const user = await this.usersRepository.findOneOrFail({
         where: { email: email },
-        select: ['id', 'email', 'password', 'nickname'],
+        select: [...USER_AUTH_FIELDS],
       });
       return user;
     } catch (err: unknown) {
