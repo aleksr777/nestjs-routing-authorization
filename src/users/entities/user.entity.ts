@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import {
   IsEmail,
+  IsPhoneNumber,
   IsString,
   Length,
   IsNotEmpty,
@@ -57,10 +58,18 @@ export class User {
   password: string;
 
   @IsOptional()
+  @IsPhoneNumber()
+  @Column({
+    nullable: true, // В БД запишется NULL, если значение не указано
+    unique: true,
+  })
+  phoneNumber?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   @Max(150)
-  @Column({ nullable: true }) // В БД запишется NULL, если значение не указано
+  @Column({ nullable: true })
   age: number;
 
   @IsOptional()

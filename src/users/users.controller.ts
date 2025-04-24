@@ -4,7 +4,6 @@ import {
   Body,
   Request,
   Patch,
-  Param,
   Query,
   Delete,
   UseGuards,
@@ -20,24 +19,27 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @UseGuards(JwtAuthGuard)
-  @Patch(':id')
-  async updateUser(
-    @Param('id') userId: string,
+  @Get('me')
+  async getCurrentProfile(@Request() req: { user: JwtPayload }) {
+    const ownId = req.user.sub;
+    return this.usersService.getCurrentProfile(ownId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('me')
+  async updateCurrentUser(
     @Body() updateUserDto: UpdateUserDto,
     @Request() req: { user: JwtPayload },
   ) {
     const ownId = req.user.sub;
-    return this.usersService.updateUser(+userId, ownId, updateUserDto);
+    return this.usersService.updateCurrentUser(ownId, updateUserDto);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Delete(':id')
-  async deleteUser(
-    @Param('id') userId: string,
-    @Request() req: { user: JwtPayload },
-  ) {
+  @Delete('me')
+  async removeCurrentUser(@Request() req: { user: JwtPayload }) {
     const ownId = req.user.sub;
-    return this.usersService.removeUser(+userId, ownId);
+    return this.usersService.removeCurrentUser(ownId);
   }
 
   @UseGuards(JwtAuthGuard)

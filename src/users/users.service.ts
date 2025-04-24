@@ -13,9 +13,9 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 import { ErrTextUsers } from '../constants/error-messages';
-import { verifyOwner } from '../utils/verify-owner';
 import {
   USER_PUBLIC_FIELDS,
+  USER_PROFILE_FIELDS,
   USER_AUTH_FIELDS,
 } from '../constants/user-select-fields';
 
@@ -43,24 +43,36 @@ export class UsersService {
     }
   }
 
-  async updateUser(
-    userId: number,
-    ownId: number,
-    updateUserDto: UpdateUserDto,
-  ) {
-    verifyOwner(userId, ownId, ErrTextUsers.ACCESS_DENIED);
+  async getCurrentProfile(ownId: number): Promise<Partial<User>> {
+    try {
+      const user = await this.usersRepository.findOneOrFail({
+        where: { id: ownId },
+        select: [...USER_PROFILE_FIELDS],
+      });
+      return user;
+    } catch (err: unknown) {
+      if (err instanceof EntityNotFoundError) {
+        throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
+      }
+      throw new InternalServerErrorException(
+        ErrTextUsers.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async updateCurrentUser(ownId: number, updateUserDto: UpdateUserDto) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
       await queryRunner.manager.findOneOrFail(User, {
-        where: { id: userId },
+        where: { id: ownId },
       });
       if (updateUserDto.password) {
         updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
       }
       const user = this.usersRepository.create({
-        id: userId,
+        id: ownId,
         ...updateUserDto,
       });
       const updatedUser = await queryRunner.manager.save(User, user);
@@ -87,16 +99,15 @@ export class UsersService {
     }
   }
 
-  async removeUser(userId: number, ownId: number) {
-    verifyOwner(userId, ownId, ErrTextUsers.ACCESS_DENIED);
+  async removeCurrentUser(ownId: number) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
       await queryRunner.manager.findOneOrFail(User, {
-        where: { id: userId },
+        where: { id: ownId },
       });
-      await queryRunner.manager.delete(User, { id: userId });
+      await queryRunner.manager.delete(User, { id: ownId });
       await queryRunner.commitTransaction();
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
