@@ -98,4 +98,11 @@ export class User {
     type: 'text',
   })
   about?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 512,
+    nullable: true,
+  })
+  refreshToken?: string;
 }

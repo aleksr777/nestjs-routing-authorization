@@ -12,7 +12,11 @@ import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
-import { ErrTextUsers } from '../constants/error-messages';
+import {
+  ErrTextAuth,
+  ErrTextUsers,
+  textServerError,
+} from '../constants/error-messages';
 import {
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
@@ -36,9 +40,7 @@ export class UsersService {
       if (isUniqueError(err)) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
       } else {
-        throw new InternalServerErrorException(
-          ErrTextUsers.INTERNAL_SERVER_ERROR,
-        );
+        throw new InternalServerErrorException(textServerError);
       }
     }
   }
@@ -54,9 +56,7 @@ export class UsersService {
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
       }
-      throw new InternalServerErrorException(
-        ErrTextUsers.INTERNAL_SERVER_ERROR,
-      );
+      throw new InternalServerErrorException(textServerError);
     }
   }
 
@@ -91,9 +91,7 @@ export class UsersService {
       if (isUniqueError(err)) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
       }
-      throw new InternalServerErrorException(
-        ErrTextUsers.INTERNAL_SERVER_ERROR,
-      );
+      throw new InternalServerErrorException(textServerError);
     } finally {
       await queryRunner.release();
     }
@@ -114,9 +112,7 @@ export class UsersService {
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
       }
-      throw new InternalServerErrorException(
-        ErrTextUsers.INTERNAL_SERVER_ERROR,
-      );
+      throw new InternalServerErrorException(textServerError);
     } finally {
       await queryRunner.release();
     }
@@ -141,9 +137,7 @@ export class UsersService {
       const users = await query.getMany();
       return users;
     } catch {
-      throw new InternalServerErrorException(
-        ErrTextUsers.INTERNAL_SERVER_ERROR,
-      );
+      throw new InternalServerErrorException(textServerError);
     }
   }
 
@@ -156,11 +150,37 @@ export class UsersService {
       return user;
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
-        throw new UnauthorizedException(ErrTextUsers.AUTH_FAILED_EMAIL);
+        throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
       }
-      throw new InternalServerErrorException(
-        ErrTextUsers.INTERNAL_SERVER_ERROR,
-      );
+      throw new InternalServerErrorException(textServerError);
     }
+  }
+
+  async saveRefreshToken(userId: number, refreshToken: string) {
+    await this.usersRepository.update(userId, { refreshToken });
+  }
+
+  async removeRefreshToken(userId: number) {
+    await this.usersRepository.update(userId, {
+      refreshToken: null as unknown as string,
+    });
+  }
+
+  async getUserIfRefreshTokenMatches(refreshToken: string, userId: number) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'refreshToken'],
+    });
+
+    if (!user || !user.refreshToken) {
+      throw new UnauthorizedException();
+    }
+
+    const isRefreshTokenMatching = refreshToken === user.refreshToken;
+    if (!isRefreshTokenMatching) {
+      throw new UnauthorizedException();
+    }
+
+    return user;
   }
 }
