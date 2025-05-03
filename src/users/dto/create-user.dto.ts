@@ -3,8 +3,6 @@ import {
   IsEmail,
   IsPhoneNumber,
   Length,
-  MinLength,
-  MaxLength,
   IsOptional,
   IsInt,
   Min,
@@ -13,17 +11,15 @@ import {
 
 export class CreateUserDto {
   @IsString()
-  @MinLength(2)
-  @MaxLength(50)
-  nickname: string;
+  @Length(2, 50)
+  nickname!: string;
 
   @IsEmail()
-  email: string;
+  email!: string;
 
   @IsString()
-  @MinLength(6)
-  @MaxLength(100)
-  password: string;
+  @Length(8, 100)
+  password!: string;
 
   @IsOptional()
   @IsPhoneNumber()
@@ -41,6 +37,6 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsString()
-  @Length(0, 500)
+  @Length(0, 1000)
   about?: string;
 }
