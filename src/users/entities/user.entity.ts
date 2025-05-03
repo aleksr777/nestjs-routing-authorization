@@ -20,48 +20,56 @@ import {
 @Entity()
 export class User {
   @PrimaryGeneratedColumn()
-  // Автоинкрементный первичный ключ
-  id: number;
+  id!: number;
 
   @CreateDateColumn({
-    // Автоматически задает дату создания записи
     type: 'timestamp',
-    name: 'createdAt',
-    default: () => 'LOCALTIMESTAMP',
+    name: 'created_at',
+    default: () => 'CURRENT_TIMESTAMP',
   })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({
-    //Автоматически обновляет дату при изменении записи
     type: 'timestamp',
-    name: 'updatedAt',
-    default: () => 'LOCALTIMESTAMP',
+    name: 'updated_at',
+    default: () => 'CURRENT_TIMESTAMP',
     onUpdate: 'CURRENT_TIMESTAMP',
   })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @IsNotEmpty()
   @IsString()
   @Length(2, 50)
-  @Column({ unique: true })
-  nickname: string;
+  @Column({
+    unique: true,
+    length: 50,
+  })
+  nickname!: string;
 
   @IsNotEmpty()
   @IsEmail()
-  @Column({ unique: true })
-  email: string;
+  @Column({
+    unique: true,
+    length: 255,
+  })
+  email!: string;
 
   @IsNotEmpty()
   @IsString()
-  @Length(6, 100)
-  @Column({ select: false }) // Исключает поле из выборок по умолчанию (безопасность)
-  password: string;
+  @Length(8, 100)
+  @Column({
+    select: false,
+    length: 100,
+  })
+  password!: string;
 
   @IsOptional()
   @IsPhoneNumber()
   @Column({
-    nullable: true, // В БД запишется NULL, если значение не указано
+    nullable: true,
     unique: true,
+    length: 20,
+    name: 'phone_number',
   })
   phoneNumber?: string;
 
@@ -69,17 +77,26 @@ export class User {
   @IsInt()
   @Min(0)
   @Max(150)
-  @Column({ nullable: true })
-  age: number;
+  @Column({
+    nullable: true,
+    type: 'smallint',
+  })
+  age?: number;
 
   @IsOptional()
   @IsString()
-  @Column({ nullable: true })
-  gender: string;
+  @Column({
+    nullable: true,
+    length: 20,
+  })
+  gender?: string;
 
   @IsOptional()
   @IsString()
-  @Length(0, 500)
-  @Column({ nullable: true })
-  about: string;
+  @Length(0, 1000)
+  @Column({
+    nullable: true,
+    type: 'text',
+  })
+  about?: string;
 }
