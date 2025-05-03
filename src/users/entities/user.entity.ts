@@ -24,30 +24,20 @@ export class User {
 
   @CreateDateColumn({
     type: 'timestamp',
-    name: 'created_at',
     default: () => 'CURRENT_TIMESTAMP',
   })
   createdAt!: Date;
 
   @UpdateDateColumn({
     type: 'timestamp',
-    name: 'updated_at',
     default: () => 'CURRENT_TIMESTAMP',
     onUpdate: 'CURRENT_TIMESTAMP',
   })
   updatedAt!: Date;
 
   @IsNotEmpty()
-  @IsString()
-  @Length(2, 50)
-  @Column({
-    unique: true,
-    length: 50,
-  })
-  nickname!: string;
-
-  @IsNotEmpty()
   @IsEmail()
+  @Length(6, 255)
   @Column({
     unique: true,
     length: 255,
@@ -64,12 +54,21 @@ export class User {
   password!: string;
 
   @IsOptional()
+  @IsString()
+  @Length(2, 50)
+  @Column({
+    nullable: true,
+    unique: true,
+    length: 50,
+  })
+  nickname?: string;
+
+  @IsOptional()
   @IsPhoneNumber()
   @Column({
     nullable: true,
     unique: true,
     length: 20,
-    name: 'phone_number',
   })
   phoneNumber?: string;
 

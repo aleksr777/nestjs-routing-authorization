@@ -6,13 +6,13 @@ export class GetUsersQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  limit?: number;
+  limit: number = 1;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
-  offset?: number;
+  offset: number = 0;
 
   @IsOptional()
   @IsString()
