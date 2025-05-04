@@ -1,4 +1,6 @@
 export enum ErrTextAuth {
+  TOKEN_EXPIRED = 'Token has expired',
+  INVALID_TOKEN = 'Invalid authentication token',
   INVALID_TOKEN_MISSING_EXP = 'Invalid token: missing expiration time',
   INVALID_REFRESH_TOKEN = 'Invalid refresh token',
   INVALID_EMAIL_OR_PASSWORD = 'Invalid email or password',
@@ -10,6 +12,7 @@ export enum ErrTextUsers {
   CONFLICT_USER_EXISTS = 'A user with such unique data already exists in the database!',
   ACCESS_DENIED = 'The current user has insufficient access rights!',
   UNAUTHORIZED = 'User is not authorized',
+  USER_UPDATE_FAILED = 'Failed to update user data',
 }
 
 export const textServerError = 'Internal server error!';

@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   InternalServerErrorException,
+  ConflictException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
@@ -10,7 +11,11 @@ import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { TokenPayloadDto } from './dto/token-payload.dto';
-import { ErrTextAuth, textServerError } from '../constants/error-messages';
+import {
+  ErrTextAuth,
+  ErrTextUsers,
+  textServerError,
+} from '../constants/error-messages';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from '../types/jwt-payload.type';
 
@@ -30,20 +35,30 @@ export class AuthService {
         throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
       }
       return { id: user.id };
-    } catch {
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new InternalServerErrorException(textServerError);
     }
   }
 
   private generateTokens(user: User): TokenPayloadDto {
-    const payload: JwtPayload = {
+    const payloadData = {
       sub: user.id,
       email: user.email,
-      exp: 0, // Will be overwritten during signing
     };
-    const accessToken = this.jwtService.sign(payload);
+    const accessToken = this.jwtService.sign(
+      { ...payloadData },
+      {
+        expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRES_IN'),
+      },
+    );
     const refreshToken = this.jwtService.sign(
-      { ...payload, refreshTokenId: this.generateTokenId() },
+      {
+        ...payloadData,
+        refreshTokenId: this.generateTokenId(),
+      },
       {
         secret: this.configService.get<string>('JWT_SECRET'),
         expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN'),
@@ -75,7 +90,8 @@ export class AuthService {
       const tokens = this.generateTokens(user);
       await this.usersService.saveRefreshToken(user.id, tokens.refreshToken);
       return tokens;
-    } catch {
+    } catch (error) {
+      console.error('Login error:', error);
       throw new InternalServerErrorException(textServerError);
     }
   }
@@ -90,7 +106,11 @@ export class AuthService {
       const tokens = this.generateTokens(user);
       await this.usersService.saveRefreshToken(user.id, tokens.refreshToken);
       return tokens;
-    } catch {
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
+      }
+      console.error('Registration error:', error);
       throw new InternalServerErrorException(textServerError);
     }
   }
@@ -98,7 +118,8 @@ export class AuthService {
   async logout(userId: number): Promise<void> {
     try {
       await this.usersService.removeRefreshToken(userId);
-    } catch {
+    } catch (error) {
+      console.error('Logout error:', error);
       throw new InternalServerErrorException(textServerError);
     }
   }
@@ -118,8 +139,16 @@ export class AuthService {
       const tokens = this.generateTokens(user);
       await this.usersService.saveRefreshToken(user.id, tokens.refreshToken);
       return tokens;
-    } catch (err: unknown) {
-      if (err instanceof UnauthorizedException) {
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === 'TokenExpiredError') {
+          throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
+        }
+        if (error.name === 'JsonWebTokenError') {
+          throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
+        }
+      }
+      if (error instanceof UnauthorizedException) {
         throw new UnauthorizedException(ErrTextAuth.REFRESH_TOKEN_MISMATCH);
       }
       throw new InternalServerErrorException(textServerError);
