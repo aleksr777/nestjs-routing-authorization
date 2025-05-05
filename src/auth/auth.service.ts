@@ -124,7 +124,9 @@ export class AuthService {
     }
   }
 
-  async refreshTokens(refreshToken: string): Promise<TokenPayloadDto> {
+  async refreshTokens(authHeader: string): Promise<TokenPayloadDto> {
+    // Забираем "Bearer <token>"
+    const refreshToken = authHeader?.replace(/^Bearer\s+/i, '');
     if (!refreshToken) {
       throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
     }
