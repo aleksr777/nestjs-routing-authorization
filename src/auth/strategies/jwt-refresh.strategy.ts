@@ -1,9 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
+import {
+  Strategy,
+  ExtractJwt,
+  StrategyOptionsWithoutRequest,
+} from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { AuthService } from '../auth.service';
-import { TokenPayloadDto } from '../dto/token-payload.dto';
+import { UsersService } from '../../users/users.service';
+import { JwtPayload } from '../../types/jwt-payload.type';
 
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
@@ -11,31 +15,24 @@ export class JwtRefreshStrategy extends PassportStrategy(
   'jwt-refresh',
 ) {
   constructor(
-    private readonly config: ConfigService,
-    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+    private readonly usersService: UsersService,
   ) {
+    const secret = configService.get<string>('JWT_SECRET');
+    if (!secret) {
+      throw new Error('❌ JWT_SECRET is not defined!');
+    }
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: config.get<string>('JWT_REFRESH_SECRET'),
-      passReqToCallback: false,
       ignoreExpiration: false,
+      secretOrKey: secret,
       algorithms: ['HS256'],
-    });
+    } as StrategyOptionsWithoutRequest);
   }
 
-  async validate(payload: TokenPayloadDto) {
-    // Проверяем, что в токене действительно тип — Refresh
-    if (payload.tokenType !== 'refresh') {
-      throw new UnauthorizedException('Invalid token type');
-    }
-    // Дополнительная валидация — сверяем токен с тем, что хранится в БД
-    const user = await this.authService.getUserIfRefreshTokenMatches(
-      payload.sub,
-      payload.refreshTokenHash,
-    );
-    if (!user) {
-      throw new UnauthorizedException('Refresh token revoked');
-    }
-    return { userId: payload.sub, email: payload.email };
+  validate(payload: JwtPayload) {
+    // вернём объект, который попадёт в req.user для RefreshRequest
+    return { id: payload.sub, email: payload.email };
   }
 }
