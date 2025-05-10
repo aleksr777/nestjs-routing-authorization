@@ -15,9 +15,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     @InjectRepository(User)
     private userRepository: Repository<User>,
   ) {
-    const secret = configService.get<string>('JWT_SECRET');
+    const secret = configService.get<string>('JWT_ACCESS_SECRET');
     if (!secret) {
-      throw new Error('❌ JWT_SECRET is not defined!');
+      throw new Error('JWT_ACCESS_SECRET is not defined!');
     }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),

@@ -18,9 +18,9 @@ export class JwtRefreshStrategy extends PassportStrategy(
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
   ) {
-    const secret = configService.get<string>('JWT_SECRET');
+    const secret = configService.get<string>('JWT_REFRESH_SECRET');
     if (!secret) {
-      throw new Error('❌ JWT_SECRET is not defined!');
+      throw new Error('JWT_REFRESH_SECRET is not defined!');
     }
 
     super({

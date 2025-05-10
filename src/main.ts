@@ -16,6 +16,10 @@ async function bootstrap() {
     'DB_USERNAME',
     'DB_PASSWORD',
     'DB_TYPEORM_SYNC',
+    'JWT_ACCESS_SECRET',
+    'JWT_REFRESH_SECRET',
+    'JWT_ACCESS_EXPIRES_IN',
+    'JWT_REFRESH_EXPIRES_IN',
   ]);
 
   const app = await NestFactory.create(AppModule);
