@@ -1,7 +1,9 @@
 # nestjs-routing-authorization
+
 A template for basic routing and authorization.
 
 ## 📄 Example environment file (.env)
+
 ```env
 DB_TYPE='postgres'
 DB_HOST='localhost'
@@ -14,3 +16,5 @@ DB_TYPEORM_SYNC=true
 SERVER_PORT=4444
 FRONTEND_URL='http://localhost:5173/'
 JWT_SECRET='your_very_strong_secret_key_here'
+
+```

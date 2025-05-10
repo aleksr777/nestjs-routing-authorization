@@ -28,7 +28,7 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
 
   @IsOptional()
   @IsPhoneNumber()
-  phoneNumber?: string;
+  phone_number?: string;
 
   @IsOptional()
   @IsInt()

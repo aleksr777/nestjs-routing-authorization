@@ -32,7 +32,6 @@ export class JwtRefreshStrategy extends PassportStrategy(
   }
 
   validate(payload: JwtPayload) {
-    // вернём объект, который попадёт в req.user для RefreshRequest
     return { id: payload.sub, email: payload.email };
   }
 }

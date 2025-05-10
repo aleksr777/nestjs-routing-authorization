@@ -45,6 +45,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  console.error('❌ Application failed to start:', err);
+  console.error('Application failed to start:', err);
   process.exit(1);
 });

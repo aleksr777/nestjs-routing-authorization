@@ -27,22 +27,6 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  async validateUser(email: string, pass: string) {
-    try {
-      const user = await this.usersService.checkUserByEmail(email);
-      const isPasswordValid = await bcrypt.compare(pass, user.password);
-      if (!isPasswordValid) {
-        throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
-      }
-      return { id: user.id };
-    } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      throw new InternalServerErrorException(textServerError);
-    }
-  }
-
   private generateTokens(user: User): TokenPayloadDto {
     const payloadData = {
       sub: user.id,
@@ -86,8 +70,7 @@ export class AuthService {
       const tokens = this.generateTokens(user);
       await this.usersService.saveRefreshToken(user.id, tokens.refreshToken);
       return tokens;
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch {
       throw new InternalServerErrorException(textServerError);
     }
   }
@@ -106,16 +89,17 @@ export class AuthService {
       if (error instanceof ConflictException) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
       }
-      console.error('Registration error:', error);
       throw new InternalServerErrorException(textServerError);
     }
   }
 
-  async logout(userId: number): Promise<void> {
+  async logout(user: User): Promise<void> {
     try {
-      await this.usersService.removeRefreshToken(userId);
+      await this.usersService.removeRefreshToken(user.id);
     } catch (error) {
-      console.error('Logout error:', error);
+      if (error instanceof UnauthorizedException) {
+        throw new UnauthorizedException(ErrTextAuth.REFRESH_TOKEN_MISMATCH);
+      }
       throw new InternalServerErrorException(textServerError);
     }
   }

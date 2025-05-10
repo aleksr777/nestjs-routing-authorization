@@ -8,13 +8,8 @@ export const USER_PUBLIC_FIELDS = [
 
 export const USER_PROFILE_FIELDS = [
   ...USER_PUBLIC_FIELDS,
+  'created_at',
+  'updated_at',
   'email',
-  'phoneNumber',
-] as const;
-
-export const USER_AUTH_FIELDS = [
-  ...USER_PUBLIC_FIELDS,
-  'email',
-  'phoneNumber',
-  'password',
+  'phone_number',
 ] as const;

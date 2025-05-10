@@ -2,7 +2,7 @@ import {
   Controller,
   Get,
   Body,
-  Request,
+  Req,
   Patch,
   Query,
   Delete,
@@ -12,7 +12,7 @@ import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { JwtPayload } from '../types/jwt-payload.type';
+import { User } from '../users/entities/user.entity';
 
 @Controller('users')
 export class UsersController {
@@ -20,8 +20,8 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async getCurrentProfile(@Request() req: { user: JwtPayload }) {
-    const ownId = req.user.sub;
+  async getCurrentProfile(@Req() req: { user: User }) {
+    const ownId = req.user.id;
     return this.usersService.getCurrentProfile(ownId);
   }
 
@@ -29,16 +29,16 @@ export class UsersController {
   @Patch('me')
   async updateCurrentUser(
     @Body() updateUserDto: UpdateUserDto,
-    @Request() req: { user: JwtPayload },
+    @Req() req: { user: User },
   ) {
-    const ownId = req.user.sub;
+    const ownId = req.user.id;
     return this.usersService.updateCurrentUser(ownId, updateUserDto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete('me')
-  async removeCurrentUser(@Request() req: { user: JwtPayload }) {
-    const ownId = req.user.sub;
+  async removeCurrentUser(@Req() req: { user: User }) {
+    const ownId = req.user.id;
     return this.usersService.removeCurrentUser(ownId);
   }
 

@@ -8,6 +8,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUniqueError } from '../utils/is-unique-error';
+import { removeKey } from '../utils/remove-keys-from-object';
 import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -20,7 +21,6 @@ import {
 import {
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
-  USER_AUTH_FIELDS,
 } from '../constants/user-select-fields';
 
 @Injectable()
@@ -141,46 +141,52 @@ export class UsersService {
     }
   }
 
-  async checkUserByEmail(email: string): Promise<User> {
+  async saveRefreshToken(userId: number, refresh_token: string) {
+    await this.usersRepository.update(userId, { refresh_token });
+  }
+
+  async removeRefreshToken(userId: number) {
+    await this.usersRepository.update(userId, {
+      refresh_token: null as unknown as string,
+    });
+  }
+
+  async getUserIfRefreshTokenMatches(refresh_token: string, userId: number) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'refresh_token'],
+    });
+    if (!user || !user.refresh_token) {
+      throw new UnauthorizedException();
+    }
+    const isRefreshTokenMatching = refresh_token === user.refresh_token;
+    if (!isRefreshTokenMatching) {
+      throw new UnauthorizedException();
+    }
+    return user;
+  }
+
+  async validateUser(
+    email: string,
+    password: string,
+  ) /* : Promise<Omit<User, 'password'>> */ {
+    let user: User;
     try {
-      const user = await this.usersRepository.findOneOrFail({
-        where: { email: email },
-        select: [...USER_AUTH_FIELDS],
+      user = await this.usersRepository.findOneOrFail({
+        where: { email },
+        select: [...USER_PROFILE_FIELDS, 'password'],
       });
-      return user;
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
         throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
       }
       throw new InternalServerErrorException(textServerError);
     }
-  }
-
-  async saveRefreshToken(userId: number, refreshToken: string) {
-    await this.usersRepository.update(userId, { refreshToken });
-  }
-
-  async removeRefreshToken(userId: number) {
-    await this.usersRepository.update(userId, {
-      refreshToken: null as unknown as string,
-    });
-  }
-
-  async getUserIfRefreshTokenMatches(refreshToken: string, userId: number) {
-    const user = await this.usersRepository.findOne({
-      where: { id: userId },
-      select: ['id', 'refreshToken'],
-    });
-
-    if (!user || !user.refreshToken) {
-      throw new UnauthorizedException();
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
     }
-
-    const isRefreshTokenMatching = refreshToken === user.refreshToken;
-    if (!isRefreshTokenMatching) {
-      throw new UnauthorizedException();
-    }
-
-    return user;
+    const safeUser = removeKey(user, 'password');
+    return safeUser.id;
   }
 }
