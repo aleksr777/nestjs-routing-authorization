@@ -23,30 +23,32 @@ export class User {
   id!: number;
 
   @CreateDateColumn({
+    default: () => 'CURRENT_TIMESTAMP',
     name: 'created_at',
     type: 'timestamp',
-    default: () => 'CURRENT_TIMESTAMP',
+    select: false,
   })
   created_at!: Date;
 
   @UpdateDateColumn({
-    name: 'updated_at',
-    type: 'timestamp',
     default: () => 'CURRENT_TIMESTAMP',
     onUpdate: 'CURRENT_TIMESTAMP',
+    name: 'updated_at',
+    type: 'timestamp',
+    select: false,
   })
   updated_at!: Date;
 
   @IsNotEmpty()
   @IsEmail()
   @Length(6, 255)
-  @Column({ name: 'email', unique: true, length: 255 })
+  @Column({ name: 'email', unique: true, length: 255, select: false })
   email!: string;
 
   @IsNotEmpty()
   @IsString()
   @Length(8, 100)
-  @Column({ name: 'password', select: false, length: 100 })
+  @Column({ name: 'password', length: 100, select: false })
   password!: string;
 
   @IsOptional()
@@ -57,7 +59,13 @@ export class User {
 
   @IsOptional()
   @IsPhoneNumber()
-  @Column({ name: 'phone_number', nullable: true, unique: true, length: 20 })
+  @Column({
+    name: 'phone_number',
+    nullable: true,
+    unique: true,
+    length: 20,
+    select: false,
+  })
   phone_number?: string;
 
   @IsOptional()
@@ -83,6 +91,7 @@ export class User {
     type: 'varchar',
     length: 512,
     nullable: true,
+    select: false,
   })
   refresh_token?: string;
 }

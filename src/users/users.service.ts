@@ -7,17 +7,12 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { isUniqueError } from '../utils/is-unique-error';
-import { removeKey } from '../utils/remove-keys-from-object';
+import { isUniqueError } from '../utils/is-unique-error.util';
 import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
-import {
-  ErrTextAuth,
-  ErrTextUsers,
-  textServerError,
-} from '../constants/error-messages';
+import { ErrTextUsers, textServerError } from '../constants/error-messages';
 import {
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
@@ -164,29 +159,5 @@ export class UsersService {
       throw new UnauthorizedException();
     }
     return user;
-  }
-
-  async validateUser(
-    email: string,
-    password: string,
-  ) /* : Promise<Omit<User, 'password'>> */ {
-    let user: User;
-    try {
-      user = await this.usersRepository.findOneOrFail({
-        where: { email },
-        select: [...USER_PROFILE_FIELDS, 'password'],
-      });
-    } catch (err: unknown) {
-      if (err instanceof EntityNotFoundError) {
-        throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
-      }
-      throw new InternalServerErrorException(textServerError);
-    }
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
-    }
-    const safeUser = removeKey(user, 'password');
-    return safeUser.id;
   }
 }

@@ -2,11 +2,11 @@ import { IsNumber, IsString } from 'class-validator';
 
 export class TokenPayloadDto {
   @IsString()
-  accessToken!: string;
+  access_token!: string;
 
   @IsString()
-  refreshToken!: string;
+  refresh_token!: string;
 
   @IsNumber()
-  accessTokenExpires!: number;
+  access_token_expires!: number;
 }

@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { validateEnvVariables } from './utils/env.util';
+import { validateEnvVariables } from './utils/validate-env.util';
 
 async function bootstrap() {
   validateEnvVariables([

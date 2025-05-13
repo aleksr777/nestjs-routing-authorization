@@ -21,8 +21,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getCurrentProfile(@Req() req: { user: User }) {
-    const ownId = req.user.id;
-    return this.usersService.getCurrentProfile(ownId);
+    return this.usersService.getCurrentProfile(+req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -31,15 +30,13 @@ export class UsersController {
     @Body() updateUserDto: UpdateUserDto,
     @Req() req: { user: User },
   ) {
-    const ownId = req.user.id;
-    return this.usersService.updateCurrentUser(ownId, updateUserDto);
+    return this.usersService.updateCurrentUser(+req.user.id, updateUserDto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete('me')
   async removeCurrentUser(@Req() req: { user: User }) {
-    const ownId = req.user.id;
-    return this.usersService.removeCurrentUser(ownId);
+    return this.usersService.removeCurrentUser(+req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
