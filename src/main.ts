@@ -2,25 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ENV_VARIABLES } from './constants/env-variables';
 import { validateEnvVariables } from './utils/validate-env.util';
 
 async function bootstrap() {
-  validateEnvVariables([
-    'SERVER_PORT',
-    'FRONTEND_URL',
-    'DB_TYPE',
-    'DB_HOST',
-    'DB_PORT',
-    'DB_NAME',
-    'DB_SCHEMA',
-    'DB_USERNAME',
-    'DB_PASSWORD',
-    'DB_TYPEORM_SYNC',
-    'JWT_ACCESS_SECRET',
-    'JWT_REFRESH_SECRET',
-    'JWT_ACCESS_EXPIRES_IN',
-    'JWT_REFRESH_EXPIRES_IN',
-  ]);
+  validateEnvVariables(ENV_VARIABLES);
 
   const app = await NestFactory.create(AppModule);
 

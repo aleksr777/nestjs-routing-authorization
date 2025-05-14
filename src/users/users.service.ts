@@ -1,11 +1,11 @@
 import {
+  Inject,
+  forwardRef,
   Injectable,
   NotFoundException,
   ConflictException,
   InternalServerErrorException,
-  UnauthorizedException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUniqueError } from '../utils/is-unique-error.util';
 import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
@@ -17,11 +17,14 @@ import {
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
 } from '../constants/user-select-fields';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService: AuthService,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
   ) {}
@@ -31,6 +34,7 @@ export class UsersService {
       const user = this.usersRepository.create({ ...createUserDto });
       const createdUser = await this.usersRepository.save(user);
       return createdUser;
+      //removeSensitiveInfo(userData, ['password', 'refresh_token']);
     } catch (err: unknown) {
       if (isUniqueError(err)) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
@@ -46,6 +50,7 @@ export class UsersService {
         where: { id: ownId },
         select: [...USER_PROFILE_FIELDS],
       });
+      //removeSensitiveInfo(userData, ['password', 'refresh_token']);
       return user;
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
@@ -64,7 +69,9 @@ export class UsersService {
         where: { id: ownId },
       });
       if (updateUserDto.password) {
-        updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
+        updateUserDto.password = await this.authService.hashPassword(
+          updateUserDto.password,
+        );
       }
       const user = this.usersRepository.create({
         id: ownId,
@@ -77,6 +84,7 @@ export class UsersService {
         nickname: updatedUser.nickname,
         email: user.email,
       };
+      //removeSensitiveInfo(userData, ['password', 'refresh_token']);
       return result;
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
@@ -130,34 +138,10 @@ export class UsersService {
         });
       }
       const users = await query.getMany();
+      //removeSensitiveInfo(userData, ['password', 'refresh_token']);
       return users;
     } catch {
       throw new InternalServerErrorException(textServerError);
     }
-  }
-
-  async saveRefreshToken(userId: number, refresh_token: string) {
-    await this.usersRepository.update(userId, { refresh_token });
-  }
-
-  async removeRefreshToken(userId: number) {
-    await this.usersRepository.update(userId, {
-      refresh_token: null as unknown as string,
-    });
-  }
-
-  async getUserIfRefreshTokenMatches(refresh_token: string, userId: number) {
-    const user = await this.usersRepository.findOne({
-      where: { id: userId },
-      select: ['id', 'refresh_token'],
-    });
-    if (!user || !user.refresh_token) {
-      throw new UnauthorizedException();
-    }
-    const isRefreshTokenMatching = refresh_token === user.refresh_token;
-    if (!isRefreshTokenMatching) {
-      throw new UnauthorizedException();
-    }
-    return user;
   }
 }

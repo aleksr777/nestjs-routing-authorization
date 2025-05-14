@@ -11,14 +11,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private configService: ConfigService,
     private readonly authService: AuthService,
   ) {
-    const secret = configService.get<string>('JWT_ACCESS_SECRET');
-    if (!secret) {
-      throw new Error('JWT_ACCESS_SECRET is not defined!');
-    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: secret,
+      secretOrKey: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
     });
   }
 

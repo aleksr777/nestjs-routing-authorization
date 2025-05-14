@@ -1,4 +1,6 @@
 import {
+  Inject,
+  forwardRef,
   Injectable,
   UnauthorizedException,
   InternalServerErrorException,
@@ -6,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { Repository, EntityNotFoundError } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
@@ -25,13 +26,90 @@ import { USER_PROFILE_FIELDS } from '../constants/user-select-fields';
 
 @Injectable()
 export class AuthService {
+  private readonly accessSecret: string;
+  private readonly refreshSecret: string;
+  private readonly accessExpiresIn: string;
+  private readonly refreshExpiresIn: string;
+  config: any;
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-  ) {}
+  ) {
+    this.accessSecret =
+      this.configService.getOrThrow<string>('JWT_ACCESS_SECRET');
+    this.refreshSecret =
+      this.configService.getOrThrow<string>('JWT_REFRESH_SECRET');
+    this.accessExpiresIn = this.configService.getOrThrow<string>(
+      'JWT_ACCESS_EXPIRES_IN',
+    );
+    this.refreshExpiresIn = this.configService.getOrThrow<string>(
+      'JWT_REFRESH_EXPIRES_IN',
+    );
+  }
+
+  private async saveRefreshToken(userId: number, refresh_token: string) {
+    try {
+      await this.usersRepository.update(userId, { refresh_token });
+    } catch {
+      throw new InternalServerErrorException(textServerError);
+    }
+  }
+
+  private async removeRefreshToken(userId: number) {
+    try {
+      await this.usersRepository.update(userId, {
+        refresh_token: null as unknown as string,
+      });
+    } catch {
+      throw new InternalServerErrorException(textServerError);
+    }
+  }
+
+  async hashPassword(password: string): Promise<string> {
+    return await bcrypt.hash(password, 10);
+  }
+
+  private async comparePasswords(
+    plain: string,
+    hashed: string,
+  ): Promise<boolean> {
+    return await bcrypt.compare(plain, hashed);
+  }
+
+  private getTokenExpiration(token: string): number {
+    const decoded = this.jwtService.decode<JwtPayload>(token);
+    if (!decoded?.exp) {
+      throw new InternalServerErrorException(
+        ErrTextAuth.INVALID_TOKEN_MISSING_EXP,
+      );
+    }
+    return decoded.exp;
+  }
+
+  private generateTokens(user: User) {
+    const payload = {
+      sub: user.id,
+      email: user.email,
+    };
+    const accessToken = this.jwtService.sign(payload, {
+      secret: this.accessSecret,
+      expiresIn: this.accessExpiresIn,
+    });
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: this.refreshSecret,
+      expiresIn: this.refreshExpiresIn,
+    });
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      access_token_expires: this.getTokenExpiration(accessToken),
+      refresh_token_expires: this.getTokenExpiration(refreshToken),
+    };
+  }
 
   async validateByEmailAndPassword(
     email: string,
@@ -49,7 +127,10 @@ export class AuthService {
       }
       throw new InternalServerErrorException(textServerError);
     }
-    const isPasswordValid = await bcrypt.compare(password, userData.password);
+    const isPasswordValid = await this.comparePasswords(
+      password,
+      userData.password,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
     }
@@ -91,48 +172,10 @@ export class AuthService {
     return removeSensitiveInfo(userData, ['password']);
   }
 
-  private generateTokens(user: User): TokenPayloadDto {
-    const payloadData = {
-      sub: user.id,
-      email: user.email,
-    };
-    const accessToken = this.jwtService.sign(
-      { ...payloadData },
-      {
-        expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRES_IN'),
-      },
-    );
-    const refreshToken = this.jwtService.sign(
-      {
-        ...payloadData,
-        refreshTokenId: randomBytes(16).toString('hex'),
-      },
-      {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN'),
-      },
-    );
-    return {
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      access_token_expires: this.getTokenExpiration(accessToken),
-    };
-  }
-
-  private getTokenExpiration(token: string): number {
-    const decoded = this.jwtService.decode<JwtPayload>(token);
-    if (!decoded?.exp) {
-      throw new InternalServerErrorException(
-        ErrTextAuth.INVALID_TOKEN_MISSING_EXP,
-      );
-    }
-    return decoded.exp;
-  }
-
   async login(user: User): Promise<TokenPayloadDto> {
     try {
       const tokens = this.generateTokens(user);
-      await this.usersService.saveRefreshToken(user.id, tokens.refresh_token);
+      await this.saveRefreshToken(user.id, tokens.refresh_token);
       return tokens;
     } catch {
       throw new InternalServerErrorException(textServerError);
@@ -141,13 +184,13 @@ export class AuthService {
 
   async register(createUserDto: CreateUserDto): Promise<TokenPayloadDto> {
     try {
-      const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+      const hashedPassword = await this.hashPassword(createUserDto.password);
       const user = await this.usersService.create({
         ...createUserDto,
         password: hashedPassword,
       });
       const tokens = this.generateTokens(user);
-      await this.usersService.saveRefreshToken(user.id, tokens.refresh_token);
+      await this.saveRefreshToken(user.id, tokens.refresh_token);
       return tokens;
     } catch (error) {
       if (error instanceof ConflictException) {
@@ -159,7 +202,7 @@ export class AuthService {
 
   async logout(user: User): Promise<void> {
     try {
-      await this.usersService.removeRefreshToken(user.id);
+      await this.removeRefreshToken(user.id);
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw new UnauthorizedException(ErrTextAuth.REFRESH_TOKEN_MISMATCH);
@@ -174,22 +217,18 @@ export class AuthService {
       throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
     }
     try {
-      const payload = this.jwtService.verify<JwtPayload>(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      this.jwtService.verify<JwtPayload>(refreshToken, {
+        secret: this.refreshSecret,
       });
-      const user = await this.usersService.getUserIfRefreshTokenMatches(
-        refreshToken,
-        payload.sub,
-      );
       const tokens = this.generateTokens(user);
-      await this.usersService.saveRefreshToken(user.id, tokens.refresh_token);
+      await this.saveRefreshToken(user.id, tokens.refresh_token);
       return tokens;
     } catch (error) {
       if (error instanceof Error) {
-        if (error.name === 'TokenExpiredError') {
-          throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
-        }
-        if (error.name === 'JsonWebTokenError') {
+        if (
+          error.name === 'TokenExpiredError' ||
+          error.name === 'JsonWebTokenError'
+        ) {
           throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
         }
       }

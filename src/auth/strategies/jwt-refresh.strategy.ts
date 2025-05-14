@@ -16,14 +16,10 @@ export class JwtRefreshStrategy extends PassportStrategy(
     private readonly configService: ConfigService,
     private readonly authService: AuthService,
   ) {
-    const secret = configService.get<string>('JWT_REFRESH_SECRET');
-    if (!secret) {
-      throw new Error('JWT_REFRESH_SECRET is not defined!');
-    }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: secret,
+      secretOrKey: configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       algorithms: ['HS256'],
       passReqToCallback: true,
     } as StrategyOptionsWithRequest);
