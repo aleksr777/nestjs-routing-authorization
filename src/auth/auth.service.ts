@@ -13,7 +13,6 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
-import { TokenPayloadDto } from './dto/token-payload.dto';
 import {
   ErrTextAuth,
   ErrTextUsers,
@@ -22,7 +21,11 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from '../types/jwt-payload.type';
 import { removeSensitiveInfo } from '../utils/remove-sensitive-info.util';
-import { USER_PROFILE_FIELDS } from '../constants/user-select-fields';
+import {
+  USER_PROFILE_FIELDS,
+  USER_PASSWORD,
+  USER_SECRET_FIELDS,
+} from '../constants/user-select-fields';
 
 @Injectable()
 export class AuthService {
@@ -69,7 +72,7 @@ export class AuthService {
     }
   }
 
-  async hashPassword(password: string): Promise<string> {
+  async hashPassword(password: string) {
     return await bcrypt.hash(password, 10);
   }
 
@@ -80,7 +83,7 @@ export class AuthService {
     return await bcrypt.compare(plain, hashed);
   }
 
-  private getTokenExpiration(token: string): number {
+  private getTokenExpiration(token: string) {
     const decoded = this.jwtService.decode<JwtPayload>(token);
     if (!decoded?.exp) {
       throw new InternalServerErrorException(
@@ -111,15 +114,12 @@ export class AuthService {
     };
   }
 
-  async validateByEmailAndPassword(
-    email: string,
-    password: string,
-  ): Promise<Omit<User, 'password'>> {
+  async validateByEmailAndPassword(email: string, password: string) {
     let userData: User;
     try {
       userData = await this.usersRepository.findOneOrFail({
         where: { email },
-        select: [...USER_PROFILE_FIELDS, 'password'],
+        select: [...USER_PROFILE_FIELDS, USER_PASSWORD],
       });
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
@@ -134,7 +134,7 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
     }
-    return removeSensitiveInfo(userData, ['password', 'refresh_token']);
+    return removeSensitiveInfo(userData, [...USER_SECRET_FIELDS]);
   }
 
   async validateByAccessToken(id: number) {
@@ -150,7 +150,7 @@ export class AuthService {
       }
       throw new InternalServerErrorException(textServerError);
     }
-    return removeSensitiveInfo(userData, ['password', 'refresh_token']);
+    return removeSensitiveInfo(userData, [...USER_SECRET_FIELDS]);
   }
 
   async validateByRefreshToken(id: number, refreshToken: string) {
@@ -169,10 +169,10 @@ export class AuthService {
     if (refreshToken !== userData.refresh_token) {
       throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
     }
-    return removeSensitiveInfo(userData, ['password']);
+    return removeSensitiveInfo(userData, [USER_PASSWORD]);
   }
 
-  async login(user: User): Promise<TokenPayloadDto> {
+  async login(user: User) {
     try {
       const tokens = this.generateTokens(user);
       await this.saveRefreshToken(user.id, tokens.refresh_token);
@@ -182,7 +182,7 @@ export class AuthService {
     }
   }
 
-  async register(createUserDto: CreateUserDto): Promise<TokenPayloadDto> {
+  async register(createUserDto: CreateUserDto) {
     try {
       const hashedPassword = await this.hashPassword(createUserDto.password);
       const user = await this.usersService.create({
@@ -200,7 +200,7 @@ export class AuthService {
     }
   }
 
-  async logout(user: User): Promise<void> {
+  async logout(user: User) {
     try {
       await this.removeRefreshToken(user.id);
     } catch (error) {
@@ -211,7 +211,7 @@ export class AuthService {
     }
   }
 
-  async refreshTokens(user: User): Promise<TokenPayloadDto> {
+  async refreshTokens(user: User) {
     const refreshToken = user.refresh_token;
     if (!refreshToken) {
       throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);

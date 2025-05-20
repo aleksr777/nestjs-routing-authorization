@@ -65,40 +65,35 @@ export class UsersService {
   }
 
   async updateCurrentUser(ownId: number, updateUserDto: UpdateUserDto) {
+    const dto = { ...updateUserDto };
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      const data = await queryRunner.manager
+      if (dto.password) {
+        dto.password = await this.authService.hashPassword(dto.password);
+      }
+      const updateResult = await queryRunner.manager
+        .createQueryBuilder()
+        .update(User)
+        .set(dto)
+        .where('id = :id', { id: ownId })
+        .execute();
+      // если затронуто 0 строк — пользователя нет
+      if (updateResult.affected === 0) {
+        throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
+      }
+      const updatedUserData = await queryRunner.manager
         .createQueryBuilder(User, 'user')
-        .addSelect([
-          ...USER_PROFILE_FIELDS.map((f) => `user.${f}`),
-          'user.password',
-          'user.refresh_token',
-          'user.email',
-        ])
+        .addSelect([...USER_PROFILE_FIELDS.map((f) => `user.${f}`)])
         .where('user.id = :id', { id: ownId })
         .getOneOrFail();
-      /* await queryRunner.manager.findOneOrFail(User, {
-        where: { id: ownId },
-      }); */
-      if (updateUserDto.password) {
-        updateUserDto.password = await this.authService.hashPassword(
-          updateUserDto.password,
-        );
-      }
-      const user = this.usersRepository.create({
-        id: ownId,
-        ...updateUserDto,
-      });
-      const updatedUser = await queryRunner.manager.save(User, user);
-      console.log(data);
       await queryRunner.commitTransaction();
-      const safeUserData = removeSensitiveInfo(updatedUser, [
-        ...USER_SECRET_FIELDS,
-      ]);
+      const safeUserData = removeSensitiveInfo(
+        updatedUserData,
+        USER_SECRET_FIELDS,
+      );
       return safeUserData;
-      console.log(updatedUser);
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       if (err instanceof EntityNotFoundError) {
