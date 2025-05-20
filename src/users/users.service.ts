@@ -5,6 +5,7 @@ import {
   NotFoundException,
   ConflictException,
   InternalServerErrorException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUniqueError } from '../utils/is-unique-error.util';
@@ -16,8 +17,11 @@ import { ErrTextUsers, textServerError } from '../constants/error-messages';
 import {
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
+  USER_SECRET_FIELDS,
+  USER_CONFIDENTIAL_FIELDS,
 } from '../constants/user-select-fields';
 import { AuthService } from '../auth/auth.service';
+import { removeSensitiveInfo } from '../utils/remove-sensitive-info.util';
 
 @Injectable()
 export class UsersService {
@@ -33,8 +37,8 @@ export class UsersService {
     try {
       const user = this.usersRepository.create({ ...createUserDto });
       const createdUser = await this.usersRepository.save(user);
+      //removeSensitiveInfo(userData, [...USER_SECRET_FIELDS]);
       return createdUser;
-      //removeSensitiveInfo(userData, ['password', 'refresh_token']);
     } catch (err: unknown) {
       if (isUniqueError(err)) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
@@ -50,7 +54,7 @@ export class UsersService {
         where: { id: ownId },
         select: [...USER_PROFILE_FIELDS],
       });
-      //removeSensitiveInfo(userData, ['password', 'refresh_token']);
+      //removeSensitiveInfo(userData, [...USER_SECRET_FIELDS]);
       return user;
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
@@ -65,9 +69,19 @@ export class UsersService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      await queryRunner.manager.findOneOrFail(User, {
+      const data = await queryRunner.manager
+        .createQueryBuilder(User, 'user')
+        .addSelect([
+          ...USER_PROFILE_FIELDS.map((f) => `user.${f}`),
+          'user.password',
+          'user.refresh_token',
+          'user.email',
+        ])
+        .where('user.id = :id', { id: ownId })
+        .getOneOrFail();
+      /* await queryRunner.manager.findOneOrFail(User, {
         where: { id: ownId },
-      });
+      }); */
       if (updateUserDto.password) {
         updateUserDto.password = await this.authService.hashPassword(
           updateUserDto.password,
@@ -78,14 +92,13 @@ export class UsersService {
         ...updateUserDto,
       });
       const updatedUser = await queryRunner.manager.save(User, user);
+      console.log(data);
       await queryRunner.commitTransaction();
-      const result = {
-        id: updatedUser.id,
-        nickname: updatedUser.nickname,
-        email: user.email,
-      };
-      //removeSensitiveInfo(userData, ['password', 'refresh_token']);
-      return result;
+      const safeUserData = removeSensitiveInfo(updatedUser, [
+        ...USER_SECRET_FIELDS,
+      ]);
+      return safeUserData;
+      console.log(updatedUser);
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       if (err instanceof EntityNotFoundError) {
@@ -121,12 +134,11 @@ export class UsersService {
     }
   }
 
-  async getUsersQuery(
-    limit: number,
-    offset: number,
-    nickname?: string,
-  ): Promise<User[]> {
+  async getUsersQuery(limit: number, offset: number, nickname?: string) {
     try {
+      if (limit <= 0 || offset < 0) {
+        throw new BadRequestException('Invalid pagination parameters');
+      }
       const query = this.usersRepository
         .createQueryBuilder('user')
         .select(USER_PUBLIC_FIELDS.map((f) => `user.${f}`))
@@ -137,9 +149,12 @@ export class UsersService {
           nickname: `%${nickname}%`,
         });
       }
-      const users = await query.getMany();
-      //removeSensitiveInfo(userData, ['password', 'refresh_token']);
-      return users;
+      const usersData = await query.getMany();
+      const safeUsersData = removeSensitiveInfo(usersData, [
+        ...USER_SECRET_FIELDS,
+        ...USER_CONFIDENTIAL_FIELDS,
+      ]);
+      return safeUsersData;
     } catch {
       throw new InternalServerErrorException(textServerError);
     }
