@@ -1,15 +1,5 @@
-import {
-  Controller,
-  Get,
-  Body,
-  Req,
-  Patch,
-  Query,
-  Delete,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Req, Query, Delete, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/update-user.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { User } from '../users/entities/user.entity';
@@ -22,15 +12,6 @@ export class UsersController {
   @Get('me')
   async getCurrentProfile(@Req() req: { user: User }) {
     return this.usersService.getCurrentProfile(+req.user.id);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Patch('me')
-  async updateCurrentUser(
-    @Body() updateUserDto: UpdateUserDto,
-    @Req() req: { user: User },
-  ) {
-    return this.usersService.updateCurrentUser(+req.user.id, updateUserDto);
   }
 
   @UseGuards(JwtAuthGuard)

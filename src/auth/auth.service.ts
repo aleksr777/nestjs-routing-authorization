@@ -1,16 +1,14 @@
 import {
-  Inject,
-  forwardRef,
   Injectable,
   UnauthorizedException,
   InternalServerErrorException,
   ConflictException,
+  NotFoundException,
 } from '@nestjs/common';
-import { Repository, EntityNotFoundError } from 'typeorm';
+import { Repository, EntityNotFoundError, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import {
@@ -26,6 +24,8 @@ import {
   USER_PASSWORD,
   USER_SECRET_FIELDS,
 } from '../constants/user-select-fields';
+import { isUniqueError } from '../utils/is-unique-error.util';
+import { UpdateUserDto } from '../users/dto/update-user.dto';
 
 @Injectable()
 export class AuthService {
@@ -35,10 +35,9 @@ export class AuthService {
   private readonly refreshExpiresIn: string;
   config: any;
   constructor(
+    private readonly dataSource: DataSource,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    @Inject(forwardRef(() => UsersService))
-    private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {
@@ -52,24 +51,6 @@ export class AuthService {
     this.refreshExpiresIn = this.configService.getOrThrow<string>(
       'JWT_REFRESH_EXPIRES_IN',
     );
-  }
-
-  private async saveRefreshToken(userId: number, refresh_token: string) {
-    try {
-      await this.usersRepository.update(userId, { refresh_token });
-    } catch {
-      throw new InternalServerErrorException(textServerError);
-    }
-  }
-
-  private async removeRefreshToken(userId: number) {
-    try {
-      await this.usersRepository.update(userId, {
-        refresh_token: null as unknown as string,
-      });
-    } catch {
-      throw new InternalServerErrorException(textServerError);
-    }
   }
 
   async hashPassword(password: string) {
@@ -93,10 +74,9 @@ export class AuthService {
     return decoded.exp;
   }
 
-  private generateTokens(user: User) {
+  private generateTokens(userId: number) {
     const payload = {
-      sub: user.id,
-      email: user.email,
+      sub: userId,
     };
     const accessToken = this.jwtService.sign(payload, {
       secret: this.accessSecret,
@@ -114,10 +94,42 @@ export class AuthService {
     };
   }
 
-  async validateByEmailAndPassword(email: string, password: string) {
-    let userData: User;
+  private async saveRefreshToken(userId: number, refresh_token: string) {
     try {
-      userData = await this.usersRepository.findOneOrFail({
+      const result = await this.usersRepository.update(userId, {
+        refresh_token,
+      });
+      if (result.affected === 0) {
+        throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
+      }
+    } catch {
+      throw new InternalServerErrorException(textServerError);
+    }
+  }
+
+  private async removeRefreshToken(userId: number) {
+    try {
+      const result = await this.usersRepository.update(userId, {
+        refresh_token: null as unknown as string,
+      });
+      if (result.affected === 0) {
+        throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
+      }
+    } catch {
+      throw new InternalServerErrorException(textServerError);
+    }
+  }
+
+  private verifyRefreshToken(refreshToken: string) {
+    this.jwtService.verify<JwtPayload>(refreshToken, {
+      secret: this.refreshSecret,
+    });
+  }
+
+  async validateByEmailAndPassword(email: string, password: string) {
+    let user: User;
+    try {
+      user = await this.usersRepository.findOneOrFail({
         where: { email },
         select: [...USER_PROFILE_FIELDS, USER_PASSWORD],
       });
@@ -129,18 +141,18 @@ export class AuthService {
     }
     const isPasswordValid = await this.comparePasswords(
       password,
-      userData.password,
+      user.password,
     );
     if (!isPasswordValid) {
       throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
     }
-    return removeSensitiveInfo(userData, [...USER_SECRET_FIELDS]);
+    return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
   }
 
   async validateByAccessToken(id: number) {
-    let userData: User;
+    let user: User;
     try {
-      userData = await this.usersRepository.findOneOrFail({
+      user = await this.usersRepository.findOneOrFail({
         where: { id },
         select: [...USER_PROFILE_FIELDS],
       });
@@ -150,13 +162,13 @@ export class AuthService {
       }
       throw new InternalServerErrorException(textServerError);
     }
-    return removeSensitiveInfo(userData, [...USER_SECRET_FIELDS]);
+    return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
   }
 
   async validateByRefreshToken(id: number, refreshToken: string) {
-    let userData: User;
+    let user: User;
     try {
-      userData = await this.usersRepository.findOneOrFail({
+      user = await this.usersRepository.findOneOrFail({
         where: { id },
         select: [...USER_PROFILE_FIELDS, 'refresh_token'],
       });
@@ -166,31 +178,22 @@ export class AuthService {
       }
       throw new InternalServerErrorException(textServerError);
     }
-    if (refreshToken !== userData.refresh_token) {
+    if (refreshToken !== user.refresh_token) {
       throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
     }
-    return removeSensitiveInfo(userData, [USER_PASSWORD]);
+    return removeSensitiveInfo(user, [USER_PASSWORD]);
   }
 
-  async login(user: User) {
+  async register(id: number, dto: CreateUserDto) {
+    const hashedPassword = await this.hashPassword(dto.password);
+    const tokens = this.generateTokens(id);
+    const user = this.usersRepository.create({
+      ...dto,
+      password: hashedPassword,
+      refresh_token: tokens.refresh_token,
+    });
     try {
-      const tokens = this.generateTokens(user);
-      await this.saveRefreshToken(user.id, tokens.refresh_token);
-      return tokens;
-    } catch {
-      throw new InternalServerErrorException(textServerError);
-    }
-  }
-
-  async register(createUserDto: CreateUserDto) {
-    try {
-      const hashedPassword = await this.hashPassword(createUserDto.password);
-      const user = await this.usersService.create({
-        ...createUserDto,
-        password: hashedPassword,
-      });
-      const tokens = this.generateTokens(user);
-      await this.saveRefreshToken(user.id, tokens.refresh_token);
+      await this.usersRepository.save(user);
       return tokens;
     } catch (error) {
       if (error instanceof ConflictException) {
@@ -200,9 +203,19 @@ export class AuthService {
     }
   }
 
-  async logout(user: User) {
+  async login(id: number) {
     try {
-      await this.removeRefreshToken(user.id);
+      const tokens = this.generateTokens(id);
+      await this.saveRefreshToken(id, tokens.refresh_token);
+      return tokens;
+    } catch {
+      throw new InternalServerErrorException(textServerError);
+    }
+  }
+
+  async logout(id: number) {
+    try {
+      await this.removeRefreshToken(id);
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw new UnauthorizedException(ErrTextAuth.REFRESH_TOKEN_MISMATCH);
@@ -211,17 +224,14 @@ export class AuthService {
     }
   }
 
-  async refreshTokens(user: User) {
-    const refreshToken = user.refresh_token;
-    if (!refreshToken) {
+  async refreshTokens(id: number, refresh_token: string | undefined) {
+    if (!refresh_token) {
       throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
     }
+    this.verifyRefreshToken(refresh_token);
+    const tokens = this.generateTokens(id);
     try {
-      this.jwtService.verify<JwtPayload>(refreshToken, {
-        secret: this.refreshSecret,
-      });
-      const tokens = this.generateTokens(user);
-      await this.saveRefreshToken(user.id, tokens.refresh_token);
+      await this.saveRefreshToken(id, refresh_token);
       return tokens;
     } catch (error) {
       if (error instanceof Error) {
@@ -236,6 +246,45 @@ export class AuthService {
         throw new UnauthorizedException(ErrTextAuth.REFRESH_TOKEN_MISMATCH);
       }
       throw new InternalServerErrorException(textServerError);
+    }
+  }
+
+  async updateCurrentUser(ownId: number, updateUserDto: UpdateUserDto) {
+    const dto = { ...updateUserDto };
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      if (dto.password) {
+        dto.password = await this.hashPassword(dto.password);
+      }
+      const result = await queryRunner.manager
+        .createQueryBuilder()
+        .update(User)
+        .set(dto)
+        .where('id = :id', { id: ownId })
+        .execute();
+      if (result.affected === 0) {
+        throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
+      }
+      const user = await queryRunner.manager
+        .createQueryBuilder(User, 'user')
+        .addSelect([...USER_PROFILE_FIELDS.map((f) => `user.${f}`)])
+        .where('user.id = :id', { id: ownId })
+        .getOneOrFail();
+      await queryRunner.commitTransaction();
+      return removeSensitiveInfo(user, USER_SECRET_FIELDS);
+    } catch (err: unknown) {
+      await queryRunner.rollbackTransaction();
+      if (err instanceof EntityNotFoundError) {
+        throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
+      }
+      if (isUniqueError(err)) {
+        throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
+      }
+      throw new InternalServerErrorException(textServerError);
+    } finally {
+      await queryRunner.release();
     }
   }
 }
