@@ -2,8 +2,12 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ENV_VARIABLES } from './constants/env-variables';
+import { validateEnvVariables } from './utils/validate-env.util';
 
 async function bootstrap() {
+  validateEnvVariables(ENV_VARIABLES);
+
   const app = await NestFactory.create(AppModule);
 
   // Глобальная валидация DTO
@@ -19,10 +23,7 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  const serverPort = configService.get<number>('SERVER_PORT');
-  if (!serverPort) {
-    throw new Error('❌ SERVER_PORT is not defined!');
-  }
+  const serverPort = parseInt(configService.get<string>('SERVER_PORT', ''), 10);
 
   // Запуск приложения
   await app.listen(serverPort);
@@ -30,6 +31,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  console.error('❌ Application failed to start:', err);
+  console.error('Application failed to start:', err);
   process.exit(1);
 });

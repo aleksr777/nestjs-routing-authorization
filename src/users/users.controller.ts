@@ -1,18 +1,8 @@
-import {
-  Controller,
-  Get,
-  Body,
-  Request,
-  Patch,
-  Query,
-  Delete,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Req, Query, Delete, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/update-user.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { JwtPayload } from '../types/jwt-payload.type';
+import { User } from '../users/entities/user.entity';
 
 @Controller('users')
 export class UsersController {
@@ -20,26 +10,14 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async getCurrentProfile(@Request() req: { user: JwtPayload }) {
-    const ownId = req.user.sub;
-    return this.usersService.getCurrentProfile(ownId);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Patch('me')
-  async updateCurrentUser(
-    @Body() updateUserDto: UpdateUserDto,
-    @Request() req: { user: JwtPayload },
-  ) {
-    const ownId = req.user.sub;
-    return this.usersService.updateCurrentUser(ownId, updateUserDto);
+  async getCurrentProfile(@Req() req: { user: User }) {
+    return this.usersService.getCurrentProfile(+req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete('me')
-  async removeCurrentUser(@Request() req: { user: JwtPayload }) {
-    const ownId = req.user.sub;
-    return this.usersService.removeCurrentUser(ownId);
+  async removeCurrentUser(@Req() req: { user: User }) {
+    return this.usersService.removeCurrentUser(+req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)

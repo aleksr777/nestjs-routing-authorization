@@ -24,7 +24,7 @@ export class CreateUserDto {
 
   @IsOptional()
   @IsPhoneNumber()
-  phoneNumber?: string;
+  phone_number?: string;
 
   @IsOptional()
   @IsInt()
