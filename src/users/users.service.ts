@@ -7,7 +7,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
 import { User } from './entities/user.entity';
-import { ErrTextUsers, textServerError } from '../constants/error-messages';
+import {
+  ErrTextUsers,
+  INTERNAL_SERVER_ERROR,
+} from '../constants/error-messages';
 import {
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
@@ -35,7 +38,7 @@ export class UsersService {
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
       }
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -54,7 +57,7 @@ export class UsersService {
       if (err instanceof EntityNotFoundError) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
       }
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     } finally {
       await queryRunner.release();
     }
@@ -81,7 +84,7 @@ export class UsersService {
         ...USER_CONFIDENTIAL_FIELDS,
       ]);
     } catch {
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
   }
 }

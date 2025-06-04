@@ -14,7 +14,7 @@ import { CreateUserDto } from '../users/dto/create-user.dto';
 import {
   ErrTextAuth,
   ErrTextUsers,
-  textServerError,
+  INTERNAL_SERVER_ERROR,
 } from '../constants/error-messages';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from '../types/jwt-payload.type';
@@ -67,9 +67,7 @@ export class AuthService {
   private getTokenExpiration(token: string) {
     const decoded = this.jwtService.decode<JwtPayload>(token);
     if (!decoded?.exp) {
-      throw new InternalServerErrorException(
-        ErrTextAuth.INVALID_TOKEN_MISSING_EXP,
-      );
+      throw new InternalServerErrorException(ErrTextAuth.INVALID_TOKEN);
     }
     return decoded.exp;
   }
@@ -103,7 +101,7 @@ export class AuthService {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
       }
     } catch {
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -116,7 +114,7 @@ export class AuthService {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
       }
     } catch {
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -137,7 +135,7 @@ export class AuthService {
       if (err instanceof EntityNotFoundError) {
         throw new UnauthorizedException(ErrTextAuth.INVALID_EMAIL_OR_PASSWORD);
       }
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
     const isPasswordValid = await this.comparePasswords(
       password,
@@ -160,7 +158,7 @@ export class AuthService {
       if (err instanceof EntityNotFoundError) {
         throw new UnauthorizedException(ErrTextAuth.INVALID_TOKEN);
       }
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
     return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
   }
@@ -174,12 +172,12 @@ export class AuthService {
       });
     } catch (err: unknown) {
       if (err instanceof EntityNotFoundError) {
-        throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
+        throw new UnauthorizedException(ErrTextAuth.INVALID_TOKEN);
       }
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
     if (refreshToken !== user.refresh_token) {
-      throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
+      throw new UnauthorizedException(ErrTextAuth.INVALID_TOKEN);
     }
     return removeSensitiveInfo(user, [USER_PASSWORD]);
   }
@@ -199,7 +197,7 @@ export class AuthService {
       if (error instanceof ConflictException) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
       }
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -209,7 +207,7 @@ export class AuthService {
       await this.saveRefreshToken(id, tokens.refresh_token);
       return tokens;
     } catch {
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -218,15 +216,15 @@ export class AuthService {
       await this.removeRefreshToken(id);
     } catch (error) {
       if (error instanceof UnauthorizedException) {
-        throw new UnauthorizedException(ErrTextAuth.REFRESH_TOKEN_MISMATCH);
+        throw new UnauthorizedException(ErrTextAuth.INVALID_TOKEN);
       }
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
   }
 
   async refreshTokens(id: number, refresh_token: string | undefined) {
     if (!refresh_token) {
-      throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
+      throw new UnauthorizedException(ErrTextAuth.INVALID_TOKEN);
     }
     this.verifyRefreshToken(refresh_token);
     const tokens = this.generateTokens(id);
@@ -239,13 +237,13 @@ export class AuthService {
           error.name === 'TokenExpiredError' ||
           error.name === 'JsonWebTokenError'
         ) {
-          throw new UnauthorizedException(ErrTextAuth.INVALID_REFRESH_TOKEN);
+          throw new UnauthorizedException(ErrTextAuth.INVALID_TOKEN);
         }
       }
       if (error instanceof UnauthorizedException) {
-        throw new UnauthorizedException(ErrTextAuth.REFRESH_TOKEN_MISMATCH);
+        throw new UnauthorizedException(ErrTextAuth.INVALID_TOKEN);
       }
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -282,7 +280,7 @@ export class AuthService {
       if (isUniqueError(err)) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
       }
-      throw new InternalServerErrorException(textServerError);
+      throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     } finally {
       await queryRunner.release();
     }
