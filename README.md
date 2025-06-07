@@ -80,22 +80,20 @@ npm install
 npm run start:dev
 ```
 
-The server will be available at:
-
-```
-http://localhost:1603/api
-```
-
 ---
 
-### 📌 Default API Endpoints
+## 📡 API Endpoints
 
-| Method | Endpoint              | Description                |
-|--------|-----------------------|----------------------------|
-| POST   | `/api/auth/register`  | Register new user          |
-| POST   | `/api/auth/login`     | Login and receive tokens   |
-| POST   | `/api/auth/refresh`   | Refresh tokens             |
-| POST   | `/api/auth/logout`    | Invalidate refresh token   |
-| GET    | `/api/users/me`       | Get current user profile   |
+### Auth
+- `POST /api/auth/register` — Register a new user
+- `POST /api/auth/login` — Login and receive tokens
+- `POST /api/auth/logout` — Logout user
+- `POST /api/auth/refresh` — Refresh tokens
+- `PATCH /api/auth/update` — Update current user
+
+### Users
+- `GET /api/users/me` — Get current user's profile
+- `DELETE /api/users/me` — Delete current user
+- `GET /api/users` — Get list of users (with query support)
 
 ---
