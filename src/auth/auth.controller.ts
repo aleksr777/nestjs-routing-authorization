@@ -12,11 +12,8 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  async register(
-    @Body() createUserDto: CreateUserDto,
-    @Req() req: { user: User },
-  ) {
-    return this.authService.register(+req.user.id, createUserDto);
+  async register(@Body() createUserDto: CreateUserDto) {
+    return this.authService.register(createUserDto);
   }
 
   @UseGuards(LocalAuthGuard)

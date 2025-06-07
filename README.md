@@ -17,7 +17,6 @@ DB_TYPE='postgres'
 DB_HOST='localhost'
 DB_PORT=5432
 DB_NAME='db_name'
-DB_SCHEMA='db_schema'
 DB_USERNAME='postgres'
 DB_PASSWORD='db_password'
 DB_TYPEORM_SYNC=true

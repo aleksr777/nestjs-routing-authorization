@@ -182,22 +182,37 @@ export class AuthService {
     return removeSensitiveInfo(user, [USER_PASSWORD]);
   }
 
-  async register(id: number, dto: CreateUserDto) {
+  async register(dto: CreateUserDto) {
     const hashedPassword = await this.hashPassword(dto.password);
-    const tokens = this.generateTokens(id);
-    const user = this.usersRepository.create({
-      ...dto,
-      password: hashedPassword,
-      refresh_token: tokens.refresh_token,
-    });
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
-      await this.usersRepository.save(user);
+      const user = queryRunner.manager.create(User, {
+        ...dto,
+        password: hashedPassword,
+      });
+
+      const savedUser = await queryRunner.manager.save(user);
+      const tokens = this.generateTokens(savedUser.id);
+
+      await queryRunner.manager.update(User, savedUser.id, {
+        refresh_token: tokens.refresh_token,
+      });
+
+      await queryRunner.commitTransaction();
+
       return tokens;
     } catch (error) {
-      if (error instanceof ConflictException) {
+      await queryRunner.rollbackTransaction();
+      if (isUniqueError(error)) {
         throw new ConflictException(ErrTextUsers.CONFLICT_USER_EXISTS);
       }
       throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
+    } finally {
+      await queryRunner.release();
     }
   }
 
@@ -229,7 +244,7 @@ export class AuthService {
     this.verifyRefreshToken(refresh_token);
     const tokens = this.generateTokens(id);
     try {
-      await this.saveRefreshToken(id, refresh_token);
+      await this.saveRefreshToken(id, tokens.refresh_token);
       return tokens;
     } catch (error) {
       if (error instanceof Error) {
