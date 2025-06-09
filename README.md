@@ -10,6 +10,9 @@ JWT_REFRESH_SECRET='secret_refresh_key'
 JWT_ACCESS_EXPIRES_IN='15m'
 JWT_REFRESH_EXPIRES_IN='7d'
 
+REDIS_HOST='localhost'
+REDIS_PORT=6379   
+
 SERVER_PORT=1603
 FRONTEND_URL='http://localhost:1403'
 
@@ -37,22 +40,18 @@ Before you begin, make sure you have:
 
 ---
 
-### 🐘 Running PostgreSQL with Docker
+### 🐘 Running PostgreSQL and Redis with Docker
 
-This project uses Docker Compose to provide a local PostgreSQL instance.
-
-To start the database:
+To start:
 
 ```bash
 docker-compose up -d
 ```
 
 This will:
-- Download and start a `postgres:17.5` container
-- Expose it on `localhost:5432`
-- Mount a volume to preserve data across restarts
+- Download and start a `postgres:17.5` and `redis:7.2` containers
 
-To stop the database container:
+To stop the containers:
 
 ```bash
 docker-compose down
