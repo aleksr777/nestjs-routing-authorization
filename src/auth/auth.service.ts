@@ -9,6 +9,8 @@ import { Repository, EntityNotFoundError, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { RedisService } from '../redis/redis.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import {
@@ -16,7 +18,6 @@ import {
   ErrTextUsers,
   INTERNAL_SERVER_ERROR,
 } from '../constants/error-messages';
-import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from '../types/jwt-payload.type';
 import { removeSensitiveInfo } from '../utils/remove-sensitive-info.util';
 import {
@@ -40,6 +41,7 @@ export class AuthService {
     private usersRepository: Repository<User>,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
   ) {
     this.accessSecret =
       this.configService.getOrThrow<string>('JWT_ACCESS_SECRET');

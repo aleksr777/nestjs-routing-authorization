@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { RedisModule } from '../redis/redis.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
@@ -13,6 +14,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
+    RedisModule,
     ConfigModule,
     PassportModule,
     JwtModule.registerAsync({
