@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service';
 import { ConfigService } from '@nestjs/config';
 
@@ -15,7 +15,7 @@ export class TokenBlacklistService {
 
     const expiresIn = this.configService.get<string>(
       'JWT_ACCESS_EXPIRES_IN',
-      '15m',
+      '',
     );
     this.accessTokenTTL = this.parseExpiresIn(expiresIn);
   }

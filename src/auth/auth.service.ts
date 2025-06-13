@@ -13,20 +13,21 @@ import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
+import { UpdateUserDto } from '../users/dto/update-user.dto';
 import {
   ErrTextAuth,
   ErrTextUsers,
   INTERNAL_SERVER_ERROR,
 } from '../constants/error-messages';
 import { JwtPayload } from '../types/jwt-payload.type';
-import { removeSensitiveInfo } from '../utils/remove-sensitive-info.util';
 import {
   USER_PROFILE_FIELDS,
   USER_PASSWORD,
   USER_SECRET_FIELDS,
 } from '../constants/user-select-fields';
 import { isUniqueError } from '../utils/is-unique-error.util';
-import { UpdateUserDto } from '../users/dto/update-user.dto';
+import { removeSensitiveInfo } from '../utils/remove-sensitive-info.util';
+import { TokenBlacklistService } from './token-blacklist.service';
 
 @Injectable()
 export class AuthService {
@@ -42,6 +43,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
+    private readonly tokenBlacklistService: TokenBlacklistService,
   ) {
     this.accessSecret =
       this.configService.getOrThrow<string>('JWT_ACCESS_SECRET');
@@ -120,8 +122,8 @@ export class AuthService {
     }
   }
 
-  private verifyRefreshToken(refreshToken: string) {
-    this.jwtService.verify<JwtPayload>(refreshToken, {
+  private verifyRefreshToken(refresh_token: string) {
+    this.jwtService.verify<JwtPayload>(refresh_token, {
       secret: this.refreshSecret,
     });
   }
@@ -165,7 +167,7 @@ export class AuthService {
     return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
   }
 
-  async validateByRefreshToken(id: number, refreshToken: string) {
+  async validateByRefreshToken(id: number, refresh_token: string) {
     let user: User;
     try {
       user = await this.usersRepository.findOneOrFail({
@@ -178,7 +180,7 @@ export class AuthService {
       }
       throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
-    if (refreshToken !== user.refresh_token) {
+    if (refresh_token !== user.refresh_token) {
       throw new UnauthorizedException(ErrTextAuth.INVALID_TOKEN);
     }
     return removeSensitiveInfo(user, [USER_PASSWORD]);
@@ -218,19 +220,23 @@ export class AuthService {
     }
   }
 
-  async login(id: number) {
+  async login(userId: number) {
     try {
-      const tokens = this.generateTokens(id);
-      await this.saveRefreshToken(id, tokens.refresh_token);
+      const tokens = this.generateTokens(userId);
+      await this.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
     } catch {
       throw new InternalServerErrorException(INTERNAL_SERVER_ERROR);
     }
   }
 
-  async logout(id: number) {
+  async logout(userId: number, access_token: string | null) {
+    if (!access_token) {
+      throw new UnauthorizedException(ErrTextAuth.TOKEN_NOT_DEFINED);
+    }
     try {
-      await this.removeRefreshToken(id);
+      await this.removeRefreshToken(userId);
+      await this.tokenBlacklistService.add(access_token);
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw new UnauthorizedException(ErrTextAuth.INVALID_TOKEN);
@@ -239,14 +245,14 @@ export class AuthService {
     }
   }
 
-  async refreshTokens(id: number, refresh_token: string | undefined) {
+  async refreshTokens(userId: number, refresh_token: string | undefined) {
     if (!refresh_token) {
       throw new UnauthorizedException(ErrTextAuth.INVALID_TOKEN);
     }
     this.verifyRefreshToken(refresh_token);
-    const tokens = this.generateTokens(id);
+    const tokens = this.generateTokens(userId);
     try {
-      await this.saveRefreshToken(id, tokens.refresh_token);
+      await this.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
     } catch (error) {
       if (error instanceof Error) {
@@ -264,7 +270,7 @@ export class AuthService {
     }
   }
 
-  async updateCurrentUser(ownId: number, updateUserDto: UpdateUserDto) {
+  async updateCurrentUser(userId: number, updateUserDto: UpdateUserDto) {
     const dto = { ...updateUserDto };
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -277,7 +283,7 @@ export class AuthService {
         .createQueryBuilder()
         .update(User)
         .set(dto)
-        .where('id = :id', { id: ownId })
+        .where('id = :id', { id: userId })
         .execute();
       if (result.affected === 0) {
         throw new NotFoundException(ErrTextUsers.USER_NOT_FOUND);
@@ -285,7 +291,7 @@ export class AuthService {
       const user = await queryRunner.manager
         .createQueryBuilder(User, 'user')
         .addSelect([...USER_PROFILE_FIELDS.map((f) => `user.${f}`)])
-        .where('user.id = :id', { id: ownId })
+        .where('user.id = :id', { id: userId })
         .getOneOrFail();
       await queryRunner.commitTransaction();
       return removeSensitiveInfo(user, USER_SECRET_FIELDS);

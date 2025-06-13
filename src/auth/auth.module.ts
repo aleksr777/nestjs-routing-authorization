@@ -4,18 +4,20 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
-import { User } from '../users/entities/user.entity';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { AuthService } from './auth.service';
+import { TokenBlacklistService } from './token-blacklist.service';
+import { AuthController } from './auth.controller';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
     RedisModule,
     ConfigModule,
+    RedisModule,
     PassportModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -28,7 +30,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       }),
     }),
   ],
-  providers: [AuthService, LocalStrategy, JwtStrategy, JwtRefreshStrategy],
+  providers: [
+    AuthService,
+    LocalStrategy,
+    JwtStrategy,
+    JwtRefreshStrategy,
+    TokenBlacklistService,
+  ],
   controllers: [AuthController],
   exports: [AuthService],
 })

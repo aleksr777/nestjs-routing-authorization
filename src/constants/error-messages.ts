@@ -1,4 +1,5 @@
 export enum ErrTextAuth {
+  TOKEN_NOT_DEFINED = 'Token is not defined',
   INVALID_TOKEN = 'Invalid token',
   INVALID_EMAIL_OR_PASSWORD = 'Invalid email or password',
 }

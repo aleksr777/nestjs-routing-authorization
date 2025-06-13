@@ -27,10 +27,10 @@ export class UsersService {
     private usersRepository: Repository<User>,
   ) {}
 
-  async getCurrentProfile(id: number) {
+  async getCurrentProfile(userId: number) {
     try {
       const user = await this.usersRepository.findOneOrFail({
-        where: { id },
+        where: { id: userId },
         select: [...USER_PROFILE_FIELDS],
       });
       return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
@@ -42,15 +42,15 @@ export class UsersService {
     }
   }
 
-  async removeCurrentUser(id: number) {
+  async removeCurrentUser(userId: number) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
       await queryRunner.manager.findOneOrFail(User, {
-        where: { id: id },
+        where: { id: userId },
       });
-      await queryRunner.manager.delete(User, { id: id });
+      await queryRunner.manager.delete(User, { id: userId });
       await queryRunner.commitTransaction();
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
