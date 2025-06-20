@@ -88,11 +88,11 @@ npm run start:dev
 - `POST /api/auth/login` — Login and receive tokens
 - `POST /api/auth/logout` — Logout user
 - `POST /api/auth/refresh` — Refresh tokens
-- `PATCH /api/auth/update` — Update current user
 
 ### Users
 - `GET /api/users/me` — Get current user's profile
-- `DELETE /api/users/me` — Delete current user
+- `DELETE /api/users/me/delete` — Delete current user
+- `PATCH /api/users/me/update` — Update current user
 - `GET /api/users` — Get list of users (with query support)
 
 ---
