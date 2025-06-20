@@ -1,4 +1,4 @@
-import { Patch, Post, Body, Req, UseGuards, Controller } from '@nestjs/common';
+import { Post, Body, Req, UseGuards, Controller } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -6,8 +6,6 @@ import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { User } from '../users/entities/user.entity';
-import { UpdateUserDto } from '../users/dto/update-user.dto';
-import { stripBearerPrefix } from '../utils/strip-bearer-token.util';
 
 @Controller('auth')
 export class AuthController {
@@ -31,7 +29,7 @@ export class AuthController {
   async logout(@Req() req: Request) {
     const user = req.user as User;
     const userId = +user.id;
-    const access_token = stripBearerPrefix(req.headers.authorization);
+    const access_token = req.headers.authorization;
     return this.authService.logout(userId, access_token);
   }
 
@@ -40,18 +38,7 @@ export class AuthController {
   async refreshTokens(@Req() req: Request) {
     const user = req.user as User;
     const userId = +user.id;
-    const refresh_token = user.refresh_token;
-    return this.authService.refreshTokens(userId, refresh_token);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Patch('update')
-  async updateCurrentUser(
-    @Body() updateUserDto: UpdateUserDto,
-    @Req() req: Request,
-  ) {
-    const user = req.user as User;
-    const userId = +user.id;
-    return this.authService.updateCurrentUser(userId, updateUserDto);
+    const access_token = req.headers.authorization;
+    return this.authService.refreshTokens(userId, access_token);
   }
 }

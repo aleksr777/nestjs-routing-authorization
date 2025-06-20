@@ -7,8 +7,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client: RedisClientType;
 
   constructor(private readonly configService: ConfigService) {
-    const host = configService.get<string>('REDIS_HOST');
-    const port = parseInt(configService.get('REDIS_PORT', ''), 10);
+    const host = configService.getOrThrow<string>('REDIS_HOST');
+    const port = parseInt(configService.getOrThrow<string>('REDIS_PORT'), 10);
 
     this.client = createClient({
       url: `redis://${host}:${port}`,

@@ -8,7 +8,8 @@ import { LocalStrategy } from './strategies/local.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthService } from './auth.service';
-import { TokenBlacklistService } from './token-blacklist.service';
+import { TokensService } from './tokens.service';
+import { HashPasswordService } from './hash-password.service';
 import { AuthController } from './auth.controller';
 import { User } from '../users/entities/user.entity';
 
@@ -35,7 +36,8 @@ import { User } from '../users/entities/user.entity';
     LocalStrategy,
     JwtStrategy,
     JwtRefreshStrategy,
-    TokenBlacklistService,
+    TokensService,
+    HashPasswordService,
   ],
   controllers: [AuthController],
   exports: [AuthService],

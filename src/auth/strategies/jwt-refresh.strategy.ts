@@ -31,7 +31,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
     if (!refresh_token) {
       throw new UnauthorizedException('refresh_token not found in request!');
     }
-    const userData = await this.authService.validateByRefreshToken(
+    const userData = await this.authService.validateUserByRefreshToken(
       userId,
       refresh_token,
     );
