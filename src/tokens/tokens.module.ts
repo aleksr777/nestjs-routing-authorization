@@ -1,11 +1,18 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { TokensService } from './tokens.service';
+import { User } from '../users/entities/user.entity';
 import { RedisModule } from '../redis/redis.module';
 
 @Module({
-  imports: [JwtModule.register({}), ConfigModule, RedisModule],
+  imports: [
+    TypeOrmModule.forFeature([User]),
+    JwtModule.register({}),
+    ConfigModule,
+    RedisModule,
+  ],
   providers: [TokensService],
   exports: [TokensService],
 })

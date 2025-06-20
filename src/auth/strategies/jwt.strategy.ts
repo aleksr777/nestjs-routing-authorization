@@ -4,7 +4,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from '../../types/jwt-payload.type';
 import { AuthService } from '../../auth/auth.service';
-import { TokensService } from '../../auth/tokens.service';
+import { TokensService } from '../../tokens/tokens.service';
 import { Request } from 'express';
 import { ErrMessages } from '../../constants/error-messages';
 

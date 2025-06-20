@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Repository, EntityNotFoundError, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { TokensService } from './tokens.service';
+import { TokensService } from '../tokens/tokens.service';
 import { HashPasswordService } from './hash-password.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
@@ -140,11 +140,10 @@ export class AuthService {
     }
   }
 
-  async refreshTokens(userId: number, access_token: string | undefined) {
+  async refreshTokens(userId: number) {
     try {
       const tokens = this.tokensService.generateTokens(userId);
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
-      await this.tokensService.addToBlacklist(access_token);
       return tokens;
     } catch (error) {
       if (error instanceof Error) {

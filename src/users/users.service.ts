@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
 import { HashPasswordService } from '../auth/hash-password.service';
-//import { TokensService } from '../auth/tokens.service';
+import { TokensService } from '../tokens/tokens.service';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
 import { ErrMessages } from '../constants/error-messages';
@@ -27,7 +27,7 @@ export class UsersService {
     private readonly dataSource: DataSource,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    //private readonly tokensService: TokensService,
+    private readonly tokensService: TokensService,
     private readonly hashPasswordService: HashPasswordService,
   ) {}
 
@@ -46,9 +46,7 @@ export class UsersService {
     }
   }
 
-  async removeCurrentUser(
-    userId: number /* , access_token: string | undefined */,
-  ) {
+  async removeCurrentUser(userId: number, access_token: string | undefined) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -57,7 +55,7 @@ export class UsersService {
         where: { id: userId },
       });
       await queryRunner.manager.delete(User, { id: userId });
-      //await this.tokensService.addToBlacklist(access_token);
+      await this.tokensService.addToBlacklist(access_token);
       await queryRunner.commitTransaction();
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();

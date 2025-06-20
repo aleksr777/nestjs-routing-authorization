@@ -32,8 +32,8 @@ export class UsersController {
   async removeCurrentUser(@Req() req: Request) {
     const user = req.user as User;
     const userId = +user.id;
-    //const access_token = req.headers.authorization;
-    return this.usersService.removeCurrentUser(userId /* , access_token */);
+    const access_token = req.headers.authorization;
+    return this.usersService.removeCurrentUser(userId, access_token);
   }
 
   @UseGuards(JwtAuthGuard)
