@@ -10,12 +10,12 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  // Глобальная валидация DTO
+  // Global DTO validation
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Автоматически удаляет поля, не описанные в DTO
-      forbidNonWhitelisted: true, // Возвращает ошибку, если есть лишние поля
-      transform: true, // Автоматически преобразует типы (например, string -> number)
+      whitelist: true, // Automatically removes properties not defined in the DTO
+      forbidNonWhitelisted: true, // Throws an error if extra properties are present
+      transform: true, // Automatically transforms payloads to the expected types (e.g., string -> number)
     }),
   );
 
@@ -23,9 +23,12 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  const serverPort = parseInt(configService.get<string>('SERVER_PORT', ''), 10);
+  const serverPort = parseInt(
+    configService.getOrThrow<string>('SERVER_PORT'),
+    10,
+  );
 
-  // Запуск приложения
+  // Start app
   await app.listen(serverPort);
   console.log(`Application is running on: http://localhost:${serverPort}/api`);
 }

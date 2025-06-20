@@ -3,6 +3,8 @@ export const ENV_VARIABLES = [
   'JWT_REFRESH_SECRET',
   'JWT_ACCESS_EXPIRES_IN',
   'JWT_REFRESH_EXPIRES_IN',
+  'REDIS_HOST',
+  'REDIS_PORT',
   'SERVER_PORT',
   'FRONTEND_URL',
   'DB_TYPEORM_SYNC',
@@ -10,7 +12,6 @@ export const ENV_VARIABLES = [
   'DB_HOST',
   'DB_PORT',
   'DB_NAME',
-  'DB_SCHEMA',
   'DB_USERNAME',
   'DB_PASSWORD',
 ] as const;
