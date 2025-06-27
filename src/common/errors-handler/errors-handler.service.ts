@@ -1,4 +1,81 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  InternalServerErrorException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { QueryFailedError, EntityNotFoundError } from 'typeorm';
+import { ErrMessages } from '../../constants/error-messages';
 
 @Injectable()
-export class ErrorsHandler {}
+export class ErrorsHandlerService {
+  handleDefaultError() {
+    throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+  }
+
+  private isUniqueError(
+    err: unknown,
+  ): err is QueryFailedError & { code: string } {
+    return (
+      err instanceof QueryFailedError &&
+      'code' in err &&
+      (err as { code: string }).code === '23505'
+    );
+  }
+
+  handleUserConflict(err: unknown) {
+    if (this.isUniqueError(err)) {
+      throw new ConflictException(ErrMessages.CONFLICT_USER_EXISTS);
+    }
+  }
+
+  handleUserNotFound(err: unknown, resultAffected?: number) {
+    if (err instanceof EntityNotFoundError) {
+      throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
+    }
+    if (resultAffected !== undefined && resultAffected === 0) {
+      throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
+    }
+  }
+
+  handleInvalidEmailOrPassword(err: unknown, isPasswordValid?: boolean) {
+    if (
+      err instanceof EntityNotFoundError ||
+      err instanceof UnauthorizedException
+    ) {
+      throw new UnauthorizedException(ErrMessages.INVALID_EMAIL_OR_PASSWORD);
+    }
+    if (!isPasswordValid) {
+      throw new UnauthorizedException(ErrMessages.INVALID_EMAIL_OR_PASSWORD);
+    }
+  }
+
+  handleInvalidToken(err: unknown, isTokensMatch?: boolean) {
+    if (err instanceof Error) {
+      if (
+        err.name === 'TokenExpiredError' ||
+        err.name === 'JsonWebTokenError'
+      ) {
+        throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
+      }
+    }
+    if (
+      err instanceof UnauthorizedException ||
+      err instanceof EntityNotFoundError
+    ) {
+      throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
+    }
+    if (!isTokensMatch) {
+      throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
+    }
+  }
+
+  handleTokenNotDefined() {
+    throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
+  }
+
+  handleTokenIsBlacklisted() {
+    throw new UnauthorizedException(ErrMessages.TOKEN_IS_BLACKLISTED);
+  }
+}

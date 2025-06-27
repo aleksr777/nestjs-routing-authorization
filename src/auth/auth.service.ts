@@ -1,22 +1,16 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  InternalServerErrorException,
-  ConflictException,
-} from '@nestjs/common';
-import { Repository, EntityNotFoundError, DataSource } from 'typeorm';
+import { Injectable } from '@nestjs/common';
+import { Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TokensService } from './tokens.service';
 import { HashPasswordService } from '../common/hash-password/hash-password.service';
+import { ErrorsHandlerService } from '../common/errors-handler/errors-handler.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
-import { ErrMessages } from '../constants/error-messages';
 import {
   USER_PROFILE_FIELDS,
   USER_PASSWORD,
   USER_SECRET_FIELDS,
 } from '../constants/user-select-fields';
-import { isUniqueError } from '../utils/is-unique-error.util';
 import { removeSensitiveInfo } from '../utils/remove-sensitive-info.util';
 
 @Injectable()
@@ -28,6 +22,7 @@ export class AuthService {
     private usersRepository: Repository<User>,
     private readonly tokensService: TokensService,
     private readonly hashPasswordService: HashPasswordService,
+    private readonly errorsHandlerService: ErrorsHandlerService,
   ) {}
 
   async validateUserByEmailAndPassword(email: string, password: string) {
@@ -37,55 +32,48 @@ export class AuthService {
         where: { email },
         select: [...USER_PROFILE_FIELDS, USER_PASSWORD],
       });
+      const isPasswordValid = await this.hashPasswordService.comparePasswords(
+        password,
+        user.password,
+      );
+      this.errorsHandlerService.handleInvalidEmailOrPassword(
+        null,
+        isPasswordValid,
+      );
+      return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
-      if (err instanceof EntityNotFoundError) {
-        throw new UnauthorizedException(ErrMessages.INVALID_EMAIL_OR_PASSWORD);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleInvalidEmailOrPassword(err);
+      this.errorsHandlerService.handleDefaultError();
     }
-    const isPasswordValid = await this.hashPasswordService.comparePasswords(
-      password,
-      user.password,
-    );
-    if (!isPasswordValid) {
-      throw new UnauthorizedException(ErrMessages.INVALID_EMAIL_OR_PASSWORD);
-    }
-    return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
   }
 
   async validateUserById(id: number) {
-    let user: User;
     try {
-      user = await this.usersRepository.findOneOrFail({
+      const user = await this.usersRepository.findOneOrFail({
         where: { id },
         select: ['id'],
       });
+      return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
-      if (err instanceof EntityNotFoundError) {
-        throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleInvalidEmailOrPassword(err);
+      this.errorsHandlerService.handleDefaultError();
+      throw err;
     }
-    return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
   }
 
   async validateUserByRefreshToken(id: number, refresh_token: string) {
-    let user: User;
     try {
-      user = await this.usersRepository.findOneOrFail({
+      const user = await this.usersRepository.findOneOrFail({
         where: { id },
         select: [...USER_PROFILE_FIELDS, 'refresh_token'],
       });
+      const isTokensMatch = refresh_token === user.refresh_token;
+      this.errorsHandlerService.handleInvalidToken(null, isTokensMatch);
+      return removeSensitiveInfo(user, [USER_PASSWORD]);
     } catch (err: unknown) {
-      if (err instanceof EntityNotFoundError) {
-        throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleInvalidToken(err);
+      this.errorsHandlerService.handleDefaultError();
     }
-    if (refresh_token !== user.refresh_token) {
-      throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
-    }
-    return removeSensitiveInfo(user, [USER_PASSWORD]);
   }
 
   async register(dto: CreateUserDto) {
@@ -107,12 +95,10 @@ export class AuthService {
       });
       await queryRunner.commitTransaction();
       return tokens;
-    } catch (error) {
+    } catch (err) {
       await queryRunner.rollbackTransaction();
-      if (isUniqueError(error)) {
-        throw new ConflictException(ErrMessages.CONFLICT_USER_EXISTS);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleUserConflict(err);
+      this.errorsHandlerService.handleDefaultError();
     } finally {
       await queryRunner.release();
     }
@@ -124,22 +110,20 @@ export class AuthService {
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
     } catch {
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleDefaultError();
     }
   }
 
   async logout(userId: number, access_token: string | undefined) {
     if (!access_token) {
-      throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
+      return this.errorsHandlerService.handleTokenNotDefined();
     }
     try {
       await this.tokensService.removeRefreshToken(userId);
       await this.tokensService.addToBlacklist(access_token);
-    } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+    } catch (err) {
+      this.errorsHandlerService.handleInvalidToken(err);
+      this.errorsHandlerService.handleDefaultError();
     }
   }
 
@@ -148,19 +132,9 @@ export class AuthService {
       const tokens = this.tokensService.generateTokens(userId);
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
-    } catch (error) {
-      if (error instanceof Error) {
-        if (
-          error.name === 'TokenExpiredError' ||
-          error.name === 'JsonWebTokenError'
-        ) {
-          throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
-        }
-      }
-      if (error instanceof UnauthorizedException) {
-        throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+    } catch (err) {
+      this.errorsHandlerService.handleInvalidToken(err);
+      this.errorsHandlerService.handleDefaultError();
     }
   }
 }

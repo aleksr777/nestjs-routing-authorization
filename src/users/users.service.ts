@@ -1,18 +1,11 @@
-import {
-  Injectable,
-  NotFoundException,
-  InternalServerErrorException,
-  BadRequestException,
-  ConflictException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { HashPasswordService } from '../common/hash-password/hash-password.service';
 import { TokensService } from '../auth/tokens.service';
+import { ErrorsHandlerService } from '../common/errors-handler/errors-handler.service';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
-import { ErrMessages } from '../constants/error-messages';
 import {
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
@@ -20,7 +13,6 @@ import {
   USER_CONFIDENTIAL_FIELDS,
 } from '../constants/user-select-fields';
 import { removeSensitiveInfo } from '../utils/remove-sensitive-info.util';
-import { isUniqueError } from '../utils/is-unique-error.util';
 
 @Injectable()
 export class UsersService {
@@ -30,6 +22,7 @@ export class UsersService {
     private usersRepository: Repository<User>,
     private readonly tokensService: TokensService,
     private readonly hashPasswordService: HashPasswordService,
+    private readonly errorsHandlerService: ErrorsHandlerService,
   ) {}
 
   async getCurrentProfile(userId: number) {
@@ -40,16 +33,14 @@ export class UsersService {
       });
       return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
-      if (err instanceof EntityNotFoundError) {
-        throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleUserNotFound(err);
+      this.errorsHandlerService.handleDefaultError();
     }
   }
 
   async removeCurrentUser(userId: number, access_token: string | undefined) {
     if (!access_token) {
-      throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
+      return this.errorsHandlerService.handleTokenNotDefined();
     }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -63,10 +54,8 @@ export class UsersService {
       await queryRunner.commitTransaction();
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
-      if (err instanceof EntityNotFoundError) {
-        throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleUserNotFound(err);
+      this.errorsHandlerService.handleDefaultError();
     } finally {
       await queryRunner.release();
     }
@@ -89,9 +78,7 @@ export class UsersService {
         .set(dto)
         .where('id = :id', { id: userId })
         .execute();
-      if (result.affected === 0) {
-        throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
-      }
+      this.errorsHandlerService.handleUserNotFound(null, result.affected);
       const user = await queryRunner.manager
         .createQueryBuilder(User, 'user')
         .addSelect([...USER_PROFILE_FIELDS.map((f) => `user.${f}`)])
@@ -101,13 +88,9 @@ export class UsersService {
       return removeSensitiveInfo(user, USER_SECRET_FIELDS);
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
-      if (err instanceof EntityNotFoundError) {
-        throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
-      }
-      if (isUniqueError(err)) {
-        throw new ConflictException(ErrMessages.CONFLICT_USER_EXISTS);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleUserNotFound(err);
+      this.errorsHandlerService.handleUserConflict(err);
+      this.errorsHandlerService.handleDefaultError();
     } finally {
       await queryRunner.release();
     }
@@ -134,7 +117,7 @@ export class UsersService {
         ...USER_CONFIDENTIAL_FIELDS,
       ]);
     } catch {
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleDefaultError();
     }
   }
 }
