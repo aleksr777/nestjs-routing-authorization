@@ -1,6 +1,5 @@
 import {
   Injectable,
-  UnauthorizedException,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,7 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { RedisClientType } from 'redis';
-import { RedisService } from '../redis/redis.service';
+import { RedisService } from '../common/redis/redis.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ErrMessages } from '../constants/error-messages';
@@ -50,18 +49,15 @@ export class TokensService {
     return decoded.exp;
   }
 
-  private checkAndStripToken(token: string | undefined) {
-    if (!token) {
-      throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
-    }
+  private stripToken(token: string) {
     const cleanedToken = token.startsWith('Bearer ')
       ? token.slice(7).trim()
       : token.trim();
     return cleanedToken;
   }
 
-  async addToBlacklist(access_token: string | undefined): Promise<void> {
-    const cleanedToken = this.checkAndStripToken(access_token);
+  async addToBlacklist(access_token: string): Promise<void> {
+    const cleanedToken = this.stripToken(access_token);
     const exp = this.getTokenExpiration(cleanedToken);
     const ttl = exp - Math.floor(Date.now() / 1000);
     if (ttl > 0) {
@@ -69,8 +65,8 @@ export class TokensService {
     }
   }
 
-  async isBlacklisted(access_token: string | undefined): Promise<boolean> {
-    const cleanedToken = this.checkAndStripToken(access_token);
+  async isBlacklisted(access_token: string): Promise<boolean> {
+    const cleanedToken = this.stripToken(access_token);
     const result = await this.redisClient.get(cleanedToken);
     return result === 'blacklisted';
   }

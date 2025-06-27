@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { RedisModule } from './redis/redis.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
 import { User } from './users/entities/user.entity';
 import { AuthModule } from './auth/auth.module';
+import { CoreModule } from './common/core.module';
 
 @Module({
   imports: [
@@ -24,9 +24,9 @@ import { AuthModule } from './auth/auth.module';
           configService.getOrThrow<string>('DB_TYPEORM_SYNC') === 'true',
       }),
     }),
-    RedisModule,
-    UsersModule,
     AuthModule,
+    UsersModule,
+    CoreModule,
   ],
 })
 export class AppModule {}
