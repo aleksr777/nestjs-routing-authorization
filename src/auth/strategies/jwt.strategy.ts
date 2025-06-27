@@ -4,7 +4,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload } from '../../types/jwt-payload.type';
 import { AuthService } from '../../auth/auth.service';
-import { TokensService } from '../../tokens/tokens.service';
+import { TokensService } from '../tokens.service';
 import { Request } from 'express';
 import { ErrMessages } from '../../constants/error-messages';
 
@@ -25,6 +25,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
   async validate(req: Request, payload: JwtPayload) {
     const access_token = req.headers.authorization;
+    if (!access_token) {
+      throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
+    }
     const isBlacklisted = await this.tokensService.isBlacklisted(access_token);
     if (isBlacklisted) {
       throw new UnauthorizedException(ErrMessages.TOKEN_IS_BLACKLISTED);

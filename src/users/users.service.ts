@@ -4,11 +4,12 @@ import {
   InternalServerErrorException,
   BadRequestException,
   ConflictException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
-import { HashPasswordService } from '../auth/hash-password.service';
-import { TokensService } from '../tokens/tokens.service';
+import { HashPasswordService } from '../common/hash-password/hash-password.service';
+import { TokensService } from '../auth/tokens.service';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
 import { ErrMessages } from '../constants/error-messages';
@@ -47,6 +48,9 @@ export class UsersService {
   }
 
   async removeCurrentUser(userId: number, access_token: string | undefined) {
+    if (!access_token) {
+      throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
+    }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();

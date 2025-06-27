@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { Repository, EntityNotFoundError, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { TokensService } from '../tokens/tokens.service';
-import { HashPasswordService } from './hash-password.service';
+import { TokensService } from './tokens.service';
+import { HashPasswordService } from '../common/hash-password/hash-password.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { ErrMessages } from '../constants/error-messages';
@@ -129,6 +129,9 @@ export class AuthService {
   }
 
   async logout(userId: number, access_token: string | undefined) {
+    if (!access_token) {
+      throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
+    }
     try {
       await this.tokensService.removeRefreshToken(userId);
       await this.tokensService.addToBlacklist(access_token);
