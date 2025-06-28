@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { HashPasswordService } from '../common/hash-password/hash-password.service';
+import { HashService } from '../common/hash/hash.service';
 import { TokensService } from '../auth/tokens.service';
 import { ErrorsHandlerService } from '../common/errors-handler/errors-handler.service';
 import { User } from './entities/user.entity';
@@ -21,7 +21,7 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly tokensService: TokensService,
-    private readonly hashPasswordService: HashPasswordService,
+    private readonly hashService: HashService,
     private readonly errorsHandlerService: ErrorsHandlerService,
   ) {}
 
@@ -68,9 +68,7 @@ export class UsersService {
     await queryRunner.startTransaction();
     try {
       if (dto.password) {
-        dto.password = await this.hashPasswordService.hashPassword(
-          dto.password,
-        );
+        dto.password = await this.hashService.hash(dto.password);
       }
       const result = await queryRunner.manager
         .createQueryBuilder()

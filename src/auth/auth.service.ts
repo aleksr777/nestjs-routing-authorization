@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TokensService } from './tokens.service';
-import { HashPasswordService } from '../common/hash-password/hash-password.service';
+import { HashService } from '../common/hash/hash.service';
 import { ErrorsHandlerService } from '../common/errors-handler/errors-handler.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
@@ -21,7 +21,7 @@ export class AuthService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly tokensService: TokensService,
-    private readonly hashPasswordService: HashPasswordService,
+    private readonly hashService: HashService,
     private readonly errorsHandlerService: ErrorsHandlerService,
   ) {}
 
@@ -32,7 +32,7 @@ export class AuthService {
         where: { email },
         select: [...USER_PROFILE_FIELDS, USER_PASSWORD],
       });
-      const isPasswordValid = await this.hashPasswordService.comparePasswords(
+      const isPasswordValid = await this.hashService.compare(
         password,
         user.password,
       );
@@ -79,9 +79,7 @@ export class AuthService {
   }
 
   async register(dto: CreateUserDto) {
-    const hashedPassword = await this.hashPasswordService.hashPassword(
-      dto.password,
-    );
+    const hashedPassword = await this.hashService.hash(dto.password);
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
