@@ -13,8 +13,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsInt,
-  Min,
-  Max,
 } from 'class-validator';
 
 @Entity()
@@ -59,6 +57,7 @@ export class User {
 
   @IsOptional()
   @IsPhoneNumber()
+  @Length(4, 30)
   @Column({
     name: 'phone_number',
     nullable: true,
@@ -69,8 +68,7 @@ export class User {
 
   @IsOptional()
   @IsInt()
-  @Min(0)
-  @Max(150)
+  @Length(0, 200)
   @Column({ name: 'age', nullable: true, type: 'smallint' })
   age?: number;
 
