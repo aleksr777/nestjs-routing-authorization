@@ -55,7 +55,7 @@ export class AuthService {
       });
       return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
-      this.errorsHandlerService.handleInvalidEmailOrPassword(err);
+      this.errorsHandlerService.handleUserNotFound(err);
       this.errorsHandlerService.handleDefaultError();
       throw err;
     }
@@ -68,7 +68,9 @@ export class AuthService {
         select: [...USER_PROFILE_FIELDS, 'refresh_token'],
       });
       const isTokensMatch = refresh_token === user.refresh_token;
-      this.errorsHandlerService.handleInvalidToken(null, isTokensMatch);
+      if (!isTokensMatch) {
+        return this.errorsHandlerService.handleInvalidToken();
+      }
       return removeSensitiveInfo(user, [USER_PASSWORD]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleInvalidToken(err);

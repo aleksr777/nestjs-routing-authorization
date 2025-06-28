@@ -30,11 +30,11 @@ export class ErrorsHandlerService {
     }
   }
 
-  handleUserNotFound(err: unknown, resultAffected?: number) {
-    if (err instanceof EntityNotFoundError) {
-      throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
+  handleUserNotFound(err?: unknown) {
+    if (!err) {
+      throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
     }
-    if (resultAffected !== undefined && resultAffected === 0) {
+    if (err instanceof EntityNotFoundError) {
       throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
     }
   }
@@ -51,7 +51,10 @@ export class ErrorsHandlerService {
     }
   }
 
-  handleInvalidToken(err: unknown, isTokensMatch?: boolean) {
+  handleInvalidToken(err?: unknown) {
+    if (!err) {
+      throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
+    }
     if (err instanceof Error) {
       if (
         err.name === 'TokenExpiredError' ||
@@ -64,9 +67,6 @@ export class ErrorsHandlerService {
       err instanceof UnauthorizedException ||
       err instanceof EntityNotFoundError
     ) {
-      throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
-    }
-    if (!isTokensMatch) {
       throw new UnauthorizedException(ErrMessages.INVALID_TOKEN);
     }
   }

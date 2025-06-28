@@ -78,7 +78,10 @@ export class UsersService {
         .set(dto)
         .where('id = :id', { id: userId })
         .execute();
-      this.errorsHandlerService.handleUserNotFound(null, result.affected);
+      if (result.affected === 0) {
+        await queryRunner.rollbackTransaction();
+        return this.errorsHandlerService.handleUserNotFound();
+      }
       const user = await queryRunner.manager
         .createQueryBuilder(User, 'user')
         .addSelect([...USER_PROFILE_FIELDS.map((f) => `user.${f}`)])

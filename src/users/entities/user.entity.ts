@@ -62,7 +62,6 @@ export class User {
   @Column({
     name: 'phone_number',
     nullable: true,
-    unique: true,
     length: 20,
     select: false,
   })
@@ -93,5 +92,5 @@ export class User {
     nullable: true,
     select: false,
   })
-  refresh_token?: string;
+  refresh_token?: string | null;
 }
