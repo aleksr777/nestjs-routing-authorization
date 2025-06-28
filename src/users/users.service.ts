@@ -4,6 +4,7 @@ import { Repository, DataSource } from 'typeorm';
 import { HashService } from '../common/hash/hash.service';
 import { TokensService } from '../auth/tokens.service';
 import { ErrorsHandlerService } from '../common/errors-handler/errors-handler.service';
+import { SensitiveInfoService } from '../common/sensitive-info-service/sensitive-info.service';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
 import {
@@ -12,7 +13,6 @@ import {
   USER_SECRET_FIELDS,
   USER_CONFIDENTIAL_FIELDS,
 } from '../constants/user-select-fields';
-import { removeSensitiveInfo } from '../utils/remove-sensitive-info.util';
 
 @Injectable()
 export class UsersService {
@@ -23,6 +23,7 @@ export class UsersService {
     private readonly tokensService: TokensService,
     private readonly hashService: HashService,
     private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly sensitiveInfoService: SensitiveInfoService,
   ) {}
 
   async getCurrentProfile(userId: number) {
@@ -31,7 +32,7 @@ export class UsersService {
         where: { id: userId },
         select: [...USER_PROFILE_FIELDS],
       });
-      return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
+      return this.sensitiveInfoService.remove(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleUserNotFound(err);
       this.errorsHandlerService.handleDefaultError();
@@ -86,7 +87,7 @@ export class UsersService {
         .where('user.id = :id', { id: userId })
         .getOneOrFail();
       await queryRunner.commitTransaction();
-      return removeSensitiveInfo(user, USER_SECRET_FIELDS);
+      return this.sensitiveInfoService.remove(user, USER_SECRET_FIELDS);
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       this.errorsHandlerService.handleUserNotFound(err);
@@ -113,7 +114,7 @@ export class UsersService {
         });
       }
       const users = await query.getMany();
-      return removeSensitiveInfo(users, [
+      return this.sensitiveInfoService.remove(users, [
         ...USER_SECRET_FIELDS,
         ...USER_CONFIDENTIAL_FIELDS,
       ]);

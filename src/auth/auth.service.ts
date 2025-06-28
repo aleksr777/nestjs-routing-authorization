@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { TokensService } from './tokens.service';
 import { HashService } from '../common/hash/hash.service';
 import { ErrorsHandlerService } from '../common/errors-handler/errors-handler.service';
+import { SensitiveInfoService } from '../common/sensitive-info-service/sensitive-info.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import {
@@ -11,7 +12,6 @@ import {
   USER_PASSWORD,
   USER_SECRET_FIELDS,
 } from '../constants/user-select-fields';
-import { removeSensitiveInfo } from '../utils/remove-sensitive-info.util';
 
 @Injectable()
 export class AuthService {
@@ -23,6 +23,7 @@ export class AuthService {
     private readonly tokensService: TokensService,
     private readonly hashService: HashService,
     private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly sensitiveInfoService: SensitiveInfoService,
   ) {}
 
   async validateUserByEmailAndPassword(email: string, password: string) {
@@ -40,7 +41,7 @@ export class AuthService {
         null,
         isPasswordValid,
       );
-      return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
+      return this.sensitiveInfoService.remove(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleInvalidEmailOrPassword(err);
       this.errorsHandlerService.handleDefaultError();
@@ -53,7 +54,7 @@ export class AuthService {
         where: { id },
         select: ['id'],
       });
-      return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
+      return this.sensitiveInfoService.remove(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleUserNotFound(err);
       this.errorsHandlerService.handleDefaultError();
@@ -71,7 +72,7 @@ export class AuthService {
       if (!isTokensMatch) {
         return this.errorsHandlerService.handleInvalidToken();
       }
-      return removeSensitiveInfo(user, [USER_PASSWORD]);
+      return this.sensitiveInfoService.remove(user, [USER_PASSWORD]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleInvalidToken(err);
       this.errorsHandlerService.handleDefaultError();
