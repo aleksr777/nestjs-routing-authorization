@@ -3,10 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { RedisClientType } from 'redis';
-import { RedisService } from '../common/redis/redis.service';
+import { RedisService } from '../common/redis-service/redis.service';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import { ErrorsHandlerService } from '../common/errors-handler/errors-handler.service';
+import { EnvService } from '../common/env-service/env.service';
+import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
 import { JwtPayload } from '../types/jwt-payload.type';
 
 @Injectable()
@@ -21,21 +21,15 @@ export class TokensService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly redisService: RedisService,
-    private readonly configService: ConfigService,
+    private readonly envService: EnvService,
     private readonly jwtService: JwtService,
     private readonly errorsHandlerService: ErrorsHandlerService,
   ) {
     this.redisClient = this.redisService.getClient();
-    this.accessSecret =
-      this.configService.getOrThrow<string>('JWT_ACCESS_SECRET');
-    this.refreshSecret =
-      this.configService.getOrThrow<string>('JWT_REFRESH_SECRET');
-    this.accessExpiresIn = this.configService.getOrThrow<string>(
-      'JWT_ACCESS_EXPIRES_IN',
-    );
-    this.refreshExpiresIn = this.configService.getOrThrow<string>(
-      'JWT_REFRESH_EXPIRES_IN',
-    );
+    this.accessSecret = this.envService.getEnv('JWT_ACCESS_SECRET');
+    this.refreshSecret = this.envService.getEnv('JWT_REFRESH_SECRET');
+    this.accessExpiresIn = this.envService.getEnv('JWT_ACCESS_EXPIRES_IN');
+    this.refreshExpiresIn = this.envService.getEnv('JWT_REFRESH_EXPIRES_IN');
   }
 
   private getTokenExpiration(token: string) {

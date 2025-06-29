@@ -1,10 +1,10 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { HashService } from '../common/hash/hash.service';
+import { HashService } from '../common/hash-service/hash.service';
 import { TokensService } from '../auth/tokens.service';
-import { ErrorsHandlerService } from '../common/errors-handler/errors-handler.service';
-import { SensitiveInfoService } from '../common/sensitive-info-service/sensitive-info.service';
+import { AuthService } from '../auth/auth.service';
+import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
 import {
@@ -12,7 +12,7 @@ import {
   USER_PROFILE_FIELDS,
   USER_SECRET_FIELDS,
   USER_CONFIDENTIAL_FIELDS,
-} from '../constants/user-select-fields';
+} from '../config/user-select-fields.constants';
 
 @Injectable()
 export class UsersService {
@@ -21,9 +21,9 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly tokensService: TokensService,
+    private readonly authService: AuthService,
     private readonly hashService: HashService,
     private readonly errorsHandlerService: ErrorsHandlerService,
-    private readonly sensitiveInfoService: SensitiveInfoService,
   ) {}
 
   async getCurrentProfile(userId: number) {
@@ -32,7 +32,9 @@ export class UsersService {
         where: { id: userId },
         select: [...USER_PROFILE_FIELDS],
       });
-      return this.sensitiveInfoService.remove(user, [...USER_SECRET_FIELDS]);
+      return this.authService.removeSensitiveInfo(user, [
+        ...USER_SECRET_FIELDS,
+      ]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleUserNotFound(err);
       this.errorsHandlerService.handleDefaultError();
@@ -87,7 +89,7 @@ export class UsersService {
         .where('user.id = :id', { id: userId })
         .getOneOrFail();
       await queryRunner.commitTransaction();
-      return this.sensitiveInfoService.remove(user, USER_SECRET_FIELDS);
+      return this.authService.removeSensitiveInfo(user, USER_SECRET_FIELDS);
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       this.errorsHandlerService.handleUserNotFound(err);
@@ -114,7 +116,7 @@ export class UsersService {
         });
       }
       const users = await query.getMany();
-      return this.sensitiveInfoService.remove(users, [
+      return this.authService.removeSensitiveInfo(users, [
         ...USER_SECRET_FIELDS,
         ...USER_CONFIDENTIAL_FIELDS,
       ]);

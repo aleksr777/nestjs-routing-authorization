@@ -1,27 +1,27 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
-import { User } from './users/entities/user.entity';
 import { AuthModule } from './auth/auth.module';
 import { CoreModule } from './common/core.module';
+import { EnvService } from './common/env-service/env.service';
+import { User } from './users/entities/user.entity';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
+      imports: [CoreModule],
+      inject: [EnvService],
+      useFactory: (envService: EnvService) => ({
         type: 'postgres',
-        host: configService.getOrThrow<string>('DB_HOST'),
-        port: parseInt(configService.getOrThrow<string>('DB_PORT'), 10),
-        database: configService.getOrThrow<string>('DB_NAME'),
-        username: configService.getOrThrow<string>('DB_USERNAME'),
-        password: configService.getOrThrow<string>('DB_PASSWORD'),
+        host: envService.getEnv('DB_HOST'),
+        port: envService.getEnv('DB_PORT', 'number'),
+        database: envService.getEnv('DB_NAME'),
+        username: envService.getEnv('DB_USERNAME'),
+        password: envService.getEnv('DB_PASSWORD'),
         entities: [User],
-        synchronize:
-          configService.getOrThrow<string>('DB_TYPEORM_SYNC') === 'true',
+        synchronize: envService.getEnv('DB_TYPEORM_SYNC', 'boolean'),
       }),
     }),
     AuthModule,

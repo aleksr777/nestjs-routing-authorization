@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { QueryFailedError, EntityNotFoundError } from 'typeorm';
-import { ErrMessages } from '../../constants/error-messages';
+import { ErrMessages } from './error-messages.constants';
 
 @Injectable()
 export class ErrorsHandlerService {

@@ -2,16 +2,16 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
 import { Request } from 'express';
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { EnvService } from '../../common/env-service/env.service';
 import { JwtPayload } from '../../types/jwt-payload.type';
 import { AuthService } from '../../auth/auth.service';
 import { TokensService } from '../tokens.service';
-import { ErrorsHandlerService } from '../../common/errors-handler/errors-handler.service';
+import { ErrorsHandlerService } from '../../common/errors-handler-service/errors-handler.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
-    private configService: ConfigService,
+    private readonly envService: EnvService,
     private readonly authService: AuthService,
     private readonly tokensService: TokensService,
     private readonly errorsHandlerService: ErrorsHandlerService,
@@ -19,7 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
+      secretOrKey: envService.getEnv('JWT_ACCESS_SECRET'),
       passReqToCallback: true,
     });
   }

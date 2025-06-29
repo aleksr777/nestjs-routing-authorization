@@ -1,14 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { ENV_VARIABLES } from './constants/env-variables';
-import { validateEnvVariables } from './utils/validate-env.util';
+import { EnvService } from './common/env-service/env.service';
 
 async function bootstrap() {
-  validateEnvVariables(ENV_VARIABLES);
-
   const app = await NestFactory.create(AppModule);
+
+  const envService = app.get(EnvService);
+  envService.validateVariables();
 
   // Global DTO validation
   app.useGlobalPipes(
@@ -21,12 +20,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  const configService = app.get(ConfigService);
-
-  const serverPort = parseInt(
-    configService.getOrThrow<string>('SERVER_PORT'),
-    10,
-  );
+  const serverPort = envService.getEnv('SERVER_PORT', 'number');
 
   // Start app
   await app.listen(serverPort);
