@@ -1,16 +1,12 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { RedisClientType } from 'redis';
-import { RedisService } from '../common/redis/redis.service';
+import { RedisService } from '../common/redis-service/redis.service';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import { ErrMessages } from '../constants/error-messages';
+import { EnvService } from '../common/env-service/env.service';
+import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
 import { JwtPayload } from '../types/jwt-payload.type';
 
 @Injectable()
@@ -25,26 +21,21 @@ export class TokensService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly redisService: RedisService,
-    private readonly configService: ConfigService,
+    private readonly envService: EnvService,
     private readonly jwtService: JwtService,
+    private readonly errorsHandlerService: ErrorsHandlerService,
   ) {
     this.redisClient = this.redisService.getClient();
-    this.accessSecret =
-      this.configService.getOrThrow<string>('JWT_ACCESS_SECRET');
-    this.refreshSecret =
-      this.configService.getOrThrow<string>('JWT_REFRESH_SECRET');
-    this.accessExpiresIn = this.configService.getOrThrow<string>(
-      'JWT_ACCESS_EXPIRES_IN',
-    );
-    this.refreshExpiresIn = this.configService.getOrThrow<string>(
-      'JWT_REFRESH_EXPIRES_IN',
-    );
+    this.accessSecret = this.envService.getEnv('JWT_ACCESS_SECRET');
+    this.refreshSecret = this.envService.getEnv('JWT_REFRESH_SECRET');
+    this.accessExpiresIn = this.envService.getEnv('JWT_ACCESS_EXPIRES_IN');
+    this.refreshExpiresIn = this.envService.getEnv('JWT_REFRESH_EXPIRES_IN');
   }
 
   private getTokenExpiration(token: string) {
     const decoded = this.jwtService.decode<JwtPayload>(token);
     if (!decoded?.exp) {
-      throw new InternalServerErrorException(ErrMessages.INVALID_TOKEN);
+      return this.errorsHandlerService.handleInvalidToken();
     }
     return decoded.exp;
   }
@@ -59,6 +50,9 @@ export class TokensService {
   async addToBlacklist(access_token: string): Promise<void> {
     const cleanedToken = this.stripToken(access_token);
     const exp = this.getTokenExpiration(cleanedToken);
+    if (typeof exp !== 'number' || isNaN(exp)) {
+      return this.errorsHandlerService.handleInvalidToken();
+    }
     const ttl = exp - Math.floor(Date.now() / 1000);
     if (ttl > 0) {
       await this.redisClient.set(cleanedToken, 'blacklisted', { EX: ttl });
@@ -73,27 +67,35 @@ export class TokensService {
 
   async saveRefreshToken(userId: number, refresh_token: string) {
     try {
-      const result = await this.usersRepository.update(userId, {
-        refresh_token,
-      });
+      const result = await this.usersRepository.update(
+        { id: userId },
+        {
+          refresh_token,
+        },
+      );
       if (result.affected === 0) {
-        throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
+        return this.errorsHandlerService.handleUserNotFound();
       }
-    } catch {
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+    } catch (err: unknown) {
+      this.errorsHandlerService.handleUserNotFound(err);
+      this.errorsHandlerService.handleDefaultError();
     }
   }
 
   async removeRefreshToken(userId: number) {
     try {
-      const result = await this.usersRepository.update(userId, {
-        refresh_token: null as unknown as string,
-      });
+      const result = await this.usersRepository.update(
+        { id: userId },
+        {
+          refresh_token: null,
+        },
+      );
       if (result.affected === 0) {
-        throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
+        return this.errorsHandlerService.handleUserNotFound();
       }
-    } catch {
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+    } catch (err: unknown) {
+      this.errorsHandlerService.handleUserNotFound(err);
+      this.errorsHandlerService.handleDefaultError();
     }
   }
 

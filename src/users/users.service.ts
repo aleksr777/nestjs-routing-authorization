@@ -1,26 +1,18 @@
-import {
-  Injectable,
-  NotFoundException,
-  InternalServerErrorException,
-  BadRequestException,
-  ConflictException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityNotFoundError } from 'typeorm';
-import { HashPasswordService } from '../common/hash-password/hash-password.service';
+import { Repository, DataSource } from 'typeorm';
+import { HashService } from '../common/hash-service/hash.service';
 import { TokensService } from '../auth/tokens.service';
+import { AuthService } from '../auth/auth.service';
+import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
-import { ErrMessages } from '../constants/error-messages';
 import {
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
   USER_SECRET_FIELDS,
   USER_CONFIDENTIAL_FIELDS,
-} from '../constants/user-select-fields';
-import { removeSensitiveInfo } from '../utils/remove-sensitive-info.util';
-import { isUniqueError } from '../utils/is-unique-error.util';
+} from '../config/user-select-fields.constants';
 
 @Injectable()
 export class UsersService {
@@ -29,7 +21,9 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly tokensService: TokensService,
-    private readonly hashPasswordService: HashPasswordService,
+    private readonly authService: AuthService,
+    private readonly hashService: HashService,
+    private readonly errorsHandlerService: ErrorsHandlerService,
   ) {}
 
   async getCurrentProfile(userId: number) {
@@ -38,18 +32,18 @@ export class UsersService {
         where: { id: userId },
         select: [...USER_PROFILE_FIELDS],
       });
-      return removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
+      return this.authService.removeSensitiveInfo(user, [
+        ...USER_SECRET_FIELDS,
+      ]);
     } catch (err: unknown) {
-      if (err instanceof EntityNotFoundError) {
-        throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleUserNotFound(err);
+      this.errorsHandlerService.handleDefaultError();
     }
   }
 
   async removeCurrentUser(userId: number, access_token: string | undefined) {
     if (!access_token) {
-      throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
+      return this.errorsHandlerService.handleTokenNotDefined();
     }
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -63,10 +57,8 @@ export class UsersService {
       await queryRunner.commitTransaction();
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
-      if (err instanceof EntityNotFoundError) {
-        throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleUserNotFound(err);
+      this.errorsHandlerService.handleDefaultError();
     } finally {
       await queryRunner.release();
     }
@@ -79,9 +71,7 @@ export class UsersService {
     await queryRunner.startTransaction();
     try {
       if (dto.password) {
-        dto.password = await this.hashPasswordService.hashPassword(
-          dto.password,
-        );
+        dto.password = await this.hashService.hash(dto.password);
       }
       const result = await queryRunner.manager
         .createQueryBuilder()
@@ -90,7 +80,8 @@ export class UsersService {
         .where('id = :id', { id: userId })
         .execute();
       if (result.affected === 0) {
-        throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
+        await queryRunner.rollbackTransaction();
+        return this.errorsHandlerService.handleUserNotFound();
       }
       const user = await queryRunner.manager
         .createQueryBuilder(User, 'user')
@@ -98,16 +89,12 @@ export class UsersService {
         .where('user.id = :id', { id: userId })
         .getOneOrFail();
       await queryRunner.commitTransaction();
-      return removeSensitiveInfo(user, USER_SECRET_FIELDS);
+      return this.authService.removeSensitiveInfo(user, USER_SECRET_FIELDS);
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
-      if (err instanceof EntityNotFoundError) {
-        throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
-      }
-      if (isUniqueError(err)) {
-        throw new ConflictException(ErrMessages.CONFLICT_USER_EXISTS);
-      }
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleUserNotFound(err);
+      this.errorsHandlerService.handleUserConflict(err);
+      this.errorsHandlerService.handleDefaultError();
     } finally {
       await queryRunner.release();
     }
@@ -129,12 +116,12 @@ export class UsersService {
         });
       }
       const users = await query.getMany();
-      return removeSensitiveInfo(users, [
+      return this.authService.removeSensitiveInfo(users, [
         ...USER_SECRET_FIELDS,
         ...USER_CONFIDENTIAL_FIELDS,
       ]);
     } catch {
-      throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
+      this.errorsHandlerService.handleDefaultError();
     }
   }
 }

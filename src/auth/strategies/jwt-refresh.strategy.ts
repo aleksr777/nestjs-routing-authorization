@@ -1,8 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, ExtractJwt, StrategyOptionsWithRequest } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
+import { ErrorsHandlerService } from '../../common/errors-handler-service/errors-handler.service';
 import { AuthService } from '../../auth/auth.service';
+import { EnvService } from '../../common/env-service/env.service';
 import { JwtPayload } from '../../types/jwt-payload.type';
 import { Request } from 'express';
 
@@ -13,13 +14,14 @@ export class JwtRefreshStrategy extends PassportStrategy(
 ) {
   private readonly extractor = ExtractJwt.fromAuthHeaderAsBearerToken();
   constructor(
-    private readonly configService: ConfigService,
+    private readonly envService: EnvService,
     private readonly authService: AuthService,
+    private readonly errorsHandlerService: ErrorsHandlerService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
+      secretOrKey: envService.getEnv('JWT_REFRESH_SECRET'),
       algorithms: ['HS256'],
       passReqToCallback: true,
     } as StrategyOptionsWithRequest);
@@ -29,7 +31,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
     const refresh_token = this.extractor(req);
     const userId = +payload.sub;
     if (!refresh_token) {
-      throw new UnauthorizedException('refresh_token not found in request!');
+      return this.errorsHandlerService.handleTokenNotDefined();
     }
     const userData = await this.authService.validateUserByRefreshToken(
       userId,
