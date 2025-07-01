@@ -13,6 +13,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 
 @Entity()
@@ -41,10 +43,12 @@ export class User {
   @IsEmail()
   @Length(6, 255)
   @Column({
+    type: 'varchar',
     name: 'email',
     unique: true,
     select: false,
     length: 255,
+    nullable: false,
   })
   email!: string;
 
@@ -52,6 +56,7 @@ export class User {
   @IsPhoneNumber()
   @Length(4, 30)
   @Column({
+    type: 'varchar',
     name: 'phone_number',
     unique: true,
     nullable: true,
@@ -64,6 +69,7 @@ export class User {
   @IsString()
   @Length(2, 50)
   @Column({
+    type: 'varchar',
     name: 'nickname',
     unique: true,
     nullable: true,
@@ -75,6 +81,7 @@ export class User {
   @IsString()
   @Length(8, 100)
   @Column({
+    type: 'varchar',
     name: 'password',
     length: 100,
     select: false,
@@ -83,12 +90,12 @@ export class User {
 
   @IsOptional()
   @IsInt()
-  @Length(0, 200)
+  @Min(0)
+  @Max(200)
   @Column({
     type: 'smallint',
     name: 'age',
     nullable: true,
-    length: 200,
   })
   age?: number | null;
 
@@ -96,6 +103,7 @@ export class User {
   @IsString()
   @Length(0, 20)
   @Column({
+    type: 'varchar',
     name: 'gender',
     nullable: true,
     length: 20,
@@ -109,7 +117,6 @@ export class User {
     type: 'text',
     name: 'about',
     nullable: true,
-    length: 1000,
   })
   about?: string | null;
 
