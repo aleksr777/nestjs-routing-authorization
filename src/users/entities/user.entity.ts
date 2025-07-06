@@ -39,8 +39,9 @@ export class User {
   })
   updated_at!: Date;
 
-  @IsNotEmpty()
+  /* Email */
   @IsEmail()
+  @IsNotEmpty()
   @Length(6, 255)
   @Column({
     type: 'varchar',
@@ -52,8 +53,9 @@ export class User {
   })
   email!: string;
 
-  @IsOptional()
+  /* Phone number */
   @IsPhoneNumber()
+  @IsOptional()
   @Length(4, 30)
   @Column({
     type: 'varchar',
@@ -65,6 +67,7 @@ export class User {
   })
   phone_number?: string | null;
 
+  /* Nickname */
   @IsOptional()
   @IsString()
   @Length(2, 50)
@@ -77,6 +80,7 @@ export class User {
   })
   nickname?: string | null;
 
+  /* Password */
   @IsNotEmpty()
   @IsString()
   @Length(8, 100)
@@ -88,6 +92,7 @@ export class User {
   })
   password!: string;
 
+  /* Age */
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -99,6 +104,7 @@ export class User {
   })
   age?: number | null;
 
+  /* Gender */
   @IsOptional()
   @IsString()
   @Length(0, 20)
@@ -110,6 +116,7 @@ export class User {
   })
   gender?: string | null;
 
+  /* About */
   @IsOptional()
   @IsString()
   @Length(0, 1000)
@@ -120,6 +127,7 @@ export class User {
   })
   about?: string | null;
 
+  /* refresh_token */
   @Column({
     type: 'varchar',
     name: 'refresh_token',
