@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { v4 as uuidv4 } from 'uuid';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
@@ -47,7 +48,7 @@ export class TokensService {
     return cleanedToken;
   }
 
-  async addToBlacklist(access_token: string): Promise<void> {
+  async addToBlacklist(access_token: string) {
     const cleanedToken = this.stripToken(access_token);
     const exp = this.getTokenExpiration(cleanedToken);
     if (typeof exp !== 'number' || isNaN(exp)) {
@@ -59,7 +60,7 @@ export class TokensService {
     }
   }
 
-  async isBlacklisted(access_token: string): Promise<boolean> {
+  async isBlacklisted(access_token: string) {
     const cleanedToken = this.stripToken(access_token);
     const result = await this.redisClient.get(cleanedToken);
     return result === 'blacklisted';
@@ -117,5 +118,34 @@ export class TokensService {
       access_token_expires: this.getTokenExpiration(access_token),
       refresh_token_expires: this.getTokenExpiration(refresh_token),
     };
+  }
+
+  generateResetToken() {
+    return uuidv4();
+  }
+
+  async saveResetToken(userId: number, token: string): Promise<void> {
+    const ttlSeconds = Number(this.accessExpiresIn);
+    const id = userId.toString();
+    try {
+      await this.redisClient.set(`reset:${token}`, id, {
+        EX: ttlSeconds,
+      });
+    } catch {
+      this.errorsHandlerService.handleDefaultError();
+    }
+  }
+
+  async getUserIdByResetToken(token: string): Promise<number | null> {
+    const userId = await this.redisClient.get(`reset:${token}`);
+    return userId ? parseInt(userId, 10) : null;
+  }
+
+  async deleteResetToken(token: string): Promise<void> {
+    try {
+      await this.redisClient.del(`reset:${token}`);
+    } catch {
+      this.errorsHandlerService.handleDefaultError();
+    }
   }
 }

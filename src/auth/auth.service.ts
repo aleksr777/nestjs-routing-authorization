@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { TokensService } from './tokens.service';
 import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
+import { MailService } from '../common/mail-service/mail.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import {
@@ -22,6 +23,7 @@ export class AuthService {
     private readonly tokensService: TokensService,
     private readonly hashService: HashService,
     private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly mailService: MailService,
   ) {}
 
   removeSensitiveInfo<T extends object, K extends keyof T>(
@@ -153,5 +155,13 @@ export class AuthService {
       this.errorsHandlerService.handleInvalidToken(err);
       this.errorsHandlerService.handleDefaultError();
     }
+  }
+
+  async requestPasswordReset(email: string) {
+    console.log(`email: ${email}`);
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    console.log(`token: ${token}, newPassword: ${newPassword}`);
   }
 }

@@ -40,4 +40,17 @@ export class AuthController {
     const userId = +user.id;
     return this.authService.refreshTokens(userId);
   }
+
+  @Post('request-password-reset')
+  async requestPasswordReset(@Body('email') email: string) {
+    return await this.authService.requestPasswordReset(email);
+  }
+
+  @Post('reset-password')
+  async resetPassword(
+    @Body('token') token: string,
+    @Body('newPassword') newPassword: string,
+  ) {
+    return await this.authService.resetPassword(token, newPassword);
+  }
 }
