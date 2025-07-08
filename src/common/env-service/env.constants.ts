@@ -14,4 +14,10 @@ export const ENV_VARIABLES = [
   'DB_NAME',
   'DB_USERNAME',
   'DB_PASSWORD',
+  'SMTP_HOST',
+  'SMTP_PORT',
+  'SMTP_SECURE',
+  'SMTP_USER',
+  'SMTP_PASS',
+  'SMTP_FROM',
 ] as const;

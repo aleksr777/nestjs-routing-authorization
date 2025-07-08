@@ -24,6 +24,12 @@ DB_USERNAME='postgres'
 DB_PASSWORD='db_password'
 DB_TYPEORM_SYNC=true
 
+SMTP_HOST='smtp.gmail.com'
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER='user@gmail.com'
+SMTP_PASS='aaaa bbbb cccc dddd'
+SMTP_FROM='user@gmail.com'
 ```
 
 ---
