@@ -5,8 +5,9 @@ import { EnvService } from '../env-service/env.service';
 @Injectable()
 export class MailService {
   private transporter: nodemailer.Transporter;
-
+  private smtpFrom: string;
   constructor(private readonly envService: EnvService) {
+    this.smtpFrom = this.envService.getEnv('SMTP_FROM');
     this.transporter = nodemailer.createTransport({
       host: this.envService.getEnv('SMTP_HOST'),
       port: this.envService.getEnv('SMTP_PORT', 'number'),
@@ -25,7 +26,7 @@ export class MailService {
     html?: string,
   ): Promise<void> {
     await this.transporter.sendMail({
-      from: `"No Reply" <${this.envService.getEnv('SMTP_FROM')}>`,
+      from: `"Service Email" <${this.smtpFrom}>`,
       to,
       subject,
       text,

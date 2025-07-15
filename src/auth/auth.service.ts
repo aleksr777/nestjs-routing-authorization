@@ -5,6 +5,7 @@ import { TokensService } from './tokens.service';
 import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
 import { MailService } from '../common/mail-service/mail.service';
+import { EnvService } from '../common/env-service/env.service';
 import { User } from '../users/entities/user.entity';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import {
@@ -24,6 +25,7 @@ export class AuthService {
     private readonly hashService: HashService,
     private readonly errorsHandlerService: ErrorsHandlerService,
     private readonly mailService: MailService,
+    private readonly envService: EnvService,
   ) {}
 
   removeSensitiveInfo<T extends object, K extends keyof T>(
@@ -114,7 +116,7 @@ export class AuthService {
       });
       await queryRunner.commitTransaction();
       return tokens;
-    } catch (err) {
+    } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       this.errorsHandlerService.handleUserConflict(err);
       this.errorsHandlerService.handleDefaultError();
@@ -140,7 +142,7 @@ export class AuthService {
     try {
       await this.tokensService.removeRefreshToken(userId);
       await this.tokensService.addToBlacklist(access_token);
-    } catch (err) {
+    } catch (err: unknown) {
       this.errorsHandlerService.handleInvalidToken(err);
       this.errorsHandlerService.handleDefaultError();
     }
@@ -151,17 +153,58 @@ export class AuthService {
       const tokens = this.tokensService.generateTokens(userId);
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
-    } catch (err) {
+    } catch (err: unknown) {
       this.errorsHandlerService.handleInvalidToken(err);
       this.errorsHandlerService.handleDefaultError();
     }
   }
 
   async requestPasswordReset(email: string) {
-    console.log(`email: ${email}`);
+    try {
+      const user = await this.usersRepository.findOne({
+        where: { email },
+        select: ['id'],
+      });
+      if (user) {
+        const token = this.tokensService.generateResetToken();
+        await this.tokensService.saveResetToken(user.id, token);
+        const resetUrl = `${this.envService.getEnv('FRONTEND_URL')}/reset-password?token=${token}`;
+        const text = `This is an automated message, please do not reply! Follow this link to reset your password: ${resetUrl}`;
+        const html = `
+          <p style="font-weight: bold; font-size: 17px;">This is an automated message, please do not reply! Follow this link to reset your password:</p>
+          <p style="font-weight: bold; font-size: 17px;">
+            <a href="${resetUrl}" style="font-weight: bold;">Reset your password</a>
+          </p>`;
+        await this.mailService.sendMail(email, `Password recovery`, text, html);
+      }
+      return {
+        message: 'If the email exists, we’ve sent you a password reset link.',
+      };
+    } catch {
+      this.errorsHandlerService.handleDefaultError();
+    }
   }
 
   async resetPassword(token: string, newPassword: string) {
-    console.log(`token: ${token}, newPassword: ${newPassword}`);
+    try {
+      const userId = await this.tokensService.getUserIdByResetToken(token);
+      if (!userId) {
+        this.errorsHandlerService.handleExpiredOrInvalidResetToken();
+        return;
+      }
+      const hashedPassword = await this.hashService.hash(newPassword);
+      const result = await this.usersRepository.update(
+        { id: userId },
+        { password: hashedPassword },
+      );
+      if (result.affected === 0) {
+        this.errorsHandlerService.handleUserNotFound();
+      }
+      await this.tokensService.deleteResetToken(token);
+      return { message: 'Password successfully reset!' };
+    } catch (err: unknown) {
+      this.errorsHandlerService.handleResetPassword(err);
+      this.errorsHandlerService.handleDefaultError();
+    }
   }
 }

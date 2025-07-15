@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { QueryFailedError, EntityNotFoundError } from 'typeorm';
 import { ErrMessages } from './error-messages.constants';
@@ -77,5 +78,19 @@ export class ErrorsHandlerService {
 
   handleTokenIsBlacklisted() {
     throw new UnauthorizedException(ErrMessages.TOKEN_IS_BLACKLISTED);
+  }
+
+  handleExpiredOrInvalidResetToken() {
+    throw new BadRequestException(ErrMessages.INVALID_RESET_TOKEN);
+  }
+
+  handleResetPassword(err: unknown) {
+    if (
+      err instanceof BadRequestException ||
+      err instanceof UnauthorizedException ||
+      err instanceof NotFoundException
+    ) {
+      throw err; // пробросить ошибку клиенту
+    }
   }
 }

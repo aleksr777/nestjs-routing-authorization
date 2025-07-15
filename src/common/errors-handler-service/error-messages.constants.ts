@@ -3,6 +3,7 @@ export enum ErrMessages {
 
   TOKEN_NOT_DEFINED = 'Token is not defined!',
   INVALID_TOKEN = 'Invalid token',
+  INVALID_RESET_TOKEN = 'The reset token is expired or invalid! Please request a new one.',
   TOKEN_IS_BLACKLISTED = 'Token is blacklisted',
   INVALID_EMAIL_OR_PASSWORD = 'Invalid email or password!',
 

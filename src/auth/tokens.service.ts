@@ -17,7 +17,7 @@ export class TokensService {
   private readonly refreshSecret: string;
   private readonly accessExpiresIn: string;
   private readonly refreshExpiresIn: string;
-
+  private readonly resetExpiresIn: number;
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -31,6 +31,10 @@ export class TokensService {
     this.refreshSecret = this.envService.getEnv('JWT_REFRESH_SECRET');
     this.accessExpiresIn = this.envService.getEnv('JWT_ACCESS_EXPIRES_IN');
     this.refreshExpiresIn = this.envService.getEnv('JWT_REFRESH_EXPIRES_IN');
+    this.resetExpiresIn = this.envService.getEnv(
+      'RESET_TOKEN_EXPIRES_IN',
+      'number',
+    );
   }
 
   private getTokenExpiration(token: string) {
@@ -125,11 +129,10 @@ export class TokensService {
   }
 
   async saveResetToken(userId: number, token: string): Promise<void> {
-    const ttlSeconds = Number(this.accessExpiresIn);
     const id = userId.toString();
     try {
       await this.redisClient.set(`reset:${token}`, id, {
-        EX: ttlSeconds,
+        EX: this.resetExpiresIn,
       });
     } catch {
       this.errorsHandlerService.handleDefaultError();
