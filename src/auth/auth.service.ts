@@ -173,7 +173,7 @@ export class AuthService {
         const html = `
           <p style="font-weight: bold; font-size: 17px;">This is an automated message, please do not reply! Follow this link to reset your password:</p>
           <p style="font-weight: bold; font-size: 17px;">
-            <a href="${resetUrl}" style="font-weight: bold;">Reset your password</a>
+            <a href="${resetUrl}" style="font-weight: bold;">${token}</a>
           </p>`;
         await this.mailService.sendMail(email, `Password recovery`, text, html);
       }

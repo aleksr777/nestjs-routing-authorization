@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
-import { RedisClientType } from 'redis';
 import { RedisService } from '../common/redis-service/redis.service';
 import { JwtService } from '@nestjs/jwt';
 import { EnvService } from '../common/env-service/env.service';
@@ -12,7 +11,6 @@ import { JwtPayload } from '../types/jwt-payload.type';
 
 @Injectable()
 export class TokensService {
-  private readonly redisClient: RedisClientType;
   private readonly accessSecret: string;
   private readonly refreshSecret: string;
   private readonly accessExpiresIn: string;
@@ -26,7 +24,6 @@ export class TokensService {
     private readonly jwtService: JwtService,
     private readonly errorsHandlerService: ErrorsHandlerService,
   ) {
-    this.redisClient = this.redisService.getClient();
     this.accessSecret = this.envService.getEnv('JWT_ACCESS_SECRET');
     this.refreshSecret = this.envService.getEnv('JWT_REFRESH_SECRET');
     this.accessExpiresIn = this.envService.getEnv('JWT_ACCESS_EXPIRES_IN');
@@ -59,14 +56,15 @@ export class TokensService {
       return this.errorsHandlerService.handleInvalidToken();
     }
     const ttl = exp - Math.floor(Date.now() / 1000);
-    if (ttl > 0) {
-      await this.redisClient.set(cleanedToken, 'blacklisted', { EX: ttl });
+    if (ttl <= 0) {
+      return this.errorsHandlerService.handleInvalidToken();
     }
+    await this.redisService.set(cleanedToken, 'blacklisted', { EX: ttl });
   }
 
   async isBlacklisted(access_token: string) {
     const cleanedToken = this.stripToken(access_token);
-    const result = await this.redisClient.get(cleanedToken);
+    const result = await this.redisService.get(cleanedToken);
     return result === 'blacklisted';
   }
 
@@ -116,11 +114,13 @@ export class TokensService {
       secret: this.refreshSecret,
       expiresIn: this.refreshExpiresIn,
     });
+    const decodedAccess = this.jwtService.decode<JwtPayload>(access_token);
+    const decodedRefresh = this.jwtService.decode<JwtPayload>(refresh_token);
     return {
       access_token,
       refresh_token,
-      access_token_expires: this.getTokenExpiration(access_token),
-      refresh_token_expires: this.getTokenExpiration(refresh_token),
+      access_token_expires: decodedAccess?.exp ?? null,
+      refresh_token_expires: decodedRefresh?.exp ?? null,
     };
   }
 
@@ -130,25 +130,17 @@ export class TokensService {
 
   async saveResetToken(userId: number, token: string): Promise<void> {
     const id = userId.toString();
-    try {
-      await this.redisClient.set(`reset:${token}`, id, {
-        EX: this.resetExpiresIn,
-      });
-    } catch {
-      this.errorsHandlerService.handleDefaultError();
-    }
+    await this.redisService.set(`reset:${token}`, id, {
+      EX: this.resetExpiresIn,
+    });
   }
 
   async getUserIdByResetToken(token: string): Promise<number | null> {
-    const userId = await this.redisClient.get(`reset:${token}`);
+    const userId = await this.redisService.get(`reset:${token}`);
     return userId ? parseInt(userId, 10) : null;
   }
 
-  async deleteResetToken(token: string): Promise<void> {
-    try {
-      await this.redisClient.del(`reset:${token}`);
-    } catch {
-      this.errorsHandlerService.handleDefaultError();
-    }
+  async deleteResetToken(token: string) {
+    await this.redisService.del(`reset:${token}`);
   }
 }
