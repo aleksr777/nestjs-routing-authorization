@@ -35,10 +35,10 @@ export class AuthController {
 
   @UseGuards(RefreshTokenGuard)
   @Post('refresh')
-  async refreshTokens(@Req() req: Request) {
+  async refreshJwtTokens(@Req() req: Request) {
     const user = req.user as User;
     const userId = +user.id;
-    return this.authService.refreshTokens(userId);
+    return this.authService.refreshJwtTokens(userId);
   }
 
   @Post('request-password-reset')

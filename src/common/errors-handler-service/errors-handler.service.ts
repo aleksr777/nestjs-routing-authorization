@@ -76,7 +76,7 @@ export class ErrorsHandlerService {
     throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
   }
 
-  handleTokenIsBlacklisted() {
+  handleTokenisJwtTokenBlacklisted() {
     throw new UnauthorizedException(ErrMessages.TOKEN_IS_BLACKLISTED);
   }
 

@@ -110,7 +110,7 @@ export class AuthService {
         password: hashedPassword,
       });
       const savedUser = await queryRunner.manager.save(user);
-      const tokens = this.tokensService.generateTokens(savedUser.id);
+      const tokens = this.tokensService.generateJwtTokens(savedUser.id);
       await queryRunner.manager.update(User, savedUser.id, {
         refresh_token: tokens.refresh_token,
       });
@@ -127,7 +127,7 @@ export class AuthService {
 
   async login(userId: number) {
     try {
-      const tokens = this.tokensService.generateTokens(userId);
+      const tokens = this.tokensService.generateJwtTokens(userId);
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
     } catch {
@@ -141,16 +141,16 @@ export class AuthService {
     }
     try {
       await this.tokensService.removeRefreshToken(userId);
-      await this.tokensService.addToBlacklist(access_token);
+      await this.tokensService.addJwtTokenToBlacklist(access_token);
     } catch (err: unknown) {
       this.errorsHandlerService.handleInvalidToken(err);
       this.errorsHandlerService.handleDefaultError();
     }
   }
 
-  async refreshTokens(userId: number) {
+  async refreshJwtTokens(userId: number) {
     try {
-      const tokens = this.tokensService.generateTokens(userId);
+      const tokens = this.tokensService.generateJwtTokens(userId);
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
     } catch (err: unknown) {
@@ -201,9 +201,9 @@ export class AuthService {
         this.errorsHandlerService.handleUserNotFound();
       }
       await this.tokensService.deleteResetToken(token);
-      return { message: 'Password successfully reset!' };
-    } catch (err: unknown) {
-      this.errorsHandlerService.handleResetPassword(err);
+      const tokens = await this.refreshJwtTokens(userId);
+      return tokens;
+    } catch {
       this.errorsHandlerService.handleDefaultError();
     }
   }

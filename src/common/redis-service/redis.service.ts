@@ -63,11 +63,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return this.client;
   }
 
-  async set(
-    key: string,
-    value: string,
-    options?: Record<string, any>,
-  ): Promise<void> {
+  async set(key: string, value: string, options?: Record<string, any>) {
     try {
       await this.client.set(key, value, options);
     } catch (err) {
@@ -76,7 +72,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async get(key: string): Promise<string | null> {
+  async get(key: string) {
     try {
       return await this.client.get(key);
     } catch (err) {
@@ -85,7 +81,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async del(key: string): Promise<void> {
+  async del(key: string) {
     try {
       await this.client.del(key);
     } catch (err) {

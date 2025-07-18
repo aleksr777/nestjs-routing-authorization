@@ -53,7 +53,7 @@ export class UsersService {
         where: { id: userId },
       });
       await queryRunner.manager.delete(User, { id: userId });
-      await this.tokensService.addToBlacklist(access_token);
+      await this.tokensService.addJwtTokenToBlacklist(access_token);
       await queryRunner.commitTransaction();
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();

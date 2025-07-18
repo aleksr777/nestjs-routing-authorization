@@ -34,7 +34,7 @@ export class TokensService {
     );
   }
 
-  private getTokenExpiration(token: string) {
+  private getJwtTokenExpiration(token: string) {
     const decoded = this.jwtService.decode<JwtPayload>(token);
     if (!decoded?.exp) {
       return this.errorsHandlerService.handleInvalidToken();
@@ -42,16 +42,16 @@ export class TokensService {
     return decoded.exp;
   }
 
-  private stripToken(token: string) {
+  private stripJwtToken(token: string) {
     const cleanedToken = token.startsWith('Bearer ')
       ? token.slice(7).trim()
       : token.trim();
     return cleanedToken;
   }
 
-  async addToBlacklist(access_token: string) {
-    const cleanedToken = this.stripToken(access_token);
-    const exp = this.getTokenExpiration(cleanedToken);
+  async addJwtTokenToBlacklist(access_token: string) {
+    const cleanedToken = this.stripJwtToken(access_token);
+    const exp = this.getJwtTokenExpiration(cleanedToken);
     if (typeof exp !== 'number' || isNaN(exp)) {
       return this.errorsHandlerService.handleInvalidToken();
     }
@@ -62,8 +62,8 @@ export class TokensService {
     await this.redisService.set(cleanedToken, 'blacklisted', { EX: ttl });
   }
 
-  async isBlacklisted(access_token: string) {
-    const cleanedToken = this.stripToken(access_token);
+  async isJwtTokenBlacklisted(access_token: string) {
+    const cleanedToken = this.stripJwtToken(access_token);
     const result = await this.redisService.get(cleanedToken);
     return result === 'blacklisted';
   }
@@ -102,7 +102,7 @@ export class TokensService {
     }
   }
 
-  generateTokens(userId: number) {
+  generateJwtTokens(userId: number) {
     const payload = {
       sub: userId,
     };
