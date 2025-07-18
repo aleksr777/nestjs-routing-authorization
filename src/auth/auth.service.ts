@@ -7,7 +7,6 @@ import { ErrorsHandlerService } from '../common/errors-handler-service/errors-ha
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
 import { User } from '../users/entities/user.entity';
-import { CreateUserDto } from '../users/dto/create-user.dto';
 import {
   USER_PROFILE_FIELDS,
   USER_PASSWORD,
@@ -17,16 +16,33 @@ import {
 @Injectable()
 export class AuthService {
   config: any;
+  private readonly frontendUrl: string;
   constructor(
-    private readonly dataSource: DataSource,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    private readonly dataSource: DataSource,
     private readonly tokensService: TokensService,
     private readonly hashService: HashService,
     private readonly errorsHandlerService: ErrorsHandlerService,
     private readonly mailService: MailService,
     private readonly envService: EnvService,
-  ) {}
+  ) {
+    this.frontendUrl = this.envService.getEnv('FRONTEND_URL');
+  }
+
+  private generateRandomString(length: number): string {
+    const chars =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
+  private generatePrefix(): string {
+    return `${this.generateRandomString(4)}-${this.generateRandomString(5)}-${this.generateRandomString(4)}`;
+  }
 
   removeSensitiveInfo<T extends object, K extends keyof T>(
     source: T | T[],
@@ -64,7 +80,7 @@ export class AuthService {
       return this.removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleInvalidEmailOrPassword(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 
@@ -77,7 +93,7 @@ export class AuthService {
       return this.removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
       throw err;
     }
   }
@@ -95,31 +111,88 @@ export class AuthService {
       return this.removeSensitiveInfo(user, [USER_PASSWORD]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleInvalidToken(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 
-  async register(dto: CreateUserDto) {
-    const hashedPassword = await this.hashService.hash(dto.password);
+  async requestRegistration(email: string, password: string) {
+    try {
+      const user = await this.usersRepository.findOne({
+        where: { email },
+        select: ['id'],
+      });
+      if (user) {
+        const resetUrl = `${this.frontendUrl}/reset-password?email=${encodeURIComponent(email)}`;
+        const text = `Hi, this is an automated message, please do not reply! It looks like there is already an account associated with this email address. If you’ve forgotten your password, you can reset it by clicking the link below: ${resetUrl}`;
+        const html = `
+          <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
+          <p style="font-weight: bold; font-size: 17px;">It looks like there is already an account associated with this email address.</p>
+          <p style="font-weight: bold; font-size: 17px;">If you’ve forgotten your password, you can reset it by clicking the link below:</p>
+          <p style="font-weight: bold; font-size: 17px;">
+              <a href="${resetUrl}" style="font-weight: bold;">${resetUrl}</a>
+          </p>
+          <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
+          <p style="font-weight: bold; font-size: 17px;">Best regards,<br>Your App Team</p>
+        `;
+        await this.mailService.sendMail(email, `Password recovery`, text, html);
+      } else {
+        const token = this.tokensService.generateVerificationToken();
+        const hashedPassword = await this.hashService.hash(password);
+        const redisValue = { email: email, password: hashedPassword };
+        await this.tokensService.saveRegistrationToken(token, redisValue);
+        const confirmUrl = `${this.frontendUrl}/confirm-registration?token=${token}`;
+        const text = `Hi, this is an automated message, please do not reply! You can confirm your registration by clicking the link below: ${confirmUrl}`;
+        const html = `
+          <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
+          <p style="font-weight: bold; font-size: 17px;">You can confirm your registration by clicking the link below:</p>
+          <p style="font-weight: bold; font-size: 17px;">          
+            <a href="${confirmUrl}" style="font-weight: bold;">${confirmUrl}</a>
+          </p>
+          <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
+          <p style="font-weight: bold; font-size: 17px;">Best regards,<br>Your App Team</p>
+        `;
+        await this.mailService.sendMail(
+          email,
+          `Confirm registration`,
+          text,
+          html,
+        );
+      }
+      return {
+        message: 'If the email exists, we’ve sent you a link.',
+      };
+    } catch (err: unknown) {
+      this.errorsHandlerService.handleDefaultError(err);
+    }
+  }
+
+  async confirmRegistration(token: string) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      const user = queryRunner.manager.create(User, {
-        ...dto,
-        password: hashedPassword,
+      const data = await this.tokensService.getDataByRegistrationToken(token);
+      if (!data) {
+        this.errorsHandlerService.handleExpiredOrInvalidVerificationToken();
+        return;
+      }
+      const baseNickname = data.email.split('@')[0].slice(0, 20);
+      let nickname = `${baseNickname}_${this.generatePrefix()}`;
+      while (await queryRunner.manager.findOne(User, { where: { nickname } })) {
+        nickname = `${baseNickname}_${this.generatePrefix()}`;
+      }
+      const newUser = queryRunner.manager.create(User, {
+        email: data.email,
+        password: data.password,
+        nickname,
       });
-      const savedUser = await queryRunner.manager.save(user);
-      const tokens = this.tokensService.generateJwtTokens(savedUser.id);
-      await queryRunner.manager.update(User, savedUser.id, {
-        refresh_token: tokens.refresh_token,
-      });
+      await queryRunner.manager.save(User, newUser);
       await queryRunner.commitTransaction();
-      return tokens;
+      await this.tokensService.deleteRegistrationToken(token);
+      return this.login(newUser.id);
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
-      this.errorsHandlerService.handleUserConflict(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleConfirmRegistration(err);
     } finally {
       await queryRunner.release();
     }
@@ -130,8 +203,8 @@ export class AuthService {
       const tokens = this.tokensService.generateJwtTokens(userId);
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
-    } catch {
-      this.errorsHandlerService.handleDefaultError();
+    } catch (err: unknown) {
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 
@@ -144,7 +217,7 @@ export class AuthService {
       await this.tokensService.addJwtTokenToBlacklist(access_token);
     } catch (err: unknown) {
       this.errorsHandlerService.handleInvalidToken(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 
@@ -155,7 +228,7 @@ export class AuthService {
       return tokens;
     } catch (err: unknown) {
       this.errorsHandlerService.handleInvalidToken(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 
@@ -166,22 +239,23 @@ export class AuthService {
         select: ['id'],
       });
       if (user) {
-        const token = this.tokensService.generateResetToken();
+        const token = this.tokensService.generateVerificationToken();
         await this.tokensService.saveResetToken(user.id, token);
-        const resetUrl = `${this.envService.getEnv('FRONTEND_URL')}/reset-password?token=${token}`;
-        const text = `This is an automated message, please do not reply! Follow this link to reset your password: ${resetUrl}`;
+        const resetUrl = `${this.frontendUrl}/reset-password?token=${token}`;
+        const text = `Hi, this is an automated message, please do not reply! You can reset your password by clicking the link below: ${resetUrl}`;
         const html = `
-          <p style="font-weight: bold; font-size: 17px;">This is an automated message, please do not reply! Follow this link to reset your password:</p>
+          <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
+          <p style="font-weight: bold; font-size: 17px;">You can reset your password by clicking the link below:</p>
           <p style="font-weight: bold; font-size: 17px;">
-            <a href="${resetUrl}" style="font-weight: bold;">${token}</a>
+            <a href="${resetUrl}" style="font-weight: bold;">${resetUrl}</a>
           </p>`;
         await this.mailService.sendMail(email, `Password recovery`, text, html);
       }
       return {
         message: 'If the email exists, we’ve sent you a password reset link.',
       };
-    } catch {
-      this.errorsHandlerService.handleDefaultError();
+    } catch (err: unknown) {
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 
@@ -189,7 +263,7 @@ export class AuthService {
     try {
       const userId = await this.tokensService.getUserIdByResetToken(token);
       if (!userId) {
-        this.errorsHandlerService.handleExpiredOrInvalidResetToken();
+        this.errorsHandlerService.handleExpiredOrInvalidVerificationToken();
         return;
       }
       const hashedPassword = await this.hashService.hash(newPassword);
@@ -203,8 +277,8 @@ export class AuthService {
       await this.tokensService.deleteResetToken(token);
       const tokens = await this.refreshJwtTokens(userId);
       return tokens;
-    } catch {
-      this.errorsHandlerService.handleDefaultError();
+    } catch (err: unknown) {
+      this.errorsHandlerService.handleResetPassword(err);
     }
   }
 }

@@ -4,16 +4,22 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
-import { CreateUserDto } from '../users/dto/create-user.dto';
+import { RequestRegistrationDto } from './dto/request-registration.dto';
+import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
 import { User } from '../users/entities/user.entity';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
-  async register(@Body() createUserDto: CreateUserDto) {
-    return this.authService.register(createUserDto);
+  @Post('request-registration')
+  async requestRegistration(@Body() dto: RequestRegistrationDto) {
+    return this.authService.requestRegistration(dto.email, dto.password);
+  }
+
+  @Post('confirm-registration')
+  async confirmRegistration(@Body() dto: ConfirmRegistrationDto) {
+    return this.authService.confirmRegistration(dto.token);
   }
 
   @UseGuards(LocalAuthGuard)

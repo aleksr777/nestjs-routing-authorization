@@ -37,7 +37,7 @@ export class UsersService {
       ]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 
@@ -58,7 +58,7 @@ export class UsersService {
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     } finally {
       await queryRunner.release();
     }
@@ -94,7 +94,7 @@ export class UsersService {
       await queryRunner.rollbackTransaction();
       this.errorsHandlerService.handleUserNotFound(err);
       this.errorsHandlerService.handleUserConflict(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     } finally {
       await queryRunner.release();
     }
@@ -120,8 +120,8 @@ export class UsersService {
         ...USER_SECRET_FIELDS,
         ...USER_CONFIDENTIAL_FIELDS,
       ]);
-    } catch {
-      this.errorsHandlerService.handleDefaultError();
+    } catch (err: unknown) {
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 }

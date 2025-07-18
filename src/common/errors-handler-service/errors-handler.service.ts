@@ -11,7 +11,8 @@ import { ErrMessages } from './error-messages.constants';
 
 @Injectable()
 export class ErrorsHandlerService {
-  handleDefaultError() {
+  handleDefaultError(err: unknown) {
+    console.log(`Internal server error: ${String(err)}`);
     throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
   }
 
@@ -80,8 +81,8 @@ export class ErrorsHandlerService {
     throw new UnauthorizedException(ErrMessages.TOKEN_IS_BLACKLISTED);
   }
 
-  handleExpiredOrInvalidResetToken() {
-    throw new BadRequestException(ErrMessages.INVALID_RESET_TOKEN);
+  handleExpiredOrInvalidVerificationToken() {
+    throw new BadRequestException(ErrMessages.INVALID_VERIFICATION_TOKEN);
   }
 
   handleResetPassword(err: unknown) {
@@ -90,7 +91,18 @@ export class ErrorsHandlerService {
       err instanceof UnauthorizedException ||
       err instanceof NotFoundException
     ) {
-      throw err; // пробросить ошибку клиенту
+      throw err;
     }
+    this.handleDefaultError(err);
+  }
+
+  handleConfirmRegistration(err: unknown) {
+    if (
+      err instanceof BadRequestException ||
+      err instanceof UnauthorizedException
+    ) {
+      throw err;
+    }
+    this.handleDefaultError(err);
   }
 }

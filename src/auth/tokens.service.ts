@@ -16,6 +16,7 @@ export class TokensService {
   private readonly accessExpiresIn: string;
   private readonly refreshExpiresIn: string;
   private readonly resetExpiresIn: number;
+  private readonly registrationExpiresIn: number;
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -30,6 +31,10 @@ export class TokensService {
     this.refreshExpiresIn = this.envService.getEnv('JWT_REFRESH_EXPIRES_IN');
     this.resetExpiresIn = this.envService.getEnv(
       'RESET_TOKEN_EXPIRES_IN',
+      'number',
+    );
+    this.registrationExpiresIn = this.envService.getEnv(
+      'REGISTRATION_TOKEN_EXPIRES_IN',
       'number',
     );
   }
@@ -47,6 +52,19 @@ export class TokensService {
       ? token.slice(7).trim()
       : token.trim();
     return cleanedToken;
+  }
+
+  private isRegistrationPayload(
+    obj: unknown,
+  ): obj is { email: string; password: string } {
+    return (
+      typeof obj === 'object' &&
+      obj !== null &&
+      'email' in obj &&
+      typeof (obj as { email?: unknown }).email === 'string' &&
+      'password' in obj &&
+      typeof (obj as { password?: unknown }).password === 'string'
+    );
   }
 
   async addJwtTokenToBlacklist(access_token: string) {
@@ -80,8 +98,7 @@ export class TokensService {
         return this.errorsHandlerService.handleUserNotFound();
       }
     } catch (err: unknown) {
-      this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 
@@ -97,8 +114,7 @@ export class TokensService {
         return this.errorsHandlerService.handleUserNotFound();
       }
     } catch (err: unknown) {
-      this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 
@@ -124,7 +140,7 @@ export class TokensService {
     };
   }
 
-  generateResetToken() {
+  generateVerificationToken() {
     return uuidv4();
   }
 
@@ -142,5 +158,36 @@ export class TokensService {
 
   async deleteResetToken(token: string) {
     await this.redisService.del(`reset:${token}`);
+  }
+
+  async saveRegistrationToken(token: string, value: unknown) {
+    if (!this.isRegistrationPayload(value)) {
+      throw new Error('Invalid registration payload');
+    }
+    const json = JSON.stringify(value);
+    await this.redisService.set(`register:${token}`, json, {
+      EX: this.registrationExpiresIn,
+    });
+  }
+
+  async getDataByRegistrationToken(
+    token: string,
+  ): Promise<{ email: string; password: string } | null> {
+    const json = await this.redisService.get(`register:${token}`);
+    if (!json) return null;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      return null;
+    }
+    if (this.isRegistrationPayload(parsed)) {
+      return parsed;
+    }
+    return null;
+  }
+
+  async deleteRegistrationToken(token: string) {
+    await this.redisService.del(`register:${token}`);
   }
 }
