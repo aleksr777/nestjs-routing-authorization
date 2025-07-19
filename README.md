@@ -92,15 +92,18 @@ npm run start:dev
 ## 📡 API Endpoints
 
 ### Auth
-- `POST /api/auth/register` — Register a new user
+- `POST /api/auth/request-registration` — Request registration
+- `POST /api/auth/confirm-registration` — Confirm registration
 - `POST /api/auth/login` — Login and receive tokens
 - `POST /api/auth/logout` — Logout user
 - `POST /api/auth/refresh` — Refresh tokens
+- `POST /api/auth/request-password-reset` — Request password reset
+- `POST /api/auth/reset-password` — Reset password
 
 ### Users
 - `GET /api/users/me` — Get current user's profile
-- `DELETE /api/users/me/delete` — Delete current user
-- `PATCH /api/users/me/update` — Update current user
 - `GET /api/users` — Get list of users (with query support)
+- `PATCH /api/users/me/update` — Update current user
+- `DELETE /api/users/me/delete` — Delete current user
 
 ---

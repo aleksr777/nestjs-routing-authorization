@@ -17,6 +17,8 @@ import {
 export class AuthService {
   config: any;
   private readonly frontendUrl: string;
+  private readonly registrationExpiresIn: number;
+  private readonly resetExpiresIn: number;
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -28,6 +30,10 @@ export class AuthService {
     private readonly envService: EnvService,
   ) {
     this.frontendUrl = this.envService.getEnv('FRONTEND_URL');
+    this.registrationExpiresIn =
+      this.envService.getEnv('REGISTRATION_TOKEN_EXPIRES_IN', 'number') / 60;
+    this.resetExpiresIn =
+      this.envService.getEnv('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
   }
 
   private generateRandomString(length: number): string {
@@ -141,10 +147,10 @@ export class AuthService {
         const redisValue = { email: email, password: hashedPassword };
         await this.tokensService.saveRegistrationToken(token, redisValue);
         const confirmUrl = `${this.frontendUrl}/confirm-registration?token=${token}`;
-        const text = `Hi, this is an automated message, please do not reply! You can confirm your registration by clicking the link below: ${confirmUrl}`;
+        const text = `Hi, this is an automated message, please do not reply! You can confirm your registration by clicking the link below (within ${this.registrationExpiresIn} min): ${confirmUrl}`;
         const html = `
           <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
-          <p style="font-weight: bold; font-size: 17px;">You can confirm your registration by clicking the link below:</p>
+          <p style="font-weight: bold; font-size: 17px;">You can confirm your registration by clicking the link below (within ${this.registrationExpiresIn} min):</p>
           <p style="font-weight: bold; font-size: 17px;">          
             <a href="${confirmUrl}" style="font-weight: bold;">${confirmUrl}</a>
           </p>
@@ -242,10 +248,10 @@ export class AuthService {
         const token = this.tokensService.generateVerificationToken();
         await this.tokensService.saveResetToken(user.id, token);
         const resetUrl = `${this.frontendUrl}/reset-password?token=${token}`;
-        const text = `Hi, this is an automated message, please do not reply! You can reset your password by clicking the link below: ${resetUrl}`;
+        const text = `Hi, this is an automated message, please do not reply! You can reset your password by clicking the link below (within ${this.resetExpiresIn} min): ${resetUrl}`;
         const html = `
           <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
-          <p style="font-weight: bold; font-size: 17px;">You can reset your password by clicking the link below:</p>
+          <p style="font-weight: bold; font-size: 17px;">You can reset your password by clicking the link below (within ${this.resetExpiresIn} min):</p>
           <p style="font-weight: bold; font-size: 17px;">
             <a href="${resetUrl}" style="font-weight: bold;">${resetUrl}</a>
           </p>`;
