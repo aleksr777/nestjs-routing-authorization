@@ -37,7 +37,7 @@ export class UsersService {
       ]);
     } catch (err: unknown) {
       this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 
@@ -53,30 +53,29 @@ export class UsersService {
         where: { id: userId },
       });
       await queryRunner.manager.delete(User, { id: userId });
-      await this.tokensService.addToBlacklist(access_token);
+      await this.tokensService.addJwtTokenToBlacklist(access_token);
       await queryRunner.commitTransaction();
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
       this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     } finally {
       await queryRunner.release();
     }
   }
 
-  async updateCurrentUser(userId: number, updateUserDto: UpdateUserDto) {
-    const dto = { ...updateUserDto };
+  async updateCurrentUser(userId: number, userData: UpdateUserDto) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      if (dto.password) {
-        dto.password = await this.hashService.hash(dto.password);
+      if (userData.password) {
+        userData.password = await this.hashService.hash(userData.password);
       }
       const result = await queryRunner.manager
         .createQueryBuilder()
         .update(User)
-        .set(dto)
+        .set(userData)
         .where('id = :id', { id: userId })
         .execute();
       if (result.affected === 0) {
@@ -94,7 +93,7 @@ export class UsersService {
       await queryRunner.rollbackTransaction();
       this.errorsHandlerService.handleUserNotFound(err);
       this.errorsHandlerService.handleUserConflict(err);
-      this.errorsHandlerService.handleDefaultError();
+      this.errorsHandlerService.handleDefaultError(err);
     } finally {
       await queryRunner.release();
     }
@@ -120,8 +119,8 @@ export class UsersService {
         ...USER_SECRET_FIELDS,
         ...USER_CONFIDENTIAL_FIELDS,
       ]);
-    } catch {
-      this.errorsHandlerService.handleDefaultError();
+    } catch (err: unknown) {
+      this.errorsHandlerService.handleDefaultError(err);
     }
   }
 }

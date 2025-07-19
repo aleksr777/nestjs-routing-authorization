@@ -9,11 +9,11 @@ import {
   Patch,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { UsersService } from './users.service';
-import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { User } from '../users/entities/user.entity';
+import { UsersService } from './users.service';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
+import { GetUsersQueryDto } from './dto/get-users-query.dto';
+import { User } from '../users/entities/user.entity';
 
 @Controller('users')
 export class UsersController {
@@ -23,28 +23,23 @@ export class UsersController {
   @Get('me')
   async getCurrentProfile(@Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
-    return this.usersService.getCurrentProfile(userId);
+    return this.usersService.getCurrentProfile(+user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete('me/delete')
   async removeCurrentUser(@Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
     const access_token = req.headers.authorization;
-    return this.usersService.removeCurrentUser(userId, access_token);
+    return this.usersService.removeCurrentUser(+user.id, access_token);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('me/update')
-  async updateCurrentUser(
-    @Body() updateUserDto: UpdateUserDto,
-    @Req() req: Request,
-  ) {
+  async updateCurrentUser(@Body() dto: UpdateUserDto, @Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
-    return this.usersService.updateCurrentUser(userId, updateUserDto);
+    const userData = { ...dto };
+    return this.usersService.updateCurrentUser(+user.id, userData);
   }
 
   @UseGuards(JwtAuthGuard)

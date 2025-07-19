@@ -4,40 +4,55 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
-import { CreateUserDto } from '../users/dto/create-user.dto';
+import { RequestRegistrationDto } from './dto/request-registration.dto';
+import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
+import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { User } from '../users/entities/user.entity';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
-  async register(@Body() createUserDto: CreateUserDto) {
-    return this.authService.register(createUserDto);
+  @Post('request-registration')
+  async requestRegistration(@Body() dto: RequestRegistrationDto) {
+    return this.authService.requestRegistration(dto.email, dto.password);
+  }
+
+  @Post('confirm-registration')
+  async confirmRegistration(@Body() dto: ConfirmRegistrationDto) {
+    return this.authService.confirmRegistration(dto.token);
   }
 
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async login(@Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
-    return this.authService.login(userId);
+    return this.authService.login(+user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   async logout(@Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
     const access_token = req.headers.authorization;
-    return this.authService.logout(userId, access_token);
+    return this.authService.logout(+user.id, access_token);
   }
 
   @UseGuards(RefreshTokenGuard)
   @Post('refresh')
-  async refreshTokens(@Req() req: Request) {
+  async refreshJwtTokens(@Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
-    return this.authService.refreshTokens(userId);
+    return this.authService.refreshJwtTokens(+user.id);
+  }
+
+  @Post('request-password-reset')
+  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    return await this.authService.requestPasswordReset(dto.email);
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.newPassword);
   }
 }

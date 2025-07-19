@@ -4,13 +4,15 @@ import {
   InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { QueryFailedError, EntityNotFoundError } from 'typeorm';
 import { ErrMessages } from './error-messages.constants';
 
 @Injectable()
 export class ErrorsHandlerService {
-  handleDefaultError() {
+  handleDefaultError(err: unknown) {
+    console.log(`Internal server error: ${String(err)}`);
     throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
   }
 
@@ -75,7 +77,32 @@ export class ErrorsHandlerService {
     throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
   }
 
-  handleTokenIsBlacklisted() {
+  handleTokenisJwtTokenBlacklisted() {
     throw new UnauthorizedException(ErrMessages.TOKEN_IS_BLACKLISTED);
+  }
+
+  handleExpiredOrInvalidVerificationToken() {
+    throw new BadRequestException(ErrMessages.INVALID_VERIFICATION_TOKEN);
+  }
+
+  handleResetPassword(err: unknown) {
+    if (
+      err instanceof BadRequestException ||
+      err instanceof UnauthorizedException ||
+      err instanceof NotFoundException
+    ) {
+      throw err;
+    }
+    this.handleDefaultError(err);
+  }
+
+  handleConfirmRegistration(err: unknown) {
+    if (
+      err instanceof BadRequestException ||
+      err instanceof UnauthorizedException
+    ) {
+      throw err;
+    }
+    this.handleDefaultError(err);
   }
 }

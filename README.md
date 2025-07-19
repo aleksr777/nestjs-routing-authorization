@@ -9,6 +9,8 @@ JWT_ACCESS_SECRET='secret_access_key'
 JWT_REFRESH_SECRET='secret_refresh_key' 
 JWT_ACCESS_EXPIRES_IN='15m'
 JWT_REFRESH_EXPIRES_IN='7d'
+RESET_TOKEN_EXPIRES_IN=900  # 15m
+REGISTRATION_TOKEN_EXPIRES_IN=900  # 15m
 
 REDIS_HOST='localhost'
 REDIS_PORT=6379   
@@ -24,6 +26,12 @@ DB_USERNAME='postgres'
 DB_PASSWORD='db_password'
 DB_TYPEORM_SYNC=true
 
+SMTP_HOST='smtp.gmail.com'
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER='user@gmail.com'
+SMTP_PASS='aaaa bbbb cccc dddd'
+SMTP_FROM='user@gmail.com'
 ```
 
 ---
@@ -84,15 +92,18 @@ npm run start:dev
 ## 📡 API Endpoints
 
 ### Auth
-- `POST /api/auth/register` — Register a new user
+- `POST /api/auth/request-registration` — Request registration
+- `POST /api/auth/confirm-registration` — Confirm registration
 - `POST /api/auth/login` — Login and receive tokens
 - `POST /api/auth/logout` — Logout user
 - `POST /api/auth/refresh` — Refresh tokens
+- `POST /api/auth/request-password-reset` — Request password reset
+- `POST /api/auth/reset-password` — Reset password
 
 ### Users
 - `GET /api/users/me` — Get current user's profile
-- `DELETE /api/users/me/delete` — Delete current user
-- `PATCH /api/users/me/update` — Update current user
 - `GET /api/users` — Get list of users (with query support)
+- `PATCH /api/users/me/update` — Update current user
+- `DELETE /api/users/me/delete` — Delete current user
 
 ---

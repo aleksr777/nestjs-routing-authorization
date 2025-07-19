@@ -13,6 +13,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 
 @Entity()
@@ -37,55 +39,98 @@ export class User {
   })
   updated_at!: Date;
 
-  @IsNotEmpty()
+  /* Email */
   @IsEmail()
+  @IsNotEmpty()
   @Length(6, 255)
-  @Column({ name: 'email', unique: true, length: 255, select: false })
+  @Column({
+    type: 'varchar',
+    name: 'email',
+    unique: true,
+    select: false,
+    length: 255,
+    nullable: false,
+  })
   email!: string;
 
-  @IsNotEmpty()
-  @IsString()
-  @Length(8, 100)
-  @Column({ name: 'password', length: 100, select: false })
-  password!: string;
+  /* Phone number */
+  @IsPhoneNumber()
+  @IsOptional()
+  @Length(4, 40)
+  @Column({
+    type: 'varchar',
+    name: 'phone_number',
+    unique: true,
+    nullable: true,
+    select: false,
+    length: 30,
+  })
+  phone_number?: string | null;
 
+  /* Nickname */
   @IsOptional()
   @IsString()
   @Length(2, 50)
-  @Column({ name: 'nickname', nullable: true, unique: true, length: 50 })
-  nickname?: string;
-
-  @IsOptional()
-  @IsPhoneNumber()
-  @Length(4, 30)
   @Column({
-    name: 'phone_number',
+    type: 'varchar',
+    name: 'nickname',
+    unique: true,
     nullable: true,
-    length: 20,
+    length: 50,
+  })
+  nickname?: string | null;
+
+  /* Password */
+  @IsNotEmpty()
+  @IsString()
+  @Length(8, 100)
+  @Column({
+    type: 'varchar',
+    name: 'password',
+    length: 100,
     select: false,
   })
-  phone_number?: string;
+  password!: string;
 
+  /* Age */
   @IsOptional()
   @IsInt()
-  @Length(0, 200)
-  @Column({ name: 'age', nullable: true, type: 'smallint' })
-  age?: number;
+  @Min(0)
+  @Max(150)
+  @Column({
+    type: 'smallint',
+    name: 'age',
+    nullable: true,
+  })
+  age?: number | null;
 
+  /* Gender */
   @IsOptional()
   @IsString()
-  @Column({ name: 'gender', nullable: true, length: 20 })
-  gender?: string;
+  @Length(0, 50)
+  @Column({
+    type: 'varchar',
+    name: 'gender',
+    nullable: true,
+    length: 20,
+  })
+  gender?: string | null;
 
+  /* About */
   @IsOptional()
   @IsString()
   @Length(0, 1000)
-  @Column({ name: 'about', nullable: true, type: 'text' })
-  about?: string;
-
   @Column({
-    name: 'refresh_token',
+    type: 'text',
+    name: 'about',
+    nullable: true,
+  })
+  about?: string | null;
+
+  /* refresh_token */
+  @Column({
     type: 'varchar',
+    name: 'refresh_token',
     length: 512,
     nullable: true,
     select: false,

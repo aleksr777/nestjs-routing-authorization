@@ -1,5 +1,5 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { CreateUserDto } from './create-user.dto';
+import { RequestRegistrationDto } from '../../auth/dto/request-registration.dto';
 import {
   IsString,
   IsEmail,
@@ -11,7 +11,7 @@ import {
   IsInt,
 } from 'class-validator';
 
-export class UpdateUserDto extends PartialType(CreateUserDto) {
+export class UpdateUserDto extends PartialType(RequestRegistrationDto) {
   @IsOptional()
   @IsString()
   @Length(2, 50)
@@ -28,6 +28,7 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
 
   @IsOptional()
   @IsPhoneNumber()
+  @Length(4, 40)
   phone_number?: string;
 
   @IsOptional()
@@ -38,6 +39,7 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
 
   @IsOptional()
   @IsString()
+  @Length(0, 50)
   gender?: string;
 
   @IsOptional()
