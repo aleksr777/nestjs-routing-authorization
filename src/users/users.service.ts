@@ -64,19 +64,18 @@ export class UsersService {
     }
   }
 
-  async updateCurrentUser(userId: number, updateUserDto: UpdateUserDto) {
-    const dto = { ...updateUserDto };
+  async updateCurrentUser(userId: number, userData: UpdateUserDto) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
-      if (dto.password) {
-        dto.password = await this.hashService.hash(dto.password);
+      if (userData.password) {
+        userData.password = await this.hashService.hash(userData.password);
       }
       const result = await queryRunner.manager
         .createQueryBuilder()
         .update(User)
-        .set(dto)
+        .set(userData)
         .where('id = :id', { id: userId })
         .execute();
       if (result.affected === 0) {

@@ -28,25 +28,22 @@ export class AuthController {
   @Post('login')
   async login(@Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
-    return this.authService.login(userId);
+    return this.authService.login(+user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   async logout(@Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
     const access_token = req.headers.authorization;
-    return this.authService.logout(userId, access_token);
+    return this.authService.logout(+user.id, access_token);
   }
 
   @UseGuards(RefreshTokenGuard)
   @Post('refresh')
   async refreshJwtTokens(@Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
-    return this.authService.refreshJwtTokens(userId);
+    return this.authService.refreshJwtTokens(+user.id);
   }
 
   @Post('request-password-reset')
