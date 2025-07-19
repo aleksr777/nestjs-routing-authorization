@@ -1,10 +1,12 @@
-import { IsString, Length } from 'class-validator';
+import { IsString, Length, IsUUID, IsNotEmpty } from 'class-validator';
 
 export class ResetPasswordDto {
-  @IsString()
+  @IsUUID()
+  @IsNotEmpty()
   token!: string;
 
   @IsString()
+  @IsNotEmpty()
   @Length(8, 100)
   newPassword!: string;
 }

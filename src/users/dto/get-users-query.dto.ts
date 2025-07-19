@@ -1,4 +1,4 @@
-import { IsInt, Min, IsOptional, IsString } from 'class-validator';
+import { IsInt, Min, IsOptional, IsString, Length } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class GetUsersQueryDto {
@@ -16,5 +16,6 @@ export class GetUsersQueryDto {
 
   @IsOptional()
   @IsString()
+  @Length(2, 50)
   nickname?: string;
 }

@@ -9,11 +9,11 @@ import {
   Patch,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { UsersService } from './users.service';
-import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { User } from '../users/entities/user.entity';
+import { UsersService } from './users.service';
 import { UpdateUserDto } from '../users/dto/update-user.dto';
+import { GetUsersQueryDto } from './dto/get-users-query.dto';
+import { User } from '../users/entities/user.entity';
 
 @Controller('users')
 export class UsersController {

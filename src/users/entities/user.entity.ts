@@ -56,7 +56,7 @@ export class User {
   /* Phone number */
   @IsPhoneNumber()
   @IsOptional()
-  @Length(4, 30)
+  @Length(4, 40)
   @Column({
     type: 'varchar',
     name: 'phone_number',
@@ -96,7 +96,7 @@ export class User {
   @IsOptional()
   @IsInt()
   @Min(0)
-  @Max(200)
+  @Max(150)
   @Column({
     type: 'smallint',
     name: 'age',
@@ -107,7 +107,7 @@ export class User {
   /* Gender */
   @IsOptional()
   @IsString()
-  @Length(0, 20)
+  @Length(0, 50)
   @Column({
     type: 'varchar',
     name: 'gender',

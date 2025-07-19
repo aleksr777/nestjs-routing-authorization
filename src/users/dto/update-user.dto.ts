@@ -28,6 +28,7 @@ export class UpdateUserDto extends PartialType(RequestRegistrationDto) {
 
   @IsOptional()
   @IsPhoneNumber()
+  @Length(4, 40)
   phone_number?: string;
 
   @IsOptional()
@@ -38,6 +39,7 @@ export class UpdateUserDto extends PartialType(RequestRegistrationDto) {
 
   @IsOptional()
   @IsString()
+  @Length(0, 50)
   gender?: string;
 
   @IsOptional()

@@ -6,6 +6,8 @@ import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { RequestRegistrationDto } from './dto/request-registration.dto';
 import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
+import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { User } from '../users/entities/user.entity';
 
 @Controller('auth')
@@ -48,15 +50,12 @@ export class AuthController {
   }
 
   @Post('request-password-reset')
-  async requestPasswordReset(@Body('email') email: string) {
-    return await this.authService.requestPasswordReset(email);
+  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    return await this.authService.requestPasswordReset(dto.email);
   }
 
   @Post('reset-password')
-  resetPassword(
-    @Body('token') token: string,
-    @Body('newPassword') newPassword: string,
-  ) {
-    return this.authService.resetPassword(token, newPassword);
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.newPassword);
   }
 }
