@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { EnvService } from '../common/env-service/env.service';
 import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
 import { JwtPayload } from '../types/jwt-payload.type';
+import { TokenType } from '../types/token-type.type';
 
 @Injectable()
 export class TokensService {
@@ -39,10 +40,10 @@ export class TokensService {
     );
   }
 
-  private getJwtTokenExpiration(token: string) {
+  private getJwtTokenExpiration(token: string, tokenType?: TokenType) {
     const decoded = this.jwtService.decode<JwtPayload>(token);
     if (!decoded?.exp) {
-      return this.errorsHandlerService.handleInvalidToken();
+      return this.errorsHandlerService.invalidToken(null, tokenType);
     }
     return decoded.exp;
   }
@@ -67,21 +68,21 @@ export class TokensService {
     );
   }
 
-  async addJwtTokenToBlacklist(access_token: string) {
-    const cleanedToken = this.stripJwtToken(access_token);
-    const exp = this.getJwtTokenExpiration(cleanedToken);
+  async addJwtTokenToBlacklist(token: string, tokenType?: TokenType) {
+    const cleanedToken = this.stripJwtToken(token);
+    const exp = this.getJwtTokenExpiration(cleanedToken, tokenType);
     if (typeof exp !== 'number' || isNaN(exp)) {
-      return this.errorsHandlerService.handleInvalidToken();
+      return this.errorsHandlerService.invalidToken(null, tokenType);
     }
     const ttl = exp - Math.floor(Date.now() / 1000);
     if (ttl <= 0) {
-      return this.errorsHandlerService.handleInvalidToken();
+      return this.errorsHandlerService.invalidToken(null, tokenType);
     }
     await this.redisService.set(cleanedToken, 'blacklisted', { EX: ttl });
   }
 
-  async isJwtTokenBlacklisted(access_token: string) {
-    const cleanedToken = this.stripJwtToken(access_token);
+  async isJwtTokenBlacklisted(token: string) {
+    const cleanedToken = this.stripJwtToken(token);
     const result = await this.redisService.get(cleanedToken);
     return result === 'blacklisted';
   }
@@ -95,10 +96,10 @@ export class TokensService {
         },
       );
       if (result.affected === 0) {
-        return this.errorsHandlerService.handleUserNotFound();
+        return this.errorsHandlerService.userNotFound();
       }
     } catch (err: unknown) {
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.default(err);
     }
   }
 
@@ -111,10 +112,10 @@ export class TokensService {
         },
       );
       if (result.affected === 0) {
-        return this.errorsHandlerService.handleUserNotFound();
+        return this.errorsHandlerService.userNotFound();
       }
     } catch (err: unknown) {
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.default(err);
     }
   }
 

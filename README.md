@@ -6,14 +6,14 @@ A template for basic routing and authorization.
 
 ```env
 JWT_ACCESS_SECRET='secret_access_key'
-JWT_REFRESH_SECRET='secret_refresh_key' 
+JWT_REFRESH_SECRET='secret_refresh_key'
 JWT_ACCESS_EXPIRES_IN='15m'
 JWT_REFRESH_EXPIRES_IN='7d'
 RESET_TOKEN_EXPIRES_IN=900  # 15m
 REGISTRATION_TOKEN_EXPIRES_IN=900  # 15m
 
 REDIS_HOST='localhost'
-REDIS_PORT=6379   
+REDIS_PORT=6379
 
 SERVER_PORT=1603
 FRONTEND_URL='http://localhost:1403'
@@ -57,6 +57,7 @@ docker-compose up -d
 ```
 
 This will:
+
 - Download and start a `postgres:17.5` and `redis:7.2` containers
 
 To stop the containers:
@@ -92,6 +93,7 @@ npm run start:dev
 ## 📡 API Endpoints
 
 ### Auth
+
 - `POST /api/auth/request-registration` — Request registration
 - `POST /api/auth/confirm-registration` — Confirm registration
 - `POST /api/auth/login` — Login and receive tokens
@@ -101,6 +103,7 @@ npm run start:dev
 - `POST /api/auth/reset-password` — Reset password
 
 ### Users
+
 - `GET /api/users/me` — Get current user's profile
 - `GET /api/users` — Get list of users (with query support)
 - `PATCH /api/users/me/update` — Update current user
