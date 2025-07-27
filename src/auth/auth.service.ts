@@ -12,6 +12,7 @@ import {
   USER_PASSWORD,
   USER_SECRET_FIELDS,
 } from '../config/user-select-fields.constants';
+import { TokenType } from '../types/token-type.type';
 
 @Injectable()
 export class AuthService {
@@ -47,7 +48,7 @@ export class AuthService {
   }
 
   private generatePrefix(): string {
-    return `${this.generateRandomString(4)}-${this.generateRandomString(5)}-${this.generateRandomString(4)}`;
+    return this.generateRandomString(15);
   }
 
   removeSensitiveInfo<T extends object, K extends keyof T>(
@@ -79,14 +80,11 @@ export class AuthService {
         password,
         user.password,
       );
-      this.errorsHandlerService.handleInvalidEmailOrPassword(
-        null,
-        isPasswordValid,
-      );
+      this.errorsHandlerService.invalidEmailOrPassword(null, isPasswordValid);
       return this.removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
-      this.errorsHandlerService.handleInvalidEmailOrPassword(err);
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.invalidEmailOrPassword(err);
+      this.errorsHandlerService.default(err);
     }
   }
 
@@ -98,8 +96,8 @@ export class AuthService {
       });
       return this.removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
-      this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.userNotFound(err);
+      this.errorsHandlerService.default(err);
       throw err;
     }
   }
@@ -112,12 +110,12 @@ export class AuthService {
       });
       const isTokensMatch = refresh_token === user.refresh_token;
       if (!isTokensMatch) {
-        return this.errorsHandlerService.handleInvalidToken();
+        return this.errorsHandlerService.invalidToken(null, TokenType.REFRESH);
       }
       return this.removeSensitiveInfo(user, [USER_PASSWORD]);
     } catch (err: unknown) {
-      this.errorsHandlerService.handleInvalidToken(err);
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.invalidToken(err, TokenType.REFRESH);
+      this.errorsHandlerService.default(err);
     }
   }
 
@@ -168,7 +166,7 @@ export class AuthService {
         message: 'If the email exists, we’ve sent you a link.',
       };
     } catch (err: unknown) {
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.default(err);
     }
   }
 
@@ -179,7 +177,7 @@ export class AuthService {
     try {
       const data = await this.tokensService.getDataByRegistrationToken(token);
       if (!data) {
-        this.errorsHandlerService.handleExpiredOrInvalidVerificationToken();
+        this.errorsHandlerService.invalidToken(null, TokenType.REGISTRATION);
         return;
       }
       const baseNickname = data.email.split('@')[0].slice(0, 20);
@@ -198,7 +196,7 @@ export class AuthService {
       return this.login(newUser.id);
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
-      this.errorsHandlerService.handleConfirmRegistration(err);
+      this.errorsHandlerService.confirmRegistration(err);
     } finally {
       await queryRunner.release();
     }
@@ -210,20 +208,24 @@ export class AuthService {
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
     } catch (err: unknown) {
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.default(err);
     }
   }
 
   async logout(userId: number, access_token: string | undefined) {
     if (!access_token) {
-      return this.errorsHandlerService.handleTokenNotDefined();
-    }
-    try {
-      await this.tokensService.removeRefreshToken(userId);
-      await this.tokensService.addJwtTokenToBlacklist(access_token);
-    } catch (err: unknown) {
-      this.errorsHandlerService.handleInvalidToken(err);
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.tokenNotDefined(TokenType.ACCESS);
+    } else {
+      try {
+        await this.tokensService.removeRefreshToken(userId);
+        await this.tokensService.addJwtTokenToBlacklist(
+          access_token,
+          TokenType.ACCESS,
+        );
+      } catch (err: unknown) {
+        this.errorsHandlerService.invalidToken(err, TokenType.ACCESS);
+        this.errorsHandlerService.default(err);
+      }
     }
   }
 
@@ -233,8 +235,8 @@ export class AuthService {
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
     } catch (err: unknown) {
-      this.errorsHandlerService.handleInvalidToken(err);
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.invalidToken(err, TokenType.REFRESH);
+      this.errorsHandlerService.default(err);
     }
   }
 
@@ -261,7 +263,7 @@ export class AuthService {
         message: 'If the email exists, we’ve sent you a password reset link.',
       };
     } catch (err: unknown) {
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.default(err);
     }
   }
 
@@ -269,7 +271,7 @@ export class AuthService {
     try {
       const userId = await this.tokensService.getUserIdByResetToken(token);
       if (!userId) {
-        this.errorsHandlerService.handleExpiredOrInvalidVerificationToken();
+        this.errorsHandlerService.invalidToken(null, TokenType.RESET);
         return;
       }
       const hashedPassword = await this.hashService.hash(newPassword);
@@ -278,13 +280,13 @@ export class AuthService {
         { password: hashedPassword },
       );
       if (result.affected === 0) {
-        this.errorsHandlerService.handleUserNotFound();
+        this.errorsHandlerService.userNotFound();
       }
       await this.tokensService.deleteResetToken(token);
       const tokens = await this.refreshJwtTokens(userId);
       return tokens;
     } catch (err: unknown) {
-      this.errorsHandlerService.handleResetPassword(err);
+      this.errorsHandlerService.resetPassword(err);
     }
   }
 }

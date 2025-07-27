@@ -13,6 +13,7 @@ import {
   USER_SECRET_FIELDS,
   USER_CONFIDENTIAL_FIELDS,
 } from '../config/user-select-fields.constants';
+import { TokenType } from '../types/token-type.type';
 
 @Injectable()
 export class UsersService {
@@ -36,31 +37,35 @@ export class UsersService {
         ...USER_SECRET_FIELDS,
       ]);
     } catch (err: unknown) {
-      this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.userNotFound(err);
+      this.errorsHandlerService.default(err);
     }
   }
 
   async removeCurrentUser(userId: number, access_token: string | undefined) {
     if (!access_token) {
-      return this.errorsHandlerService.handleTokenNotDefined();
-    }
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-    try {
-      await queryRunner.manager.findOneOrFail(User, {
-        where: { id: userId },
-      });
-      await queryRunner.manager.delete(User, { id: userId });
-      await this.tokensService.addJwtTokenToBlacklist(access_token);
-      await queryRunner.commitTransaction();
-    } catch (err: unknown) {
-      await queryRunner.rollbackTransaction();
-      this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleDefaultError(err);
-    } finally {
-      await queryRunner.release();
+      this.errorsHandlerService.tokenNotDefined(TokenType.ACCESS);
+    } else {
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+      try {
+        await queryRunner.manager.findOneOrFail(User, {
+          where: { id: userId },
+        });
+        await queryRunner.manager.delete(User, { id: userId });
+        await this.tokensService.addJwtTokenToBlacklist(
+          access_token,
+          TokenType.ACCESS,
+        );
+        await queryRunner.commitTransaction();
+      } catch (err: unknown) {
+        await queryRunner.rollbackTransaction();
+        this.errorsHandlerService.userNotFound(err);
+        this.errorsHandlerService.default(err);
+      } finally {
+        await queryRunner.release();
+      }
     }
   }
 
@@ -80,7 +85,7 @@ export class UsersService {
         .execute();
       if (result.affected === 0) {
         await queryRunner.rollbackTransaction();
-        return this.errorsHandlerService.handleUserNotFound();
+        return this.errorsHandlerService.userNotFound();
       }
       const user = await queryRunner.manager
         .createQueryBuilder(User, 'user')
@@ -91,9 +96,9 @@ export class UsersService {
       return this.authService.removeSensitiveInfo(user, USER_SECRET_FIELDS);
     } catch (err: unknown) {
       await queryRunner.rollbackTransaction();
-      this.errorsHandlerService.handleUserNotFound(err);
-      this.errorsHandlerService.handleUserConflict(err);
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.userNotFound(err);
+      this.errorsHandlerService.userConflict(err);
+      this.errorsHandlerService.default(err);
     } finally {
       await queryRunner.release();
     }
@@ -120,7 +125,7 @@ export class UsersService {
         ...USER_CONFIDENTIAL_FIELDS,
       ]);
     } catch (err: unknown) {
-      this.errorsHandlerService.handleDefaultError(err);
+      this.errorsHandlerService.default(err);
     }
   }
 }

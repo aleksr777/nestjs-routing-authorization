@@ -4,6 +4,7 @@ import { Request } from 'express';
 import { Injectable } from '@nestjs/common';
 import { EnvService } from '../../common/env-service/env.service';
 import { JwtPayload } from '../../types/jwt-payload.type';
+import { TokenType } from '../../types/token-type.type';
 import { AuthService } from '../../auth/auth.service';
 import { TokensService } from '../tokens.service';
 import { ErrorsHandlerService } from '../../common/errors-handler-service/errors-handler.service';
@@ -27,14 +28,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   async validate(req: Request, payload: JwtPayload) {
     const access_token = req.headers.authorization;
     if (!access_token) {
-      return this.errorsHandlerService.handleTokenNotDefined();
+      this.errorsHandlerService.tokenNotDefined(TokenType.ACCESS);
+    } else {
+      const isJwtTokenBlacklisted =
+        await this.tokensService.isJwtTokenBlacklisted(access_token);
+      if (isJwtTokenBlacklisted) {
+        this.errorsHandlerService.jwtTokenBlacklisted();
+      }
+      const userData = await this.authService.validateUserById(+payload.sub);
+      return userData;
     }
-    const isJwtTokenBlacklisted =
-      await this.tokensService.isJwtTokenBlacklisted(access_token);
-    if (isJwtTokenBlacklisted) {
-      return this.errorsHandlerService.handleTokenisJwtTokenBlacklisted();
-    }
-    const userData = await this.authService.validateUserById(+payload.sub);
-    return userData;
   }
 }

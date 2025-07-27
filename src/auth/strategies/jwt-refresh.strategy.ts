@@ -5,6 +5,7 @@ import { ErrorsHandlerService } from '../../common/errors-handler-service/errors
 import { AuthService } from '../../auth/auth.service';
 import { EnvService } from '../../common/env-service/env.service';
 import { JwtPayload } from '../../types/jwt-payload.type';
+import { TokenType } from '../../types/token-type.type';
 import { Request } from 'express';
 
 @Injectable()
@@ -31,12 +32,13 @@ export class JwtRefreshStrategy extends PassportStrategy(
     const refresh_token = this.extractor(req);
     const userId = +payload.sub;
     if (!refresh_token) {
-      return this.errorsHandlerService.handleTokenNotDefined();
+      this.errorsHandlerService.tokenNotDefined(TokenType.REFRESH);
+    } else {
+      const userData = await this.authService.validateUserByRefreshToken(
+        userId,
+        refresh_token,
+      );
+      return userData;
     }
-    const userData = await this.authService.validateUserByRefreshToken(
-      userId,
-      refresh_token,
-    );
-    return userData;
   }
 }
