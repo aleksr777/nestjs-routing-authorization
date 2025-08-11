@@ -37,7 +37,8 @@ export class AuthService {
       this.envService.getEnv('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
   }
 
-  private generateRandomString(length: number): string {
+  private generatePrefix(): string {
+    const length = 8;
     const chars =
       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
@@ -45,10 +46,6 @@ export class AuthService {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
-  }
-
-  private generatePrefix(): string {
-    return this.generateRandomString(15);
   }
 
   removeSensitiveInfo<T extends object, K extends keyof T>(
@@ -180,7 +177,7 @@ export class AuthService {
         this.errorsHandlerService.invalidToken(null, TokenType.REGISTRATION);
         return;
       }
-      const baseNickname = data.email.split('@')[0].slice(0, 20);
+      const baseNickname = `user`;
       let nickname = `${baseNickname}_${this.generatePrefix()}`;
       while (await queryRunner.manager.findOne(User, { where: { nickname } })) {
         nickname = `${baseNickname}_${this.generatePrefix()}`;
