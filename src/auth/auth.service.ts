@@ -11,8 +11,8 @@ import {
   USER_PROFILE_FIELDS,
   USER_PASSWORD,
   USER_SECRET_FIELDS,
-} from '../config/user-select-fields.constants';
-import { TokenType } from '../types/token-type.type';
+} from '../users/user-select-fields.constants';
+import { TokenType } from '../common/types/token-type.type';
 
 @Injectable()
 export class AuthService {

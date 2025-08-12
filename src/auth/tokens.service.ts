@@ -7,8 +7,8 @@ import { RedisService } from '../common/redis-service/redis.service';
 import { JwtService } from '@nestjs/jwt';
 import { EnvService } from '../common/env-service/env.service';
 import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
-import { JwtPayload } from '../types/jwt-payload.type';
-import { TokenType } from '../types/token-type.type';
+import { JwtPayload } from '../common/types/jwt-payload.type';
+import { TokenType } from '../common/types/token-type.type';
 
 @Injectable()
 export class TokensService {
