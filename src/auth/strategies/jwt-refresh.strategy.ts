@@ -4,8 +4,8 @@ import { Strategy, ExtractJwt, StrategyOptionsWithRequest } from 'passport-jwt';
 import { ErrorsHandlerService } from '../../common/errors-handler-service/errors-handler.service';
 import { AuthService } from '../../auth/auth.service';
 import { EnvService } from '../../common/env-service/env.service';
-import { JwtPayload } from '../../types/jwt-payload.type';
-import { TokenType } from '../../types/token-type.type';
+import { JwtPayload } from '../../common/types/jwt-payload.type';
+import { TokenType } from '../../common/types/token-type.type';
 import { Request } from 'express';
 
 @Injectable()

@@ -5,6 +5,7 @@ import { RedisService } from './redis-service/redis.service';
 import { ErrorsHandlerService } from './errors-handler-service/errors-handler.service';
 import { EnvService } from './env-service/env.service';
 import { MailService } from './mail-service/mail.service';
+import { NicknameGeneratorService } from './nickname-generator-service/nickname-generator.service';
 
 @Global()
 @Module({
@@ -15,6 +16,7 @@ import { MailService } from './mail-service/mail.service';
     ErrorsHandlerService,
     EnvService,
     MailService,
+    NicknameGeneratorService,
   ],
   exports: [
     HashService,
@@ -22,6 +24,7 @@ import { MailService } from './mail-service/mail.service';
     ErrorsHandlerService,
     EnvService,
     MailService,
+    NicknameGeneratorService,
   ],
 })
 export class CoreModule {}

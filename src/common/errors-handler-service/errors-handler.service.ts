@@ -7,8 +7,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { QueryFailedError, EntityNotFoundError } from 'typeorm';
-import { ErrMessages } from '../../types/error-messages.type';
-import { TokenType } from '../../types/token-type.type';
+import { ErrMessages } from '../types/error-messages.type';
+import { TokenType } from '../types/token-type.type';
 
 @Injectable()
 export class ErrorsHandlerService {
