@@ -29,9 +29,13 @@ DB_TYPEORM_SYNC=true
 SMTP_HOST='smtp.gmail.com'
 SMTP_PORT=465
 SMTP_SECURE=true
-SMTP_USER='user@gmail.com'
+SMTP_USER='admin@gmail.com'
 SMTP_PASS='aaaa bbbb cccc dddd'
-SMTP_FROM='user@gmail.com'
+SMTP_FROM='admin@gmail.com'
+
+ADMIN_EMAIL='admin@gmail.com'
+ADMIN_PASSWORD='admin-password'
+ADMIN_NICKNAME='admin-nickname'
 ```
 
 ---
@@ -89,6 +93,40 @@ npm run start:dev
 ```
 
 ---
+### 📦 Database Migrations
+Create a migration:
+```bash
+npx typeorm-ts-node-commonjs migration:create src/migrations/MigrationName
+```
+Run all pending migrations:
+```bash
+npx typeorm-ts-node-commonjs migration:run -d data-source.ts
+```
+Revert the last migration:
+```bash
+npx typeorm-ts-node-commonjs migration:revert -d data-source.ts
+```
+
+
+### 📦 👑 Admin User Creation
+
+We use a dedicated migration to create an administrator account automatically:
+
+Migration: CreateAdminUser<TIMESTAMP>.ts
+
+Uses .env variables:
+- ADMIN_EMAIL
+- ADMIN_PASSWORD
+- ADMIN_NICKNAME
+
+Hashing is done using the HashService class
+
+Run:
+```bash
+npx typeorm-ts-node-commonjs migration:run -d data-source.ts
+```
+This will create an admin user with the provided email and password or update the data of an existing user.
+---
 
 ## 📡 API Endpoints
 
@@ -108,5 +146,10 @@ npm run start:dev
 - `GET /api/users` — Get list of users (with query support)
 - `PATCH /api/users/me/update` — Update current user
 - `DELETE /api/users/me/delete` — Delete current user
+
+### Admin
+
+- `GET /api/admin/dashboard` — Admin dashboard (requires ADMIN role and valid access token)
+
 
 ---

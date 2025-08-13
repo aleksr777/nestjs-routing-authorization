@@ -1,3 +1,5 @@
+import { Role } from '../../common/types/role.enum';
+
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -128,6 +130,9 @@ export class User {
   about?: string | null;
 
   /* refresh_token */
+
+  @IsString()
+  @Max(512)
   @Column({
     type: 'varchar',
     name: 'refresh_token',
@@ -136,4 +141,16 @@ export class User {
     select: false,
   })
   refresh_token?: string | null;
+
+  /* role */
+  @IsNotEmpty()
+  @IsString()
+  @Max(20)
+  @Column({
+    type: 'varchar',
+    name: 'role',
+    length: 20,
+    default: Role.USER,
+  })
+  role!: Role;
 }

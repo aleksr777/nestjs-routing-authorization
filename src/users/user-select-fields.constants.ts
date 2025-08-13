@@ -11,6 +11,7 @@ export const USER_CONFIDENTIAL_FIELDS = [
   'updated_at',
   'email',
   'phone_number',
+  'role',
 ] as const;
 
 export const USER_PASSWORD = 'password';

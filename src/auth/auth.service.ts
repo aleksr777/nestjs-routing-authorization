@@ -6,6 +6,7 @@ import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
+import { NicknameGeneratorService } from '../common/nickname-generator-service/nickname-generator.service';
 import { User } from '../users/entities/user.entity';
 import {
   USER_PROFILE_FIELDS,
@@ -29,23 +30,13 @@ export class AuthService {
     private readonly errorsHandlerService: ErrorsHandlerService,
     private readonly mailService: MailService,
     private readonly envService: EnvService,
+    private readonly nicknameGeneratorService: NicknameGeneratorService,
   ) {
     this.frontendUrl = this.envService.getEnv('FRONTEND_URL');
     this.registrationExpiresIn =
       this.envService.getEnv('REGISTRATION_TOKEN_EXPIRES_IN', 'number') / 60;
     this.resetExpiresIn =
       this.envService.getEnv('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
-  }
-
-  private generatePrefix(): string {
-    const length = 8;
-    const chars =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
   }
 
   removeSensitiveInfo<T extends object, K extends keyof T>(
@@ -89,7 +80,7 @@ export class AuthService {
     try {
       const user = await this.usersRepository.findOneOrFail({
         where: { id },
-        select: ['id'],
+        select: ['id', 'role'],
       });
       return this.removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
     } catch (err: unknown) {
@@ -177,11 +168,20 @@ export class AuthService {
         this.errorsHandlerService.invalidToken(null, TokenType.REGISTRATION);
         return;
       }
-      const baseNickname = `user`;
-      let nickname = `${baseNickname}_${this.generatePrefix()}`;
-      while (await queryRunner.manager.findOne(User, { where: { nickname } })) {
-        nickname = `${baseNickname}_${this.generatePrefix()}`;
-      }
+      let nickname: string;
+      let attempts = 0;
+      const maxAttempts = 50;
+      do {
+        if (attempts >= maxAttempts) {
+          throw new Error(
+            'Unable to generate unique nickname after 50 attempts',
+          );
+        }
+        nickname = this.nicknameGeneratorService.get();
+        attempts++;
+      } while (
+        await queryRunner.manager.findOne(User, { where: { nickname } })
+      );
       const newUser = queryRunner.manager.create(User, {
         email: data.email,
         password: data.password,
