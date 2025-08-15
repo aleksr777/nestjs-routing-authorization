@@ -14,8 +14,6 @@ import {
   Length,
   IsNotEmpty,
   IsOptional,
-  IsInt,
-  Min,
   Max,
 } from 'class-validator';
 
@@ -24,6 +22,7 @@ export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
+  /* Account creation time */
   @CreateDateColumn({
     default: () => 'CURRENT_TIMESTAMP',
     name: 'created_at',
@@ -32,6 +31,7 @@ export class User {
   })
   created_at!: Date;
 
+  /* Data update time */
   @UpdateDateColumn({
     default: () => 'CURRENT_TIMESTAMP',
     onUpdate: 'CURRENT_TIMESTAMP',
@@ -40,6 +40,14 @@ export class User {
     select: false,
   })
   updated_at!: Date;
+
+  /* Last activity time */
+  @Column({
+    type: 'timestamp',
+    name: 'last_activity_at',
+    nullable: true,
+  })
+  last_activity_at?: Date;
 
   /* Email */
   @IsEmail()
@@ -94,43 +102,7 @@ export class User {
   })
   password!: string;
 
-  /* Age */
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(150)
-  @Column({
-    type: 'smallint',
-    name: 'age',
-    nullable: true,
-  })
-  age?: number | null;
-
-  /* Gender */
-  @IsOptional()
-  @IsString()
-  @Length(0, 50)
-  @Column({
-    type: 'varchar',
-    name: 'gender',
-    nullable: true,
-    length: 20,
-  })
-  gender?: string | null;
-
-  /* About */
-  @IsOptional()
-  @IsString()
-  @Length(0, 1000)
-  @Column({
-    type: 'text',
-    name: 'about',
-    nullable: true,
-  })
-  about?: string | null;
-
   /* refresh_token */
-
   @IsString()
   @Max(512)
   @Column({

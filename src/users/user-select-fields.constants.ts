@@ -1,9 +1,7 @@
 export const USER_PUBLIC_FIELDS = [
   'id',
   'nickname',
-  'age',
-  'gender',
-  'about',
+  'last_activity_at',
 ] as const;
 
 export const USER_CONFIDENTIAL_FIELDS = [
