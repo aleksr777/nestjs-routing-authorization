@@ -21,18 +21,22 @@ export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(ctx: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [
+    const requiredRoles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [
       ctx.getHandler(),
       ctx.getClass(),
     ]);
-    if (!required?.length) return true;
+
+    if (!requiredRoles?.length) {
+      return true;
+    }
 
     const req = ctx.switchToHttp().getRequest<RequestWithUser>();
-    const role = req.user?.role;
+    const userRole = req.user?.role;
 
-    if (!role || !required.includes(role)) {
+    if (!userRole || !requiredRoles.includes(userRole)) {
       throw new ForbiddenException(ErrMessages.INSUFFICIENT_ACCESS_RIGHTS);
     }
+
     return true;
   }
 }

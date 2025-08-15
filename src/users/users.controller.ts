@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Req,
-  Query,
   Delete,
   UseGuards,
   Patch,
@@ -11,9 +10,8 @@ import {
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
-import { UpdateUserDto } from '../users/dto/update-user.dto';
-import { GetUsersQueryDto } from './dto/get-users-query.dto';
-import { User } from '../users/entities/user.entity';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { User } from './entities/user.entity';
 
 @Controller('users')
 export class UsersController {
@@ -23,6 +21,7 @@ export class UsersController {
   @Get('me')
   async getCurrentProfile(@Req() req: Request) {
     const user = req.user as User;
+    console.log(user.role);
     return this.usersService.getCurrentProfile(+user.id);
   }
 
@@ -40,15 +39,5 @@ export class UsersController {
     const user = req.user as User;
     const userData = { ...dto };
     return this.usersService.updateCurrentUser(+user.id, userData);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get()
-  async getUsersQuery(@Query() query: GetUsersQueryDto) {
-    return this.usersService.getUsersQuery(
-      query.limit,
-      query.offset,
-      query.nickname,
-    );
   }
 }
