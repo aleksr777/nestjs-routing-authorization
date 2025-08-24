@@ -6,13 +6,13 @@ import { TokensService } from '../auth/tokens.service';
 import { AuthService } from '../auth/auth.service';
 import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
 import { User } from './entities/user.entity';
-import { UpdateUserDto } from '../users/dto/update-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import {
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
   USER_SECRET_FIELDS,
   USER_CONFIDENTIAL_FIELDS,
-} from './user-select-fields.constants';
+} from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
 
 @Injectable()
@@ -126,6 +126,15 @@ export class UsersService {
       ]);
     } catch (err: unknown) {
       this.errorsHandlerService.default(err);
+    }
+  }
+
+  async updatePartial(id: number, patch: Partial<{ last_activity_at: Date }>) {
+    try {
+      await this.usersRepository.update({ id }, patch);
+    } catch (e) {
+      // максимум лог в консоль/Logger
+      console.error('updatePartial failed', e);
     }
   }
 }

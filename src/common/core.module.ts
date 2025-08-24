@@ -6,10 +6,14 @@ import { ErrorsHandlerService } from './errors-handler-service/errors-handler.se
 import { EnvService } from './env-service/env.service';
 import { MailService } from './mail-service/mail.service';
 import { NicknameGeneratorService } from './nickname-generator-service/nickname-generator.service';
+import { ScheduleModule } from '@nestjs/schedule';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { ActivityModule } from '../activity/activity.module';
+import { ActivityInterceptor } from '../activity/activity.interceptor';
 
 @Global()
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, ScheduleModule.forRoot(), ActivityModule],
   providers: [
     HashService,
     RedisService,
@@ -17,6 +21,7 @@ import { NicknameGeneratorService } from './nickname-generator-service/nickname-
     EnvService,
     MailService,
     NicknameGeneratorService,
+    { provide: APP_INTERCEPTOR, useClass: ActivityInterceptor },
   ],
   exports: [
     HashService,

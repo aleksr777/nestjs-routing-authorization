@@ -6,9 +6,6 @@ import {
   IsPhoneNumber,
   Length,
   IsOptional,
-  Min,
-  Max,
-  IsInt,
 } from 'class-validator';
 
 export class UpdateUserDto extends PartialType(RequestRegistrationDto) {
@@ -30,20 +27,4 @@ export class UpdateUserDto extends PartialType(RequestRegistrationDto) {
   @IsPhoneNumber()
   @Length(4, 40)
   phone_number?: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(150)
-  age?: number;
-
-  @IsOptional()
-  @IsString()
-  @Length(0, 50)
-  gender?: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(0, 1000)
-  about?: string;
 }

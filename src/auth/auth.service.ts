@@ -12,7 +12,7 @@ import {
   USER_PROFILE_FIELDS,
   USER_PASSWORD,
   USER_SECRET_FIELDS,
-} from '../users/user-select-fields.constants';
+} from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
 
 @Injectable()
