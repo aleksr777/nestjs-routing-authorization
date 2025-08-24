@@ -179,9 +179,7 @@ export class AuthService {
         }
         nickname = this.nicknameGeneratorService.get();
         attempts++;
-      } while (
-        await qr.manager.findOne(User, { where: { nickname } })
-      );
+      } while (await qr.manager.findOne(User, { where: { nickname } }));
       const newUser = qr.manager.create(User, {
         email: data.email,
         password: data.password,
