@@ -9,7 +9,7 @@ import {
   USER_PROFILE_FIELDS,
   USER_SECRET_FIELDS,
 } from '../common/constants/user-select-fields.constants';
-import { FieldsType } from '../common/types/fields.type';
+import { UserSearchableFieldsType } from '../common/types/search-users-fields.type';
 
 @Injectable()
 export class AdminService {
@@ -23,7 +23,7 @@ export class AdminService {
   async getUsersByQuery(
     limit: number,
     offset: number,
-    field?: FieldsType,
+    field?: UserSearchableFieldsType,
     search?: string,
   ) {
     try {

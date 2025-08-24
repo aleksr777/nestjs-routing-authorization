@@ -128,4 +128,13 @@ export class UsersService {
       this.errorsHandlerService.default(err);
     }
   }
+
+  async updatePartial(id: number, patch: Partial<{ last_activity_at: Date }>) {
+    try {
+      await this.usersRepository.update({ id }, patch);
+    } catch (e) {
+      // максимум лог в консоль/Logger
+      console.error('updatePartial failed', e);
+    }
+  }
 }

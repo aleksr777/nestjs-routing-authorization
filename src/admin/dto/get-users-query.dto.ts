@@ -1,7 +1,7 @@
 import { IsInt, Min, IsOptional, IsString, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { USER_SEARCHABLE_FIELDS } from '../../common/constants/user-select-fields.constants';
-import { FieldsType } from '../../common/types/fields.type';
+import { UserSearchableFieldsType } from '../../common/types/search-users-fields.type';
 
 export class GetUsersQueryDto {
   @IsOptional()
@@ -18,7 +18,7 @@ export class GetUsersQueryDto {
 
   @IsOptional()
   @IsIn(USER_SEARCHABLE_FIELDS)
-  field?: FieldsType;
+  field?: UserSearchableFieldsType;
 
   @IsOptional()
   @IsString()

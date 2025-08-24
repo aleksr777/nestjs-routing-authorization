@@ -21,7 +21,6 @@ export class UsersController {
   @Get('me')
   async getCurrentProfile(@Req() req: Request) {
     const user = req.user as User;
-    console.log(user.role);
     return this.usersService.getCurrentProfile(+user.id);
   }
 
