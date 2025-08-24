@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
+import { Cron as CronDecorator } from '@nestjs/schedule';
 import { ActivityService } from './activity.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
+
+const CronSafe: (expr: string) => MethodDecorator =
+  CronDecorator as unknown as (expr: string) => MethodDecorator;
 
 @Injectable()
 export class ActivityFlushService {
@@ -13,8 +16,7 @@ export class ActivityFlushService {
     @InjectRepository(User) private readonly userRepo: Repository<User>,
   ) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-  @Interval(60_000)
+  @CronSafe('*/1 * * * *')
   async flush(): Promise<void> {
     const updates = await this.activity.scanActivities();
     if (!updates.length) return;
