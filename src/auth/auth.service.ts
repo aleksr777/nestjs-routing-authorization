@@ -159,9 +159,9 @@ export class AuthService {
   }
 
   async confirmRegistration(token: string) {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
     try {
       const data = await this.tokensService.getDataByRegistrationToken(token);
       if (!data) {
@@ -180,22 +180,22 @@ export class AuthService {
         nickname = this.nicknameGeneratorService.get();
         attempts++;
       } while (
-        await queryRunner.manager.findOne(User, { where: { nickname } })
+        await qr.manager.findOne(User, { where: { nickname } })
       );
-      const newUser = queryRunner.manager.create(User, {
+      const newUser = qr.manager.create(User, {
         email: data.email,
         password: data.password,
         nickname,
       });
-      await queryRunner.manager.save(User, newUser);
-      await queryRunner.commitTransaction();
+      await qr.manager.save(User, newUser);
+      await qr.commitTransaction();
       await this.tokensService.deleteRegistrationToken(token);
       return this.login(newUser.id);
     } catch (err: unknown) {
-      await queryRunner.rollbackTransaction();
+      await qr.rollbackTransaction();
       this.errorsHandlerService.confirmRegistration(err);
     } finally {
-      await queryRunner.release();
+      await qr.release();
     }
   }
 
