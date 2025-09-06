@@ -125,4 +125,43 @@ export class User {
     default: Role.USER,
   })
   role!: Role;
+
+  /* is_blocked */
+  @Column({
+    type: 'boolean',
+    name: 'is_blocked',
+    default: false,
+  })
+  is_blocked!: boolean;
+
+  /* blocked_at */
+  @IsOptional()
+  @Column({
+    type: 'timestamp',
+    name: 'blocked_at',
+    nullable: true,
+    default: null,
+  })
+  blocked_at?: Date | null;
+
+  /* blocked_by */
+  @IsOptional()
+  @Column({
+    type: 'int',
+    name: 'blocked_by',
+    nullable: true,
+    default: null,
+  })
+  blocked_by?: number | null;
+
+  /* blocked_reason */
+  @IsOptional()
+  @Column({
+    type: 'varchar',
+    name: 'blocked_reason',
+    length: 255,
+    nullable: true,
+    default: null,
+  })
+  blocked_reason?: string | null;
 }

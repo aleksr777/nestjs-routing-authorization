@@ -9,9 +9,13 @@ import { EnvService } from '../common/env-service/env.service';
 import { NicknameGeneratorService } from '../common/nickname-generator-service/nickname-generator.service';
 import { User } from '../users/entities/user.entity';
 import {
+  ID,
+  ROLE,
+  IS_BLOCKED,
   USER_PROFILE_FIELDS,
   USER_PASSWORD,
-  USER_SECRET_FIELDS,
+  USER_REFRESH_TOKEN,
+  BLOCKED_REASON,
 } from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
 
@@ -57,19 +61,30 @@ export class AuthService {
     }
   }
 
+  isUserBlocked(user: User) {
+    if (user.is_blocked) {
+      this.errorsHandlerService.accountBlocked(user.blocked_reason);
+    }
+  }
+
   async validateUserByEmailAndPassword(email: string, password: string) {
     let user: User;
     try {
       user = await this.usersRepository.findOneOrFail({
         where: { email },
-        select: [...USER_PROFILE_FIELDS, USER_PASSWORD],
+        select: [
+          ...USER_PROFILE_FIELDS,
+          USER_PASSWORD,
+          IS_BLOCKED,
+          BLOCKED_REASON,
+        ],
       });
       const isPasswordValid = await this.hashService.compare(
         password,
         user.password,
       );
       this.errorsHandlerService.invalidEmailOrPassword(null, isPasswordValid);
-      return this.removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
+      return user;
     } catch (err: unknown) {
       this.errorsHandlerService.invalidEmailOrPassword(err);
       this.errorsHandlerService.default(err);
@@ -80,9 +95,9 @@ export class AuthService {
     try {
       const user = await this.usersRepository.findOneOrFail({
         where: { id },
-        select: ['id', 'role'],
+        select: [ID, ROLE, IS_BLOCKED, BLOCKED_REASON],
       });
-      return this.removeSensitiveInfo(user, [...USER_SECRET_FIELDS]);
+      return user;
     } catch (err: unknown) {
       this.errorsHandlerService.userNotFound(err);
       this.errorsHandlerService.default(err);
@@ -94,13 +109,18 @@ export class AuthService {
     try {
       const user = await this.usersRepository.findOneOrFail({
         where: { id },
-        select: [...USER_PROFILE_FIELDS, 'refresh_token'],
+        select: [
+          ...USER_PROFILE_FIELDS,
+          USER_REFRESH_TOKEN,
+          IS_BLOCKED,
+          BLOCKED_REASON,
+        ],
       });
       const isTokensMatch = refresh_token === user.refresh_token;
       if (!isTokensMatch) {
         return this.errorsHandlerService.invalidToken(null, TokenType.REFRESH);
       }
-      return this.removeSensitiveInfo(user, [USER_PASSWORD]);
+      return user;
     } catch (err: unknown) {
       this.errorsHandlerService.invalidToken(err, TokenType.REFRESH);
       this.errorsHandlerService.default(err);
@@ -111,7 +131,7 @@ export class AuthService {
     try {
       const user = await this.usersRepository.findOne({
         where: { email },
-        select: ['id'],
+        select: [ID],
       });
       if (user) {
         const resetUrl = `${this.frontendUrl}/reset-password?email=${encodeURIComponent(email)}`;
@@ -159,9 +179,9 @@ export class AuthService {
   }
 
   async confirmRegistration(token: string) {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
     try {
       const data = await this.tokensService.getDataByRegistrationToken(token);
       if (!data) {
@@ -179,23 +199,21 @@ export class AuthService {
         }
         nickname = this.nicknameGeneratorService.get();
         attempts++;
-      } while (
-        await queryRunner.manager.findOne(User, { where: { nickname } })
-      );
-      const newUser = queryRunner.manager.create(User, {
+      } while (await qr.manager.findOne(User, { where: { nickname } }));
+      const newUser = qr.manager.create(User, {
         email: data.email,
         password: data.password,
         nickname,
       });
-      await queryRunner.manager.save(User, newUser);
-      await queryRunner.commitTransaction();
+      await qr.manager.save(User, newUser);
+      await qr.commitTransaction();
       await this.tokensService.deleteRegistrationToken(token);
       return this.login(newUser.id);
     } catch (err: unknown) {
-      await queryRunner.rollbackTransaction();
+      await qr.rollbackTransaction();
       this.errorsHandlerService.confirmRegistration(err);
     } finally {
-      await queryRunner.release();
+      await qr.release();
     }
   }
 
@@ -241,7 +259,7 @@ export class AuthService {
     try {
       const user = await this.usersRepository.findOne({
         where: { email },
-        select: ['id'],
+        select: [ID],
       });
       if (user) {
         const token = this.tokensService.generateVerificationToken();

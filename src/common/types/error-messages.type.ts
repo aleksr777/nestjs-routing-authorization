@@ -21,4 +21,5 @@ export enum ErrMessages {
   CONFLICT_USER_EXISTS = 'A user with such unique data already exists in the database!',
   INSUFFICIENT_ACCESS_RIGHTS = 'The current user has insufficient access rights!',
   AUTHORIZED = 'User is not authorized!',
+  ACCOUNT_BLOCKED = 'Account has been blocked by the administrator!',
 }

@@ -84,7 +84,10 @@ export class TokensService {
   async isJwtTokenBlacklisted(token: string) {
     const cleanedToken = this.stripJwtToken(token);
     const result = await this.redisService.get(cleanedToken);
-    return result === 'blacklisted';
+    if (result) {
+      this.errorsHandlerService.jwtTokenBlacklisted();
+      return 'blacklisted';
+    }
   }
 
   async saveRefreshToken(userId: number, refresh_token: string) {

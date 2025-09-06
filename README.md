@@ -143,13 +143,15 @@ This will create an admin user with the provided email and password or update th
 ### Users
 
 - `GET /api/users/me` — Get current user's profile
-- `GET /api/users` — Get list of users (with query support)
 - `PATCH /api/users/me/update` — Update current user
 - `DELETE /api/users/me/delete` — Delete current user
 
 ### Admin
 
-- `GET /api/admin/dashboard` — Admin dashboard (requires ADMIN role and valid access token)
+- `GET /api/admin/users/find` — Get list of users (with query support)
+- `DELETE /api/admin/users/block/:id` — Block user by ID
+- `DELETE /api/admin/users/unblock/:id` — Unblock user by ID
+- `DELETE /api/admin/users/delete/:id` — Delete user by ID
 
 
 ---

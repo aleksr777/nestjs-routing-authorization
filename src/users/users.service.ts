@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { HttpException, Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { HashService } from '../common/hash-service/hash.service';
@@ -8,12 +8,15 @@ import { ErrorsHandlerService } from '../common/errors-handler-service/errors-ha
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 import {
+  ID,
+  ROLE,
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
   USER_SECRET_FIELDS,
   USER_CONFIDENTIAL_FIELDS,
 } from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
+import { Role } from '../common/types/role.enum';
 
 @Injectable()
 export class UsersService {
@@ -41,66 +44,74 @@ export class UsersService {
       this.errorsHandlerService.default(err);
     }
   }
-
   async removeCurrentUser(userId: number, access_token: string | undefined) {
     if (!access_token) {
       this.errorsHandlerService.tokenNotDefined(TokenType.ACCESS);
     } else {
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
+      const qr = this.dataSource.createQueryRunner();
+      await qr.connect();
+      await qr.startTransaction();
       try {
-        await queryRunner.manager.findOneOrFail(User, {
+        const user = await qr.manager.findOneOrFail(User, {
           where: { id: userId },
+          select: [ID, ROLE],
         });
-        await queryRunner.manager.delete(User, { id: userId });
+        if (user.role === Role.ADMIN) {
+          throw new BadRequestException(
+            'Administrator account cannot be deleted this way',
+          );
+        }
+        await qr.manager.delete(User, { id: userId });
         await this.tokensService.addJwtTokenToBlacklist(
           access_token,
           TokenType.ACCESS,
         );
-        await queryRunner.commitTransaction();
+        await qr.commitTransaction();
       } catch (err: unknown) {
-        await queryRunner.rollbackTransaction();
+        await qr.rollbackTransaction();
+        if (err instanceof HttpException) {
+          throw err;
+        }
         this.errorsHandlerService.userNotFound(err);
         this.errorsHandlerService.default(err);
       } finally {
-        await queryRunner.release();
+        await qr.release();
       }
     }
   }
 
   async updateCurrentUser(userId: number, userData: UpdateUserDto) {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
     try {
       if (userData.password) {
         userData.password = await this.hashService.hash(userData.password);
       }
-      const result = await queryRunner.manager
+      const result = await qr.manager
         .createQueryBuilder()
         .update(User)
         .set(userData)
         .where('id = :id', { id: userId })
         .execute();
       if (result.affected === 0) {
-        await queryRunner.rollbackTransaction();
+        await qr.rollbackTransaction();
         return this.errorsHandlerService.userNotFound();
       }
-      const user = await queryRunner.manager
+      const user = await qr.manager
         .createQueryBuilder(User, 'user')
         .addSelect([...USER_PROFILE_FIELDS.map((f) => `user.${f}`)])
         .where('user.id = :id', { id: userId })
         .getOneOrFail();
-      await queryRunner.commitTransaction();
+      await qr.commitTransaction();
       return this.authService.removeSensitiveInfo(user, USER_SECRET_FIELDS);
     } catch (err: unknown) {
-      await queryRunner.rollbackTransaction();
+      await qr.rollbackTransaction();
       this.errorsHandlerService.userNotFound(err);
       this.errorsHandlerService.userConflict(err);
       this.errorsHandlerService.default(err);
     } finally {
-      await queryRunner.release();
+      await qr.release();
     }
   }
 
@@ -133,7 +144,6 @@ export class UsersService {
     try {
       await this.usersRepository.update({ id }, patch);
     } catch (e) {
-      // максимум лог в консоль/Logger
       console.error('updatePartial failed', e);
     }
   }
