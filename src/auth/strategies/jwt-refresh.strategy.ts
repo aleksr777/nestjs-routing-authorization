@@ -34,11 +34,14 @@ export class JwtRefreshStrategy extends PassportStrategy(
     if (!refresh_token) {
       this.errorsHandlerService.tokenNotDefined(TokenType.REFRESH);
     } else {
-      const userData = await this.authService.validateUserByRefreshToken(
+      const user = await this.authService.validateUserByRefreshToken(
         userId,
         refresh_token,
       );
-      return userData;
+      if (user) {
+        this.authService.isUserBlocked(user);
+      }
+      return user;
     }
   }
 }

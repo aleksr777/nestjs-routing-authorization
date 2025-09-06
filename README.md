@@ -149,6 +149,8 @@ This will create an admin user with the provided email and password or update th
 ### Admin
 
 - `GET /api/admin/users/find` — Get list of users (with query support)
+- `DELETE /api/admin/users/block/:id` — Block user by ID
+- `DELETE /api/admin/users/unblock/:id` — Unblock user by ID
 - `DELETE /api/admin/users/delete/:id` — Delete user by ID
 
 

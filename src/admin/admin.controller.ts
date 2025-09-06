@@ -6,13 +6,21 @@ import {
   Delete,
   Param,
   ParseIntPipe,
+  Patch,
+  Body,
+  //HttpCode,
+  Req,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/types/role.enum';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
+import { BlockUserDto } from './dto/block-user.dto';
 import { AdminService } from './admin.service';
+import { Request } from 'express';
+//import { JwtPayload } from '../common/types/jwt-payload.type';
+import { User } from '../users/entities/user.entity';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,7 +39,26 @@ export class AdminController {
   }
 
   @Delete('users/delete/:id')
-  async deleteUser(@Param('id', ParseIntPipe) id: number): Promise<void> {
+  async deleteUser(@Param('id', ParseIntPipe) id: number) {
     await this.adminService.deleteUserById(id);
+  }
+
+  @Patch('users/block/:id')
+  async blockUser(
+    @Body() dto: BlockUserDto,
+    @Req() req: Request,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const admin = req.user as User;
+    const adminId = +admin.id;
+    const userId = +id;
+    const blocked_reason = dto.blocked_reason ? dto.blocked_reason : '';
+    await this.adminService.blockUserById(adminId, userId, blocked_reason);
+  }
+
+  @Patch('users/unblock/:id')
+  async unblockUser(@Param('id', ParseIntPipe) id: number) {
+    const userId = +id;
+    await this.adminService.unblockUserById(userId);
   }
 }

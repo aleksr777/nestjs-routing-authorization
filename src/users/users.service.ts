@@ -8,6 +8,8 @@ import { ErrorsHandlerService } from '../common/errors-handler-service/errors-ha
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 import {
+  ID,
+  ROLE,
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
   USER_SECRET_FIELDS,
@@ -52,7 +54,7 @@ export class UsersService {
       try {
         const user = await qr.manager.findOneOrFail(User, {
           where: { id: userId },
-          select: ['id', 'role'],
+          select: [ID, ROLE],
         });
         if (user.role === Role.ADMIN) {
           throw new BadRequestException(

@@ -30,13 +30,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!access_token) {
       this.errorsHandlerService.tokenNotDefined(TokenType.ACCESS);
     } else {
-      const isJwtTokenBlacklisted =
-        await this.tokensService.isJwtTokenBlacklisted(access_token);
-      if (isJwtTokenBlacklisted) {
-        this.errorsHandlerService.jwtTokenBlacklisted();
+      await this.tokensService.isJwtTokenBlacklisted(access_token);
+      const user = await this.authService.validateUserById(+payload.sub);
+      if (user) {
+        this.authService.isUserBlocked(user);
       }
-      const userData = await this.authService.validateUserById(+payload.sub);
-      return userData;
+      return user;
     }
   }
 }

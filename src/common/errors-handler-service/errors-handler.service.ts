@@ -129,4 +129,11 @@ export class ErrorsHandlerService {
     }
     this.default(err);
   }
+
+  accountBlocked(reason: string | null | undefined) {
+    const message = reason
+      ? `${ErrMessages.ACCOUNT_BLOCKED} Reason: ${reason}`
+      : ErrMessages.ACCOUNT_BLOCKED;
+    throw new UnauthorizedException(message);
+  }
 }
