@@ -36,11 +36,11 @@ export class AuthService {
     private readonly envService: EnvService,
     private readonly nicknameGeneratorService: NicknameGeneratorService,
   ) {
-    this.frontendUrl = this.envService.getEnv('FRONTEND_URL');
+    this.frontendUrl = this.envService.get('FRONTEND_URL');
     this.registrationExpiresIn =
-      this.envService.getEnv('REGISTRATION_TOKEN_EXPIRES_IN', 'number') / 60;
+      this.envService.get('REGISTRATION_TOKEN_EXPIRES_IN', 'number') / 60;
     this.resetExpiresIn =
-      this.envService.getEnv('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
+      this.envService.get('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
   }
 
   removeSensitiveInfo<T extends object, K extends keyof T>(
@@ -146,7 +146,7 @@ export class AuthService {
           <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
           <p style="font-weight: bold; font-size: 17px;">Best regards,<br>Your App Team</p>
         `;
-        await this.mailService.sendMail(email, `Password recovery`, text, html);
+        await this.mailService.send(email, `Password recovery`, text, html);
       } else {
         const token = this.tokensService.generateVerificationToken();
         const hashedPassword = await this.hashService.hash(password);
@@ -163,12 +163,7 @@ export class AuthService {
           <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
           <p style="font-weight: bold; font-size: 17px;">Best regards,<br>Your App Team</p>
         `;
-        await this.mailService.sendMail(
-          email,
-          `Confirm registration`,
-          text,
-          html,
-        );
+        await this.mailService.send(email, `Confirm registration`, text, html);
       }
       return {
         message: 'If the email exists, we’ve sent you a link.',
@@ -272,7 +267,7 @@ export class AuthService {
           <p style="font-weight: bold; font-size: 17px;">
             <a href="${resetUrl}" style="font-weight: bold;">${resetUrl}</a>
           </p>`;
-        await this.mailService.sendMail(email, `Password recovery`, text, html);
+        await this.mailService.send(email, `Password recovery`, text, html);
       }
       return {
         message: 'If the email exists, we’ve sent you a password reset link.',

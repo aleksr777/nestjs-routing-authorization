@@ -21,7 +21,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  const serverPort = envService.getEnv('SERVER_PORT', 'number');
+  const serverPort = envService.get('SERVER_PORT', 'number');
 
   // Start app
   await app.listen(serverPort);

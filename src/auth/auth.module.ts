@@ -22,9 +22,9 @@ import { User } from '../users/entities/user.entity';
       imports: [CoreModule],
       inject: [EnvService],
       useFactory: (envService: EnvService) => ({
-        secret: envService.getEnv('JWT_ACCESS_SECRET'),
+        secret: envService.get('JWT_ACCESS_SECRET'),
         signOptions: {
-          expiresIn: envService.getEnv('JWT_ACCESS_EXPIRES_IN'),
+          expiresIn: envService.get('JWT_ACCESS_EXPIRES_IN'),
         },
       }),
     }),

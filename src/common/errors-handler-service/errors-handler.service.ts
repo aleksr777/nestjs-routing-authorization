@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { QueryFailedError, EntityNotFoundError } from 'typeorm';
-import { ErrMessages } from '../types/error-messages.type';
+import { ErrMessages } from './error-messages.type';
 import { TokenType } from '../types/token-type.type';
 
 @Injectable()
@@ -38,6 +38,10 @@ export class ErrorsHandlerService {
       case TokenType.REGISTRATION:
         throw new UnauthorizedException(
           ErrMessages.REGISTRATION_TOKEN_NOT_DEFINED,
+        );
+      case TokenType.ADMIN_TRANSFER:
+        throw new UnauthorizedException(
+          ErrMessages.ADMIN_TRANSFER_TOKEN_NOT_DEFINED,
         );
       default:
         throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);

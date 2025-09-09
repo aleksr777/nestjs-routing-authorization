@@ -1,15 +1,15 @@
 import {
-  Query,
-  Controller,
   Get,
-  UseGuards,
-  Delete,
-  Param,
-  ParseIntPipe,
   Patch,
+  Post,
+  Delete,
   Body,
-  //HttpCode,
   Req,
+  Query,
+  Param,
+  Controller,
+  UseGuards,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -17,16 +17,32 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/types/role.enum';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { BlockUserDto } from './dto/block-user.dto';
+import { InitiateTransferDto } from './dto/initiate-transfer.dto';
 import { AdminService } from './admin.service';
+import { AdminTransferService } from './admin-transfer.service';
 import { Request } from 'express';
-//import { JwtPayload } from '../common/types/jwt-payload.type';
 import { User } from '../users/entities/user.entity';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly transfer: AdminTransferService,
+  ) {}
+
+  @Post('transfer/initiate')
+  async initiateTransfer(
+    @Body() dto: InitiateTransferDto,
+    @Req() req: Request,
+  ) {
+    const admin = req.user as User;
+    const adminId = +admin.id;
+    const userId = +dto.id;
+    await this.transfer.requestTransfer(adminId, userId);
+    return { ok: true };
+  }
 
   @Get('users/find')
   getUsers(@Query() q: GetUsersQueryDto) {

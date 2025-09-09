@@ -89,7 +89,7 @@ export class AdminService {
       const html =
         `<p>Hello, ${user.nickname}!</p>` +
         `<p>Your account has been permanently deleted by an administrator.</p>`;
-      await this.mailService.sendMail(user.email, subject, text, html);
+      await this.mailService.send(user.email, subject, text, html);
     } catch (err: unknown) {
       await qr.rollbackTransaction();
       if (err instanceof HttpException) {
@@ -146,7 +146,7 @@ export class AdminService {
       const html =
         `<p>${greet}</p><p>Your account has been blocked by an administrator.</p>` +
         (blocked_reason ? `<p>Reason: ${blocked_reason}</p>` : '');
-      await this.mailService.sendMail(user.email, subject, text, html);
+      await this.mailService.send(user.email, subject, text, html);
     } catch (err: unknown) {
       await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;
@@ -185,7 +185,7 @@ export class AdminService {
       const greet = user.nickname ? `Hello, ${user.nickname}!` : 'Hello!';
       const text = `${greet}\n\nYour account has been unblocked by an administrator.`;
       const html = `<p>${greet}</p><p>Your account has been unblocked by an administrator.</p>`;
-      await this.mailService.sendMail(user.email, subject, text, html);
+      await this.mailService.send(user.email, subject, text, html);
     } catch (err: unknown) {
       await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;

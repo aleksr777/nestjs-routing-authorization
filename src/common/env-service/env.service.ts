@@ -5,12 +5,12 @@ import { ENV_VARIABLES } from './env.constants';
 @Injectable()
 export class EnvService {
   constructor(private readonly configService: ConfigService) {}
-  public getEnv(key: string): string;
-  public getEnv(key: string, type: 'string'): string;
-  public getEnv(key: string, type: 'number'): number;
-  public getEnv(key: string, type: 'boolean'): boolean;
+  public get(key: string): string;
+  public get(key: string, type: 'string'): string;
+  public get(key: string, type: 'number'): number;
+  public get(key: string, type: 'boolean'): boolean;
 
-  public getEnv(
+  public get(
     key: string,
     type: 'string' | 'number' | 'boolean' = 'string',
   ): string | number | boolean {
