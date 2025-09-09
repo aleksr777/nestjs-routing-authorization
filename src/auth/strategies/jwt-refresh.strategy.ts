@@ -22,7 +22,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: envService.getEnv('JWT_REFRESH_SECRET'),
+      secretOrKey: envService.get('JWT_REFRESH_SECRET'),
       algorithms: ['HS256'],
       passReqToCallback: true,
     } as StrategyOptionsWithRequest);

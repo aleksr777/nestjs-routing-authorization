@@ -1,6 +1,7 @@
 export enum TokenType {
-  ACCESS = 'access',
-  REFRESH = 'refresh',
-  RESET = 'reset',
-  REGISTRATION = 'registration',
+  ACCESS = 'ACCESS',
+  REFRESH = 'REFRESH',
+  RESET = 'RESET',
+  REGISTRATION = 'REGISTRATION',
+  ADMIN_TRANSFER = 'ADMIN_TRANSFER',
 }

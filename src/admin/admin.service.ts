@@ -89,7 +89,7 @@ export class AdminService {
       const html =
         `<p>Hello, ${user.nickname}!</p>` +
         `<p>Your account has been permanently deleted by an administrator.</p>`;
-      await this.mailService.sendMail(user.email, subject, text, html);
+      await this.mailService.send(user.email, subject, text, html);
     } catch (err: unknown) {
       await qr.rollbackTransaction();
       if (err instanceof HttpException) {
@@ -138,7 +138,7 @@ export class AdminService {
       this.redisService
         .del(`${LAST_ACTIVITY_KEY_PREFIX}:${userId}`)
         .catch(() => undefined);
-      const subject = 'Account has been suspended';
+      const subject = 'Account has been blocked';
       const greet = user.nickname ? `Hello, ${user.nickname}!` : 'Hello!';
       const text =
         `${greet}\n\nYour account has been blocked by an administrator.` +
@@ -146,7 +146,7 @@ export class AdminService {
       const html =
         `<p>${greet}</p><p>Your account has been blocked by an administrator.</p>` +
         (blocked_reason ? `<p>Reason: ${blocked_reason}</p>` : '');
-      await this.mailService.sendMail(user.email, subject, text, html);
+      await this.mailService.send(user.email, subject, text, html);
     } catch (err: unknown) {
       await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;
@@ -181,11 +181,11 @@ export class AdminService {
         },
       );
       await qr.commitTransaction();
-      const subject = 'Account has been reactivated';
+      const subject = 'Account has been unblocked';
       const greet = user.nickname ? `Hello, ${user.nickname}!` : 'Hello!';
-      const text = `${greet}\n\nYour account has been reactivated by an administrator.`;
-      const html = `<p>${greet}</p><p>Your account has been reactivated by an administrator.</p>`;
-      await this.mailService.sendMail(user.email, subject, text, html);
+      const text = `${greet}\n\nYour account has been unblocked by an administrator.`;
+      const html = `<p>${greet}</p><p>Your account has been unblocked by an administrator.</p>`;
+      await this.mailService.send(user.email, subject, text, html);
     } catch (err: unknown) {
       await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;

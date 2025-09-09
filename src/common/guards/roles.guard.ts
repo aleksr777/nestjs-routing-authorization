@@ -8,7 +8,7 @@ import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { Role } from '../types/role.enum';
-import { ErrMessages } from '../types/error-messages.type';
+import { ErrMessages } from '../errors-handler-service/error-messages.type';
 
 interface AuthUser {
   id: number;

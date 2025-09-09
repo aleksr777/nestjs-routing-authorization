@@ -7,19 +7,19 @@ export class MailService {
   private transporter: nodemailer.Transporter;
   private smtpFrom: string;
   constructor(private readonly envService: EnvService) {
-    this.smtpFrom = this.envService.getEnv('SMTP_FROM');
+    this.smtpFrom = this.envService.get('SMTP_FROM');
     this.transporter = nodemailer.createTransport({
-      host: this.envService.getEnv('SMTP_HOST'),
-      port: this.envService.getEnv('SMTP_PORT', 'number'),
-      secure: this.envService.getEnv('SMTP_SECURE', 'boolean'),
+      host: this.envService.get('SMTP_HOST'),
+      port: this.envService.get('SMTP_PORT', 'number'),
+      secure: this.envService.get('SMTP_SECURE', 'boolean'),
       auth: {
-        user: this.envService.getEnv('SMTP_USER'),
-        pass: this.envService.getEnv('SMTP_PASS'),
+        user: this.envService.get('SMTP_USER'),
+        pass: this.envService.get('SMTP_PASS'),
       },
     });
   }
 
-  async sendMail(
+  async send(
     to: string,
     subject: string,
     text: string,

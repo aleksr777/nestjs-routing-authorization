@@ -10,6 +10,10 @@ import { ErrorsHandlerService } from '../common/errors-handler-service/errors-ha
 import { JwtPayload } from '../common/types/jwt-payload.type';
 import { TokenType } from '../common/types/token-type.type';
 
+const RESET_REDIS_PREFIX = `reset:`;
+const REGISTER_REDIS_PREFIX = `register:`;
+const ADMIN_TRANSFER_REDIS_PREFIX = `admin:transfer:`;
+
 @Injectable()
 export class TokensService {
   private readonly accessSecret: string;
@@ -18,6 +22,7 @@ export class TokensService {
   private readonly refreshExpiresIn: string;
   private readonly resetExpiresIn: number;
   private readonly registrationExpiresIn: number;
+  private readonly transferExpiresIn: number;
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -26,16 +31,20 @@ export class TokensService {
     private readonly jwtService: JwtService,
     private readonly errorsHandlerService: ErrorsHandlerService,
   ) {
-    this.accessSecret = this.envService.getEnv('JWT_ACCESS_SECRET');
-    this.refreshSecret = this.envService.getEnv('JWT_REFRESH_SECRET');
-    this.accessExpiresIn = this.envService.getEnv('JWT_ACCESS_EXPIRES_IN');
-    this.refreshExpiresIn = this.envService.getEnv('JWT_REFRESH_EXPIRES_IN');
-    this.resetExpiresIn = this.envService.getEnv(
+    this.accessSecret = this.envService.get('JWT_ACCESS_SECRET');
+    this.refreshSecret = this.envService.get('JWT_REFRESH_SECRET');
+    this.accessExpiresIn = this.envService.get('JWT_ACCESS_EXPIRES_IN');
+    this.refreshExpiresIn = this.envService.get('JWT_REFRESH_EXPIRES_IN');
+    this.resetExpiresIn = this.envService.get(
       'RESET_TOKEN_EXPIRES_IN',
       'number',
     );
-    this.registrationExpiresIn = this.envService.getEnv(
+    this.registrationExpiresIn = this.envService.get(
       'REGISTRATION_TOKEN_EXPIRES_IN',
+      'number',
+    );
+    this.transferExpiresIn = this.envService.get(
+      'ADMIN_TRANSFER_TOKEN_EXPIRES_IN',
       'number',
     );
   }
@@ -43,7 +52,7 @@ export class TokensService {
   private getJwtTokenExpiration(token: string, tokenType?: TokenType) {
     const decoded = this.jwtService.decode<JwtPayload>(token);
     if (!decoded?.exp) {
-      return this.errorsHandlerService.invalidToken(null, tokenType);
+      this.errorsHandlerService.invalidToken(null, tokenType);
     }
     return decoded.exp;
   }
@@ -72,13 +81,14 @@ export class TokensService {
     const cleanedToken = this.stripJwtToken(token);
     const exp = this.getJwtTokenExpiration(cleanedToken, tokenType);
     if (typeof exp !== 'number' || isNaN(exp)) {
-      return this.errorsHandlerService.invalidToken(null, tokenType);
+      this.errorsHandlerService.invalidToken(null, tokenType);
+    } else {
+      const ttl = exp - Math.floor(Date.now() / 1000);
+      if (ttl <= 0) {
+        this.errorsHandlerService.invalidToken(null, tokenType);
+      }
+      await this.redisService.set(cleanedToken, 'blacklisted', { EX: ttl });
     }
-    const ttl = exp - Math.floor(Date.now() / 1000);
-    if (ttl <= 0) {
-      return this.errorsHandlerService.invalidToken(null, tokenType);
-    }
-    await this.redisService.set(cleanedToken, 'blacklisted', { EX: ttl });
   }
 
   async isJwtTokenBlacklisted(token: string) {
@@ -150,18 +160,18 @@ export class TokensService {
 
   async saveResetToken(userId: number, token: string): Promise<void> {
     const id = userId.toString();
-    await this.redisService.set(`reset:${token}`, id, {
+    await this.redisService.set(`${RESET_REDIS_PREFIX}${token}`, id, {
       EX: this.resetExpiresIn,
     });
   }
 
   async getUserIdByResetToken(token: string): Promise<number | null> {
-    const userId = await this.redisService.get(`reset:${token}`);
+    const userId = await this.redisService.get(`${RESET_REDIS_PREFIX}${token}`);
     return userId ? parseInt(userId, 10) : null;
   }
 
   async deleteResetToken(token: string) {
-    await this.redisService.del(`reset:${token}`);
+    await this.redisService.del(`${RESET_REDIS_PREFIX}${token}`);
   }
 
   async saveRegistrationToken(token: string, value: unknown) {
@@ -169,7 +179,7 @@ export class TokensService {
       throw new Error('Invalid registration payload');
     }
     const json = JSON.stringify(value);
-    await this.redisService.set(`register:${token}`, json, {
+    await this.redisService.set(`${REGISTER_REDIS_PREFIX}${token}`, json, {
       EX: this.registrationExpiresIn,
     });
   }
@@ -177,7 +187,9 @@ export class TokensService {
   async getDataByRegistrationToken(
     token: string,
   ): Promise<{ email: string; password: string } | null> {
-    const json = await this.redisService.get(`register:${token}`);
+    const json = await this.redisService.get(
+      `${REGISTER_REDIS_PREFIX}${token}`,
+    );
     if (!json) return null;
     let parsed: unknown;
     try {
@@ -192,6 +204,37 @@ export class TokensService {
   }
 
   async deleteRegistrationToken(token: string) {
-    await this.redisService.del(`register:${token}`);
+    await this.redisService.del(`${REGISTER_REDIS_PREFIX}${token}`);
+  }
+
+  async saveTransferToken(token: string, fromId: number, toId: number) {
+    await this.redisService.set(
+      `${ADMIN_TRANSFER_REDIS_PREFIX}${token}`,
+      JSON.stringify({ fromId: fromId, toId: toId }),
+      {
+        EX: this.transferExpiresIn,
+      },
+    );
+  }
+
+  async getDataByTransferToken(
+    token: string,
+  ): Promise<{ fromId: number; toId: number } | undefined> {
+    const raw = await this.redisService.get(
+      `${ADMIN_TRANSFER_REDIS_PREFIX}${token}`,
+    );
+    if (!raw) {
+      this.errorsHandlerService.invalidToken(null, TokenType.ADMIN_TRANSFER);
+    } else {
+      const data = JSON.parse(raw) as {
+        fromId: number;
+        toId: number;
+      };
+      return data;
+    }
+  }
+
+  async deleteTransferToken(token: string) {
+    await this.redisService.del(`${ADMIN_TRANSFER_REDIS_PREFIX}${token}`);
   }
 }

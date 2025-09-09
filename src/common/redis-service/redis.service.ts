@@ -8,8 +8,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private isShuttingDown = false; // Flag to prevent re-closing
 
   constructor(private readonly envService: EnvService) {
-    const host = envService.getEnv('REDIS_HOST');
-    const port = envService.getEnv('REDIS_PORT', 'number');
+    const host = envService.get('REDIS_HOST');
+    const port = envService.get('REDIS_PORT', 'number');
 
     this.client = createClient({
       url: `redis://${host}:${port}`,
