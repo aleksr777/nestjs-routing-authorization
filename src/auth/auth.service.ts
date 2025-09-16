@@ -3,7 +3,7 @@ import { Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TokensService } from './tokens.service';
 import { HashService } from '../common/hash-service/hash.service';
-import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
+import { ErrorsService } from '../common/errors-service/errors.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
 import { NicknameGeneratorService } from '../common/nickname-generator-service/nickname-generator.service';
@@ -31,7 +31,7 @@ export class AuthService {
     private readonly dataSource: DataSource,
     private readonly tokensService: TokensService,
     private readonly hashService: HashService,
-    private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly errorsService: ErrorsService,
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly nicknameGeneratorService: NicknameGeneratorService,
@@ -63,7 +63,7 @@ export class AuthService {
 
   isUserBlocked(user: User) {
     if (user.is_blocked) {
-      this.errorsHandlerService.accountBlocked(user.blocked_reason);
+      this.errorsService.accountBlocked(user.blocked_reason);
     }
   }
 
@@ -83,11 +83,11 @@ export class AuthService {
         password,
         user.password,
       );
-      this.errorsHandlerService.invalidEmailOrPassword(null, isPasswordValid);
+      this.errorsService.invalidEmailOrPassword(null, isPasswordValid);
       return user;
     } catch (err: unknown) {
-      this.errorsHandlerService.invalidEmailOrPassword(err);
-      this.errorsHandlerService.default(err);
+      this.errorsService.invalidEmailOrPassword(err);
+      this.errorsService.default(err);
     }
   }
 
@@ -99,8 +99,8 @@ export class AuthService {
       });
       return user;
     } catch (err: unknown) {
-      this.errorsHandlerService.userNotFound(err);
-      this.errorsHandlerService.default(err);
+      this.errorsService.userNotFound(err);
+      this.errorsService.default(err);
       throw err;
     }
   }
@@ -118,16 +118,17 @@ export class AuthService {
       });
       const isTokensMatch = refresh_token === user.refresh_token;
       if (!isTokensMatch) {
-        return this.errorsHandlerService.invalidToken(null, TokenType.REFRESH);
+        return this.errorsService.invalidToken(null, TokenType.REFRESH);
       }
       return user;
     } catch (err: unknown) {
-      this.errorsHandlerService.invalidToken(err, TokenType.REFRESH);
-      this.errorsHandlerService.default(err);
+      this.errorsService.invalidToken(err, TokenType.REFRESH);
+      this.errorsService.default(err);
     }
   }
 
   async requestRegistration(email: string, password: string) {
+    this.mailService.validateNotServiceEmail(email);
     try {
       const user = await this.usersRepository.findOne({
         where: { email },
@@ -169,7 +170,7 @@ export class AuthService {
         message: 'If the email exists, we’ve sent you a link.',
       };
     } catch (err: unknown) {
-      this.errorsHandlerService.default(err);
+      this.errorsService.default(err);
     }
   }
 
@@ -180,16 +181,18 @@ export class AuthService {
     try {
       const data = await this.tokensService.getDataByRegistrationToken(token);
       if (!data) {
-        this.errorsHandlerService.invalidToken(null, TokenType.REGISTRATION);
+        this.errorsService.invalidToken(null, TokenType.REGISTRATION);
         return;
       }
+      this.mailService.validateNotServiceEmail(data.email);
       let nickname: string;
       let attempts = 0;
-      const maxAttempts = 50;
+      const maxAttempts = 100;
       do {
         if (attempts >= maxAttempts) {
-          throw new Error(
-            'Unable to generate unique nickname after 50 attempts',
+          this.errorsService.default(
+            null,
+            `Unable to generate unique nickname after ${maxAttempts} attempts`,
           );
         }
         nickname = this.nicknameGeneratorService.get();
@@ -206,7 +209,7 @@ export class AuthService {
       return this.login(newUser.id);
     } catch (err: unknown) {
       await qr.rollbackTransaction();
-      this.errorsHandlerService.confirmRegistration(err);
+      this.errorsService.confirmRegistration(err);
     } finally {
       await qr.release();
     }
@@ -218,13 +221,13 @@ export class AuthService {
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
     } catch (err: unknown) {
-      this.errorsHandlerService.default(err);
+      this.errorsService.default(err);
     }
   }
 
   async logout(userId: number, access_token: string | undefined) {
     if (!access_token) {
-      this.errorsHandlerService.tokenNotDefined(TokenType.ACCESS);
+      this.errorsService.tokenNotDefined(TokenType.ACCESS);
     } else {
       try {
         await this.tokensService.removeRefreshToken(userId);
@@ -233,8 +236,8 @@ export class AuthService {
           TokenType.ACCESS,
         );
       } catch (err: unknown) {
-        this.errorsHandlerService.invalidToken(err, TokenType.ACCESS);
-        this.errorsHandlerService.default(err);
+        this.errorsService.invalidToken(err, TokenType.ACCESS);
+        this.errorsService.default(err);
       }
     }
   }
@@ -245,12 +248,13 @@ export class AuthService {
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
     } catch (err: unknown) {
-      this.errorsHandlerService.invalidToken(err, TokenType.REFRESH);
-      this.errorsHandlerService.default(err);
+      this.errorsService.invalidToken(err, TokenType.REFRESH);
+      this.errorsService.default(err);
     }
   }
 
   async requestPasswordReset(email: string) {
+    this.mailService.validateNotServiceEmail(email);
     try {
       const user = await this.usersRepository.findOne({
         where: { email },
@@ -273,7 +277,7 @@ export class AuthService {
         message: 'If the email exists, we’ve sent you a password reset link.',
       };
     } catch (err: unknown) {
-      this.errorsHandlerService.default(err);
+      this.errorsService.default(err);
     }
   }
 
@@ -281,7 +285,7 @@ export class AuthService {
     try {
       const userId = await this.tokensService.getUserIdByResetToken(token);
       if (!userId) {
-        this.errorsHandlerService.invalidToken(null, TokenType.RESET);
+        this.errorsService.invalidToken(null, TokenType.RESET);
         return;
       }
       const hashedPassword = await this.hashService.hash(newPassword);
@@ -290,13 +294,13 @@ export class AuthService {
         { password: hashedPassword },
       );
       if (result.affected === 0) {
-        this.errorsHandlerService.userNotFound();
+        this.errorsService.userNotFound();
       }
       await this.tokensService.deleteResetToken(token);
       const tokens = await this.refreshJwtTokens(userId);
       return tokens;
     } catch (err: unknown) {
-      this.errorsHandlerService.resetPassword(err);
+      this.errorsService.resetPassword(err);
     }
   }
 }

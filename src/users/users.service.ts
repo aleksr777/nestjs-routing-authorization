@@ -1,10 +1,10 @@
-import { HttpException, Injectable, BadRequestException } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { HashService } from '../common/hash-service/hash.service';
 import { TokensService } from '../auth/tokens.service';
 import { AuthService } from '../auth/auth.service';
-import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
+import { ErrorsService } from '../common/errors-service/errors.service';
 import { User } from './entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 import {
@@ -27,7 +27,7 @@ export class UsersService {
     private readonly tokensService: TokensService,
     private readonly authService: AuthService,
     private readonly hashService: HashService,
-    private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly errorsService: ErrorsService,
   ) {}
 
   async getCurrentProfile(userId: number) {
@@ -40,13 +40,13 @@ export class UsersService {
         ...USER_SECRET_FIELDS,
       ]);
     } catch (err: unknown) {
-      this.errorsHandlerService.userNotFound(err);
-      this.errorsHandlerService.default(err);
+      this.errorsService.userNotFound(err);
+      this.errorsService.default(err);
     }
   }
   async removeCurrentUser(userId: number, access_token: string | undefined) {
     if (!access_token) {
-      this.errorsHandlerService.tokenNotDefined(TokenType.ACCESS);
+      this.errorsService.tokenNotDefined(TokenType.ACCESS);
     } else {
       const qr = this.dataSource.createQueryRunner();
       await qr.connect();
@@ -57,8 +57,8 @@ export class UsersService {
           select: [ID, ROLE],
         });
         if (user.role === Role.ADMIN) {
-          throw new BadRequestException(
-            'Administrator account cannot be deleted this way',
+          this.errorsService.badRequest(
+            'Administrator account cannot be deleted.',
           );
         }
         await qr.manager.delete(User, { id: userId });
@@ -72,8 +72,8 @@ export class UsersService {
         if (err instanceof HttpException) {
           throw err;
         }
-        this.errorsHandlerService.userNotFound(err);
-        this.errorsHandlerService.default(err);
+        this.errorsService.userNotFound(err);
+        this.errorsService.default(err);
       } finally {
         await qr.release();
       }
@@ -96,7 +96,7 @@ export class UsersService {
         .execute();
       if (result.affected === 0) {
         await qr.rollbackTransaction();
-        return this.errorsHandlerService.userNotFound();
+        return this.errorsService.userNotFound();
       }
       const user = await qr.manager
         .createQueryBuilder(User, 'user')
@@ -107,9 +107,9 @@ export class UsersService {
       return this.authService.removeSensitiveInfo(user, USER_SECRET_FIELDS);
     } catch (err: unknown) {
       await qr.rollbackTransaction();
-      this.errorsHandlerService.userNotFound(err);
-      this.errorsHandlerService.userConflict(err);
-      this.errorsHandlerService.default(err);
+      this.errorsService.userNotFound(err);
+      this.errorsService.userConflict(err);
+      this.errorsService.default(err);
     } finally {
       await qr.release();
     }
@@ -118,7 +118,7 @@ export class UsersService {
   async getUsersQuery(limit: number, offset: number, nickname?: string) {
     try {
       if (limit <= 0 || offset < 0) {
-        throw new BadRequestException('Invalid pagination parameters');
+        this.errorsService.badRequest('Invalid pagination parameters');
       }
       const query = this.usersRepository
         .createQueryBuilder('user')
@@ -136,15 +136,15 @@ export class UsersService {
         ...USER_CONFIDENTIAL_FIELDS,
       ]);
     } catch (err: unknown) {
-      this.errorsHandlerService.default(err);
+      this.errorsService.default(err);
     }
   }
 
   async updatePartial(id: number, patch: Partial<{ last_activity_at: Date }>) {
     try {
       await this.usersRepository.update({ id }, patch);
-    } catch (e) {
-      console.error('updatePartial failed', e);
+    } catch (err) {
+      this.errorsService.default(err, 'UpdatePartial failed.');
     }
   }
 }

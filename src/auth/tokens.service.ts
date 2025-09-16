@@ -6,7 +6,7 @@ import { User } from '../users/entities/user.entity';
 import { RedisService } from '../common/redis-service/redis.service';
 import { JwtService } from '@nestjs/jwt';
 import { EnvService } from '../common/env-service/env.service';
-import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
+import { ErrorsService } from '../common/errors-service/errors.service';
 import { JwtPayload } from '../common/types/jwt-payload.type';
 import { TokenType } from '../common/types/token-type.type';
 
@@ -29,7 +29,7 @@ export class TokensService {
     private readonly redisService: RedisService,
     private readonly envService: EnvService,
     private readonly jwtService: JwtService,
-    private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly errorsService: ErrorsService,
   ) {
     this.accessSecret = this.envService.get('JWT_ACCESS_SECRET');
     this.refreshSecret = this.envService.get('JWT_REFRESH_SECRET');
@@ -52,7 +52,7 @@ export class TokensService {
   private getJwtTokenExpiration(token: string, tokenType?: TokenType) {
     const decoded = this.jwtService.decode<JwtPayload>(token);
     if (!decoded?.exp) {
-      this.errorsHandlerService.invalidToken(null, tokenType);
+      this.errorsService.invalidToken(null, tokenType);
     }
     return decoded.exp;
   }
@@ -81,11 +81,11 @@ export class TokensService {
     const cleanedToken = this.stripJwtToken(token);
     const exp = this.getJwtTokenExpiration(cleanedToken, tokenType);
     if (typeof exp !== 'number' || isNaN(exp)) {
-      this.errorsHandlerService.invalidToken(null, tokenType);
+      this.errorsService.invalidToken(null, tokenType);
     } else {
       const ttl = exp - Math.floor(Date.now() / 1000);
       if (ttl <= 0) {
-        this.errorsHandlerService.invalidToken(null, tokenType);
+        this.errorsService.invalidToken(null, tokenType);
       }
       await this.redisService.set(cleanedToken, 'blacklisted', { EX: ttl });
     }
@@ -95,7 +95,7 @@ export class TokensService {
     const cleanedToken = this.stripJwtToken(token);
     const result = await this.redisService.get(cleanedToken);
     if (result) {
-      this.errorsHandlerService.jwtTokenBlacklisted();
+      this.errorsService.jwtTokenBlacklisted();
       return 'blacklisted';
     }
   }
@@ -109,10 +109,10 @@ export class TokensService {
         },
       );
       if (result.affected === 0) {
-        return this.errorsHandlerService.userNotFound();
+        return this.errorsService.userNotFound();
       }
     } catch (err: unknown) {
-      this.errorsHandlerService.default(err);
+      this.errorsService.default(err);
     }
   }
 
@@ -125,10 +125,10 @@ export class TokensService {
         },
       );
       if (result.affected === 0) {
-        return this.errorsHandlerService.userNotFound();
+        return this.errorsService.userNotFound();
       }
     } catch (err: unknown) {
-      this.errorsHandlerService.default(err);
+      this.errorsService.default(err);
     }
   }
 
@@ -176,7 +176,7 @@ export class TokensService {
 
   async saveRegistrationToken(token: string, value: unknown) {
     if (!this.isRegistrationPayload(value)) {
-      throw new Error('Invalid registration payload');
+      this.errorsService.default(null, 'Invalid registration payload');
     }
     const json = JSON.stringify(value);
     await this.redisService.set(`${REGISTER_REDIS_PREFIX}${token}`, json, {
@@ -224,7 +224,7 @@ export class TokensService {
       `${ADMIN_TRANSFER_REDIS_PREFIX}${token}`,
     );
     if (!raw) {
-      this.errorsHandlerService.invalidToken(null, TokenType.ADMIN_TRANSFER);
+      this.errorsService.invalidToken(null, TokenType.ADMIN_TRANSFER);
     } else {
       const data = JSON.parse(raw) as {
         fromId: number;

@@ -19,6 +19,7 @@ export enum ErrMessages {
   INVALID_ADMIN_TRANSFER_TOKEN = 'Admin transfer token is expired or invalid. Please request a new one.',
 
   USER_NOT_FOUND = 'User was not found in the database.',
+  ADMIN_NOT_FOUND = 'Admin was not found in the database.',
   CONFLICT_USER_EXISTS = 'A user with such unique data already exists in the database.',
   INSUFFICIENT_ACCESS_RIGHTS = 'The current user has insufficient access rights.',
   AUTHORIZED = 'User is not authorized.',
@@ -31,4 +32,5 @@ export enum ErrMessages {
   INITIATOR_IS_NO_ADMINISTRATOR = 'Initiator is no longer an administrator.',
   TOKEN_NOT_ISSUED_FOR_CURRENT_USER = 'Token not issued for current user',
   ADMIN_CANNOT_TRANSFER_THEMSELVES = 'Admin cannot transfer rights to themselves.',
+  SERVICE_EMAIL_MATCH_USER_EMAIL = `The service mail must not match the user's email.`,
 }

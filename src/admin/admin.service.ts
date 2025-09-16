@@ -1,10 +1,10 @@
-import { HttpException, Injectable, BadRequestException } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Brackets } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { RedisService } from '../common/redis-service/redis.service';
-import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
+import { ErrorsService } from '../common/errors-service/errors.service';
 import { User } from '../users/entities/user.entity';
 import {
   ID,
@@ -25,7 +25,7 @@ export class AdminService {
     private readonly dataSource: DataSource,
     @InjectRepository(User) private readonly usersRepository: Repository<User>,
     private readonly authService: AuthService,
-    private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly errorsService: ErrorsService,
     private readonly mailService: MailService,
     private readonly redisService: RedisService,
   ) {}
@@ -38,7 +38,7 @@ export class AdminService {
   ) {
     try {
       if (limit <= 0 || offset < 0)
-        throw new BadRequestException('Invalid pagination parameters');
+        this.errorsService.badRequest('Invalid pagination parameters');
       const qb = this.usersRepository
         .createQueryBuilder('user')
         .select(ADMIN_FIELDS.map((f) => `user.${f}`))
@@ -62,7 +62,7 @@ export class AdminService {
         ...USER_SECRET_FIELDS,
       ]);
     } catch (err: unknown) {
-      this.errorsHandlerService.default(err);
+      this.errorsService.default(err);
     }
   }
 
@@ -76,7 +76,7 @@ export class AdminService {
         select: [ID, EMAIL, NICKNAME, ROLE],
       });
       if (user.role === Role.ADMIN) {
-        throw new BadRequestException('Admin cannot delete themselves!');
+        this.errorsService.badRequest('Admin cannot delete themselves!');
       }
       await qr.manager.delete(User, { id: userId });
       await qr.commitTransaction();
@@ -95,8 +95,8 @@ export class AdminService {
       if (err instanceof HttpException) {
         throw err;
       }
-      this.errorsHandlerService.userNotFound(err);
-      this.errorsHandlerService.default(err);
+      this.errorsService.userNotFound(err);
+      this.errorsService.default(err);
     } finally {
       await qr.release();
     }
@@ -107,8 +107,9 @@ export class AdminService {
     userId: number,
     blocked_reason: string,
   ): Promise<void> {
-    if (userId === adminId)
-      throw new BadRequestException('Admin cannot block themselves!');
+    if (userId === adminId) {
+      this.errorsService.badRequest('Admin cannot block themselves!');
+    }
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
@@ -118,7 +119,7 @@ export class AdminService {
         select: [ID, EMAIL, NICKNAME, ROLE, IS_BLOCKED],
       });
       if (user.role === Role.ADMIN) {
-        throw new BadRequestException('Admin cannot block themselves!');
+        this.errorsService.badRequest('Admin cannot block themselves!');
       }
       if (user.is_blocked) {
         await qr.rollbackTransaction();
@@ -150,8 +151,8 @@ export class AdminService {
     } catch (err: unknown) {
       await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;
-      this.errorsHandlerService.userNotFound(err);
-      this.errorsHandlerService.default(err);
+      this.errorsService.userNotFound(err);
+      this.errorsService.default(err);
     } finally {
       await qr.release();
     }
@@ -189,8 +190,8 @@ export class AdminService {
     } catch (err: unknown) {
       await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;
-      this.errorsHandlerService.userNotFound(err);
-      this.errorsHandlerService.default(err);
+      this.errorsService.userNotFound(err);
+      this.errorsService.default(err);
     } finally {
       await qr.release();
     }

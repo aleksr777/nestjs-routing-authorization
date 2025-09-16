@@ -13,7 +13,6 @@ export class AdminTransferSecureController {
   @Post('confirm')
   async confirmTransfer(@Body() dto: ConfirmTransferDto, @Req() req: Request) {
     const user = req.user as User;
-    await this.transfer.confirmTransfer(dto.token, +user.id);
-    return { ok: true };
+    return await this.transfer.confirmTransfer(dto.token, +user.id);
   }
 }

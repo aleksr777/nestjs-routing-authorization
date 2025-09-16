@@ -7,7 +7,7 @@ import { JwtPayload } from '../../common/types/jwt-payload.type';
 import { TokenType } from '../../common/types/token-type.type';
 import { AuthService } from '../../auth/auth.service';
 import { TokensService } from '../tokens.service';
-import { ErrorsHandlerService } from '../../common/errors-handler-service/errors-handler.service';
+import { ErrorsService } from '../../common/errors-service/errors.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -15,7 +15,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private readonly envService: EnvService,
     private readonly authService: AuthService,
     private readonly tokensService: TokensService,
-    private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly errorsService: ErrorsService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -28,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   async validate(req: Request, payload: JwtPayload) {
     const access_token = req.headers.authorization;
     if (!access_token) {
-      this.errorsHandlerService.tokenNotDefined(TokenType.ACCESS);
+      this.errorsService.tokenNotDefined(TokenType.ACCESS);
     } else {
       await this.tokensService.isJwtTokenBlacklisted(access_token);
       const user = await this.authService.validateUserById(+payload.sub);

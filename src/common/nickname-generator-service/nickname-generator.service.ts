@@ -17,9 +17,7 @@ export class NicknameGeneratorService {
   }
 
   get(): string {
-    const baseNickname = `user`;
-    const prefixLength = 12;
-    const nickname = `${baseNickname}_${this.getPrefix(prefixLength)}`;
+    const nickname = `user_${this.getPrefix(12)}`;
     return nickname;
   }
 }

@@ -1,19 +1,14 @@
 // admin/admin-transfer.service.ts
-import {
-  Injectable,
-  BadRequestException,
-  ForbiddenException,
-  HttpException,
-} from '@nestjs/common';
+import { Injectable, HttpException } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../users/entities/user.entity';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
-import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
+import { ErrorsService } from '../common/errors-service/errors.service';
+import { ErrMessages } from '../common/errors-service/error-messages.type';
 import { TokensService } from '../auth/tokens.service';
 import { Role } from '../common/types/role.enum';
-import { ErrMessages } from '../common/errors-handler-service/error-messages.type';
 import { TokenType } from '../common/types/token-type.type';
 import {
   ID,
@@ -28,7 +23,7 @@ export class AdminTransferService {
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(User) private readonly usersRepository: Repository<User>,
-    private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly errorsService: ErrorsService,
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly tokensService: TokensService,
@@ -39,29 +34,39 @@ export class AdminTransferService {
    */
   async requestTransfer(adminId: number, userId: number) {
     if (adminId === userId) {
-      throw new ForbiddenException(
+      this.errorsService.forbidden(
         ErrMessages.ADMIN_CANNOT_TRANSFER_THEMSELVES,
       );
     }
-    const [from, to] = await Promise.all([
-      this.usersRepository.findOneOrFail({
+    let from;
+    let to;
+    try {
+      from = await this.usersRepository.findOneOrFail({
         where: { id: adminId },
         select: [ID, EMAIL, NICKNAME, ROLE, IS_BLOCKED],
-      }),
-      this.usersRepository.findOneOrFail({
+      });
+    } catch (err) {
+      return this.errorsService.userNotFound(err);
+    }
+    try {
+      to = await this.usersRepository.findOneOrFail({
         where: { id: userId },
         select: [ID, EMAIL, NICKNAME, ROLE, IS_BLOCKED],
-      }),
-    ]);
-    if (from.role !== Role.ADMIN) {
-      throw new BadRequestException(ErrMessages.ONLY_ADMINISTRATOR_TRANSFER);
+      });
+    } catch (err) {
+      return this.errorsService.userNotFound(err, ErrMessages.ADMIN_NOT_FOUND);
     }
-    if (to.is_blocked)
-      throw new BadRequestException(ErrMessages.TARGET_USER_BLOCKED);
-    if (to.role === Role.ADMIN)
-      throw new BadRequestException(
+    if (from.role !== Role.ADMIN) {
+      this.errorsService.badRequest(ErrMessages.ONLY_ADMINISTRATOR_TRANSFER);
+    }
+    if (to.is_blocked) {
+      this.errorsService.badRequest(ErrMessages.TARGET_USER_BLOCKED);
+    }
+    if (to.role === Role.ADMIN) {
+      this.errorsService.badRequest(
         ErrMessages.TARGET_USER_ALREADY_ADMINISTRATOR,
       );
+    }
     const token = this.tokensService.generateVerificationToken();
     await this.tokensService.saveTransferToken(token, from.id, to.id);
     const frontendUrl = this.envService.get('FRONTEND_URL');
@@ -90,19 +95,16 @@ export class AdminTransferService {
       typeof data.fromId !== 'number' ||
       typeof data.toId !== 'number'
     ) {
-      return this.errorsHandlerService.invalidToken(
-        null,
-        TokenType.ADMIN_TRANSFER,
-      );
+      return this.errorsService.invalidToken(null, TokenType.ADMIN_TRANSFER);
     }
     const { fromId, toId } = data;
     if (fromId === toId) {
-      throw new BadRequestException(
+      this.errorsService.badRequest(
         ErrMessages.ADMIN_CANNOT_TRANSFER_THEMSELVES,
       );
     }
     if (currentUserId !== toId) {
-      throw new ForbiddenException(
+      this.errorsService.forbidden(
         ErrMessages.TOKEN_NOT_ISSUED_FOR_CURRENT_USER,
       );
     }
@@ -119,13 +121,13 @@ export class AdminTransferService {
         select: [ID, EMAIL, ROLE, IS_BLOCKED],
       });
       if (to.is_blocked)
-        throw new BadRequestException(ErrMessages.TARGET_USER_BLOCKED);
+        this.errorsService.badRequest(ErrMessages.TARGET_USER_BLOCKED);
       if (from.role !== Role.ADMIN)
-        throw new BadRequestException(
+        this.errorsService.badRequest(
           ErrMessages.INITIATOR_IS_NO_ADMINISTRATOR,
         );
       if (to.role === Role.ADMIN)
-        throw new BadRequestException(
+        this.errorsService.badRequest(
           ErrMessages.TARGET_USER_ALREADY_ADMINISTRATOR,
         );
       // Reassigning Roles
@@ -148,7 +150,7 @@ export class AdminTransferService {
     } catch (e) {
       await qr.rollbackTransaction();
       if (e instanceof HttpException) throw e;
-      throw new BadRequestException(ErrMessages.TRANSFER_FAILED);
+      this.errorsService.badRequest(ErrMessages.TRANSFER_FAILED);
     } finally {
       await qr.release();
     }

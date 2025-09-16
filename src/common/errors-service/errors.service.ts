@@ -5,18 +5,14 @@ import {
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { QueryFailedError, EntityNotFoundError } from 'typeorm';
 import { ErrMessages } from './error-messages.type';
 import { TokenType } from '../types/token-type.type';
 
 @Injectable()
-export class ErrorsHandlerService {
-  default(err: unknown) {
-    console.log(`Internal server error: ${String(err)}`);
-    throw new InternalServerErrorException(ErrMessages.INTERNAL_SERVER_ERROR);
-  }
-
+export class ErrorsService {
   private isUniqueError(
     err: unknown,
   ): err is QueryFailedError & { code: string } {
@@ -27,49 +23,71 @@ export class ErrorsHandlerService {
     );
   }
 
-  tokenNotDefined(tokenType?: TokenType) {
+  private getInvalidTokenMessage(tokenType?: TokenType): string {
     switch (tokenType) {
       case TokenType.ACCESS:
-        throw new UnauthorizedException(ErrMessages.ACCESS_TOKEN_NOT_DEFINED);
+        return ErrMessages.INVALID_ACCESS_TOKEN;
       case TokenType.REFRESH:
-        throw new UnauthorizedException(ErrMessages.REFRESH_TOKEN_NOT_DEFINED);
+        return ErrMessages.INVALID_REFRESH_TOKEN;
       case TokenType.RESET:
-        throw new UnauthorizedException(ErrMessages.RESET_TOKEN_NOT_DEFINED);
+        return ErrMessages.INVALID_RESET_TOKEN;
       case TokenType.REGISTRATION:
-        throw new UnauthorizedException(
-          ErrMessages.REGISTRATION_TOKEN_NOT_DEFINED,
-        );
+        return ErrMessages.INVALID_REGISTRATION_TOKEN;
       case TokenType.ADMIN_TRANSFER:
-        throw new UnauthorizedException(
-          ErrMessages.ADMIN_TRANSFER_TOKEN_NOT_DEFINED,
-        );
+        return ErrMessages.INVALID_ADMIN_TRANSFER_TOKEN;
       default:
-        throw new UnauthorizedException(ErrMessages.TOKEN_NOT_DEFINED);
+        return ErrMessages.INVALID_TOKEN;
     }
   }
 
-  invalidToken(err: unknown, tokenType?: TokenType) {
-    let errMessage;
+  private getTokenNotDefinedMessage(tokenType?: TokenType): string {
     switch (tokenType) {
       case TokenType.ACCESS:
-        errMessage = ErrMessages.INVALID_ACCESS_TOKEN;
-        break;
+        return ErrMessages.ACCESS_TOKEN_NOT_DEFINED;
       case TokenType.REFRESH:
-        errMessage = ErrMessages.INVALID_REFRESH_TOKEN;
-        break;
+        return ErrMessages.REFRESH_TOKEN_NOT_DEFINED;
       case TokenType.RESET:
-        errMessage = ErrMessages.INVALID_RESET_TOKEN;
-        break;
+        return ErrMessages.RESET_TOKEN_NOT_DEFINED;
       case TokenType.REGISTRATION:
-        errMessage = ErrMessages.INVALID_REGISTRATION_TOKEN;
-        break;
+        return ErrMessages.REGISTRATION_TOKEN_NOT_DEFINED;
+      case TokenType.ADMIN_TRANSFER:
+        return ErrMessages.ADMIN_TRANSFER_TOKEN_NOT_DEFINED;
       default:
-        errMessage = ErrMessages.INVALID_TOKEN;
+        return ErrMessages.TOKEN_NOT_DEFINED;
     }
+  }
+
+  default(err?: unknown, message?: string) {
+    const msg = message ?? ErrMessages.INTERNAL_SERVER_ERROR;
+    if (err) console.error(msg, err);
+    throw new InternalServerErrorException(msg);
+  }
+
+  badRequest(message?: string) {
+    const msg = message ?? 'Bad Request';
+    console.error(msg);
+    throw new BadRequestException(msg);
+  }
+
+  forbidden(message?: string) {
+    const msg = message ?? 'Forbidden';
+    console.error(msg);
+    throw new ForbiddenException(msg);
+  }
+
+  tokenNotDefined(tokenType?: TokenType) {
+    const errMessage = this.getTokenNotDefinedMessage(tokenType);
+    console.error(errMessage);
+    throw new UnauthorizedException(errMessage);
+  }
+
+  invalidToken(err: unknown, tokenType?: TokenType) {
+    const errMessage = this.getInvalidTokenMessage(tokenType);
     if (!err) {
       throw new UnauthorizedException(errMessage);
     }
     if (err instanceof Error) {
+      console.error(errMessage, err);
       if (
         err.name === 'TokenExpiredError' ||
         err.name === 'JsonWebTokenError'
@@ -86,18 +104,21 @@ export class ErrorsHandlerService {
   }
 
   userConflict(err: unknown) {
+    if (err) console.error(ErrMessages.CONFLICT_USER_EXISTS, err);
     if (this.isUniqueError(err)) {
       throw new ConflictException(ErrMessages.CONFLICT_USER_EXISTS);
     }
   }
 
-  userNotFound(err?: unknown) {
-    if (err instanceof EntityNotFoundError) {
-      throw new NotFoundException(ErrMessages.USER_NOT_FOUND);
+  userNotFound(err?: unknown, message?: string) {
+    if (err) console.error(`Error:`, err);
+    if (err instanceof EntityNotFoundError || !err) {
+      throw new NotFoundException(message ?? ErrMessages.USER_NOT_FOUND);
     }
   }
 
   invalidEmailOrPassword(err: unknown, isPasswordValid?: boolean) {
+    if (err) console.error(`Error:`, err);
     if (
       err instanceof EntityNotFoundError ||
       err instanceof UnauthorizedException
@@ -110,6 +131,7 @@ export class ErrorsHandlerService {
   }
 
   jwtTokenBlacklisted() {
+    console.error(ErrMessages.ACCESS_TOKEN_IS_BLACKLISTED);
     throw new UnauthorizedException(ErrMessages.ACCESS_TOKEN_IS_BLACKLISTED);
   }
 
@@ -125,6 +147,8 @@ export class ErrorsHandlerService {
   }
 
   confirmRegistration(err: unknown) {
+    console.error(err, ErrMessages.ACCOUNT_BLOCKED);
+    if (err) console.error(`Error:`, err);
     if (
       err instanceof BadRequestException ||
       err instanceof UnauthorizedException
@@ -135,9 +159,15 @@ export class ErrorsHandlerService {
   }
 
   accountBlocked(reason: string | null | undefined) {
+    console.error(ErrMessages.ACCOUNT_BLOCKED);
     const message = reason
       ? `${ErrMessages.ACCOUNT_BLOCKED} Reason: ${reason}`
       : ErrMessages.ACCOUNT_BLOCKED;
     throw new UnauthorizedException(message);
+  }
+
+  throwIfServiceEmail() {
+    console.error(ErrMessages.SERVICE_EMAIL_MATCH_USER_EMAIL);
+    throw new BadRequestException(ErrMessages.SERVICE_EMAIL_MATCH_USER_EMAIL);
   }
 }

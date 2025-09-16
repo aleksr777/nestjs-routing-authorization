@@ -40,8 +40,7 @@ export class AdminController {
     const admin = req.user as User;
     const adminId = +admin.id;
     const userId = +dto.id;
-    await this.transfer.requestTransfer(adminId, userId);
-    return { ok: true };
+    return await this.transfer.requestTransfer(adminId, userId);
   }
 
   @Get('users/find')

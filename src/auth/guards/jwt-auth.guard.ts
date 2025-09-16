@@ -1,9 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ErrMessages } from '../../common/errors-handler-service/error-messages.type';
+import { ErrorsService } from '../../common/errors-service/errors.service';
+import { TokenType } from '../../common/types/token-type.type';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
+  constructor(private readonly errorsService: ErrorsService) {
+    super();
+  }
   handleRequest<TUser = any>(
     err: any,
     user: any,
@@ -14,10 +18,10 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       info?.message === 'No auth token' ||
       info?.name === 'TokenExpiredError'
     ) {
-      throw new UnauthorizedException(ErrMessages.ACCESS_TOKEN_NOT_DEFINED);
+      this.errorsService.tokenNotDefined(TokenType.ACCESS);
     }
     if (!user) {
-      throw new UnauthorizedException(ErrMessages.INVALID_ACCESS_TOKEN);
+      this.errorsService.invalidToken(null, TokenType.ACCESS);
     }
     return user as TUser;
   }
