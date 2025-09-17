@@ -1,4 +1,4 @@
-export enum ErrMessages {
+export enum ErrMsg {
   INTERNAL_SERVER_ERROR = 'Internal server error.',
 
   ACCESS_TOKEN_IS_BLACKLISTED = 'Access token is blacklisted.',

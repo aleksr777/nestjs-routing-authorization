@@ -4,7 +4,7 @@ import { Request } from 'express';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { Role } from '../types/role.enum';
 import { ErrorsService } from '../errors-service/errors.service';
-import { ErrMessages } from '../errors-service/error-messages.type';
+import { ErrMsg } from '../errors-service/error-messages.type';
 
 interface AuthUser {
   id: number;
@@ -30,7 +30,7 @@ export class RolesGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<RequestWithUser>();
     const userRole = req.user?.role;
     if (!userRole || !requiredRoles.includes(userRole)) {
-      this.errorsService.forbidden(ErrMessages.INSUFFICIENT_ACCESS_RIGHTS);
+      this.errorsService.forbidden(ErrMsg.INSUFFICIENT_ACCESS_RIGHTS);
     }
     return true;
   }

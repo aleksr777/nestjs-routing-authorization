@@ -8,7 +8,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { QueryFailedError, EntityNotFoundError } from 'typeorm';
-import { ErrMessages } from './error-messages.type';
+import { ErrMsg } from './error-messages.type';
 import { TokenType } from '../types/token-type.type';
 
 @Injectable()
@@ -26,39 +26,39 @@ export class ErrorsService {
   private getInvalidTokenMessage(tokenType?: TokenType): string {
     switch (tokenType) {
       case TokenType.ACCESS:
-        return ErrMessages.INVALID_ACCESS_TOKEN;
+        return ErrMsg.INVALID_ACCESS_TOKEN;
       case TokenType.REFRESH:
-        return ErrMessages.INVALID_REFRESH_TOKEN;
+        return ErrMsg.INVALID_REFRESH_TOKEN;
       case TokenType.RESET:
-        return ErrMessages.INVALID_RESET_TOKEN;
+        return ErrMsg.INVALID_RESET_TOKEN;
       case TokenType.REGISTRATION:
-        return ErrMessages.INVALID_REGISTRATION_TOKEN;
+        return ErrMsg.INVALID_REGISTRATION_TOKEN;
       case TokenType.ADMIN_TRANSFER:
-        return ErrMessages.INVALID_ADMIN_TRANSFER_TOKEN;
+        return ErrMsg.INVALID_ADMIN_TRANSFER_TOKEN;
       default:
-        return ErrMessages.INVALID_TOKEN;
+        return ErrMsg.INVALID_TOKEN;
     }
   }
 
   private getTokenNotDefinedMessage(tokenType?: TokenType): string {
     switch (tokenType) {
       case TokenType.ACCESS:
-        return ErrMessages.ACCESS_TOKEN_NOT_DEFINED;
+        return ErrMsg.ACCESS_TOKEN_NOT_DEFINED;
       case TokenType.REFRESH:
-        return ErrMessages.REFRESH_TOKEN_NOT_DEFINED;
+        return ErrMsg.REFRESH_TOKEN_NOT_DEFINED;
       case TokenType.RESET:
-        return ErrMessages.RESET_TOKEN_NOT_DEFINED;
+        return ErrMsg.RESET_TOKEN_NOT_DEFINED;
       case TokenType.REGISTRATION:
-        return ErrMessages.REGISTRATION_TOKEN_NOT_DEFINED;
+        return ErrMsg.REGISTRATION_TOKEN_NOT_DEFINED;
       case TokenType.ADMIN_TRANSFER:
-        return ErrMessages.ADMIN_TRANSFER_TOKEN_NOT_DEFINED;
+        return ErrMsg.ADMIN_TRANSFER_TOKEN_NOT_DEFINED;
       default:
-        return ErrMessages.TOKEN_NOT_DEFINED;
+        return ErrMsg.TOKEN_NOT_DEFINED;
     }
   }
 
   default(err?: unknown, message?: string) {
-    const msg = message ?? ErrMessages.INTERNAL_SERVER_ERROR;
+    const msg = message ?? ErrMsg.INTERNAL_SERVER_ERROR;
     if (err) console.error(msg, err);
     throw new InternalServerErrorException(msg);
   }
@@ -101,13 +101,13 @@ export class ErrorsService {
 
   userConflict(err: unknown) {
     if (this.isUniqueError(err)) {
-      throw new ConflictException(ErrMessages.CONFLICT_USER_EXISTS);
+      throw new ConflictException(ErrMsg.CONFLICT_USER_EXISTS);
     }
   }
 
   userNotFound(err?: unknown, message?: string) {
     if (err instanceof EntityNotFoundError || !err) {
-      throw new NotFoundException(message ?? ErrMessages.USER_NOT_FOUND);
+      throw new NotFoundException(message ?? ErrMsg.USER_NOT_FOUND);
     }
   }
 
@@ -116,15 +116,15 @@ export class ErrorsService {
       err instanceof EntityNotFoundError ||
       err instanceof UnauthorizedException
     ) {
-      throw new UnauthorizedException(ErrMessages.INVALID_EMAIL_OR_PASSWORD);
+      throw new UnauthorizedException(ErrMsg.INVALID_EMAIL_OR_PASSWORD);
     }
     if (!isPasswordValid) {
-      throw new UnauthorizedException(ErrMessages.INVALID_EMAIL_OR_PASSWORD);
+      throw new UnauthorizedException(ErrMsg.INVALID_EMAIL_OR_PASSWORD);
     }
   }
 
   jwtTokenBlacklisted() {
-    throw new UnauthorizedException(ErrMessages.ACCESS_TOKEN_IS_BLACKLISTED);
+    throw new UnauthorizedException(ErrMsg.ACCESS_TOKEN_IS_BLACKLISTED);
   }
 
   resetPassword(err: unknown) {
@@ -151,12 +151,12 @@ export class ErrorsService {
 
   accountBlocked(reason: string | null | undefined) {
     const message = reason
-      ? `${ErrMessages.ACCOUNT_BLOCKED} Reason: ${reason}`
-      : ErrMessages.ACCOUNT_BLOCKED;
+      ? `${ErrMsg.ACCOUNT_BLOCKED} Reason: ${reason}`
+      : ErrMsg.ACCOUNT_BLOCKED;
     throw new UnauthorizedException(message);
   }
 
   throwIfServiceEmail() {
-    throw new BadRequestException(ErrMessages.SERVICE_EMAIL_MATCH_USER_EMAIL);
+    throw new BadRequestException(ErrMsg.SERVICE_EMAIL_MATCH_USER_EMAIL);
   }
 }

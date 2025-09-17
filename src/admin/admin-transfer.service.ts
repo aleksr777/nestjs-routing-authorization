@@ -6,7 +6,7 @@ import { User } from '../users/entities/user.entity';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
-import { ErrMessages } from '../common/errors-service/error-messages.type';
+import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokensService } from '../auth/tokens.service';
 import { Role } from '../common/types/role.enum';
 import { TokenType } from '../common/types/token-type.type';
@@ -34,9 +34,7 @@ export class AdminTransferService {
    */
   async requestTransfer(adminId: number, userId: number) {
     if (adminId === userId) {
-      this.errorsService.forbidden(
-        ErrMessages.ADMIN_CANNOT_TRANSFER_THEMSELVES,
-      );
+      this.errorsService.forbidden(ErrMsg.ADMIN_CANNOT_TRANSFER_THEMSELVES);
     }
     let from;
     let to;
@@ -54,18 +52,16 @@ export class AdminTransferService {
         select: [ID, EMAIL, NICKNAME, ROLE, IS_BLOCKED],
       });
     } catch (err) {
-      return this.errorsService.userNotFound(err, ErrMessages.ADMIN_NOT_FOUND);
+      return this.errorsService.userNotFound(err, ErrMsg.ADMIN_NOT_FOUND);
     }
     if (from.role !== Role.ADMIN) {
-      this.errorsService.badRequest(ErrMessages.ONLY_ADMINISTRATOR_TRANSFER);
+      this.errorsService.badRequest(ErrMsg.ONLY_ADMINISTRATOR_TRANSFER);
     }
     if (to.is_blocked) {
-      this.errorsService.badRequest(ErrMessages.TARGET_USER_BLOCKED);
+      this.errorsService.badRequest(ErrMsg.TARGET_USER_BLOCKED);
     }
     if (to.role === Role.ADMIN) {
-      this.errorsService.badRequest(
-        ErrMessages.TARGET_USER_ALREADY_ADMINISTRATOR,
-      );
+      this.errorsService.badRequest(ErrMsg.TARGET_USER_ALREADY_ADMINISTRATOR);
     }
     const token = this.tokensService.generateVerificationToken();
     await this.tokensService.saveTransferToken(token, from.id, to.id);
@@ -99,14 +95,10 @@ export class AdminTransferService {
     }
     const { fromId, toId } = data;
     if (fromId === toId) {
-      this.errorsService.badRequest(
-        ErrMessages.ADMIN_CANNOT_TRANSFER_THEMSELVES,
-      );
+      this.errorsService.badRequest(ErrMsg.ADMIN_CANNOT_TRANSFER_THEMSELVES);
     }
     if (currentUserId !== toId) {
-      this.errorsService.forbidden(
-        ErrMessages.TOKEN_NOT_ISSUED_FOR_CURRENT_USER,
-      );
+      this.errorsService.forbidden(ErrMsg.TOKEN_NOT_ISSUED_FOR_CURRENT_USER);
     }
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
@@ -121,15 +113,11 @@ export class AdminTransferService {
         select: [ID, EMAIL, ROLE, IS_BLOCKED],
       });
       if (to.is_blocked)
-        this.errorsService.badRequest(ErrMessages.TARGET_USER_BLOCKED);
+        this.errorsService.badRequest(ErrMsg.TARGET_USER_BLOCKED);
       if (from.role !== Role.ADMIN)
-        this.errorsService.badRequest(
-          ErrMessages.INITIATOR_IS_NO_ADMINISTRATOR,
-        );
+        this.errorsService.badRequest(ErrMsg.INITIATOR_IS_NO_ADMINISTRATOR);
       if (to.role === Role.ADMIN)
-        this.errorsService.badRequest(
-          ErrMessages.TARGET_USER_ALREADY_ADMINISTRATOR,
-        );
+        this.errorsService.badRequest(ErrMsg.TARGET_USER_ALREADY_ADMINISTRATOR);
       // Reassigning Roles
       await qr.manager.update(User, { id: fromId }, { role: Role.USER });
       await qr.manager.update(User, { id: toId }, { role: Role.ADMIN });
@@ -150,7 +138,7 @@ export class AdminTransferService {
     } catch (e) {
       await qr.rollbackTransaction();
       if (e instanceof HttpException) throw e;
-      this.errorsService.badRequest(ErrMessages.TRANSFER_FAILED);
+      this.errorsService.badRequest(ErrMsg.TRANSFER_FAILED);
     } finally {
       await qr.release();
     }
