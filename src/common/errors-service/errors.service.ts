@@ -65,19 +65,16 @@ export class ErrorsService {
 
   badRequest(message?: string) {
     const msg = message ?? 'Bad Request';
-    console.error(msg);
     throw new BadRequestException(msg);
   }
 
   forbidden(message?: string) {
     const msg = message ?? 'Forbidden';
-    console.error(msg);
     throw new ForbiddenException(msg);
   }
 
   tokenNotDefined(tokenType?: TokenType) {
     const errMessage = this.getTokenNotDefinedMessage(tokenType);
-    console.error(errMessage);
     throw new UnauthorizedException(errMessage);
   }
 
@@ -87,7 +84,6 @@ export class ErrorsService {
       throw new UnauthorizedException(errMessage);
     }
     if (err instanceof Error) {
-      console.error(errMessage, err);
       if (
         err.name === 'TokenExpiredError' ||
         err.name === 'JsonWebTokenError'
@@ -104,21 +100,18 @@ export class ErrorsService {
   }
 
   userConflict(err: unknown) {
-    if (err) console.error(ErrMessages.CONFLICT_USER_EXISTS, err);
     if (this.isUniqueError(err)) {
       throw new ConflictException(ErrMessages.CONFLICT_USER_EXISTS);
     }
   }
 
   userNotFound(err?: unknown, message?: string) {
-    if (err) console.error(`Error:`, err);
     if (err instanceof EntityNotFoundError || !err) {
       throw new NotFoundException(message ?? ErrMessages.USER_NOT_FOUND);
     }
   }
 
   invalidEmailOrPassword(err: unknown, isPasswordValid?: boolean) {
-    if (err) console.error(`Error:`, err);
     if (
       err instanceof EntityNotFoundError ||
       err instanceof UnauthorizedException
@@ -131,7 +124,6 @@ export class ErrorsService {
   }
 
   jwtTokenBlacklisted() {
-    console.error(ErrMessages.ACCESS_TOKEN_IS_BLACKLISTED);
     throw new UnauthorizedException(ErrMessages.ACCESS_TOKEN_IS_BLACKLISTED);
   }
 
@@ -147,7 +139,6 @@ export class ErrorsService {
   }
 
   confirmRegistration(err: unknown) {
-    console.error(err, ErrMessages.ACCOUNT_BLOCKED);
     if (err) console.error(`Error:`, err);
     if (
       err instanceof BadRequestException ||
@@ -159,7 +150,6 @@ export class ErrorsService {
   }
 
   accountBlocked(reason: string | null | undefined) {
-    console.error(ErrMessages.ACCOUNT_BLOCKED);
     const message = reason
       ? `${ErrMessages.ACCOUNT_BLOCKED} Reason: ${reason}`
       : ErrMessages.ACCOUNT_BLOCKED;
@@ -167,7 +157,6 @@ export class ErrorsService {
   }
 
   throwIfServiceEmail() {
-    console.error(ErrMessages.SERVICE_EMAIL_MATCH_USER_EMAIL);
     throw new BadRequestException(ErrMessages.SERVICE_EMAIL_MATCH_USER_EMAIL);
   }
 }
