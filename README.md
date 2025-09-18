@@ -145,8 +145,8 @@ This will create an admin user with the provided email and password or update th
 ### Users
 
 - `GET /api/users/me` — Get current user's profile
-- `POST /api/auth/email/update/request` — Request update email
-- `POST /api/auth/email/update/confirm` — Confirm update email
+- `POST /api/users/me/email/update/request` — Request update email
+- `POST /api/users/me/email/update/confirm` — Confirm update email
 - `DELETE /api/users/me/delete` — Delete current user
 
 ### Admin
