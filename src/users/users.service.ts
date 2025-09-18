@@ -1,12 +1,12 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import { HashService } from '../common/hash-service/hash.service';
+//import { HashService } from '../common/hash-service/hash.service';
 import { TokensService } from '../auth/tokens.service';
 import { AuthService } from '../auth/auth.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { User } from './entities/user.entity';
-import { UpdateUserDto } from './dto/update-user.dto';
+/* import { UpdateUserDto } from './dto/update-user.dto'; */
 import {
   ID,
   ROLE,
@@ -26,7 +26,7 @@ export class UsersService {
     private usersRepository: Repository<User>,
     private readonly tokensService: TokensService,
     private readonly authService: AuthService,
-    private readonly hashService: HashService,
+    //private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
   ) {}
 
@@ -80,7 +80,7 @@ export class UsersService {
     }
   }
 
-  async updateCurrentUser(userId: number, userData: UpdateUserDto) {
+  /* async updateCurrentUser(userId: number, userData: UpdateUserDto) {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
@@ -113,7 +113,7 @@ export class UsersService {
     } finally {
       await qr.release();
     }
-  }
+  } */
 
   async getUsersQuery(limit: number, offset: number, nickname?: string) {
     try {
@@ -137,14 +137,6 @@ export class UsersService {
       ]);
     } catch (err: unknown) {
       this.errorsService.default(err);
-    }
-  }
-
-  async updatePartial(id: number, patch: Partial<{ last_activity_at: Date }>) {
-    try {
-      await this.usersRepository.update({ id }, patch);
-    } catch (err) {
-      this.errorsService.default(err, 'UpdatePartial failed.');
     }
   }
 }

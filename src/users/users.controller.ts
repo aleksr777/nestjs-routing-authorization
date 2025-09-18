@@ -1,30 +1,34 @@
 import {
   Body,
+  Post,
   Controller,
   Get,
   Req,
   Delete,
   UseGuards,
-  Patch,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { EmailChangeService } from './email-change.service';
+import { EmailChangeRequestDto } from './dto/email-change-request.dto';
+import { EmailChangeConfirmDto } from './dto/email-change-confirm.dto';
 import { User } from './entities/user.entity';
 
+@UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly emailChangeService: EmailChangeService,
+  ) {}
 
-  @UseGuards(JwtAuthGuard)
   @Get('me')
   async getCurrentProfile(@Req() req: Request) {
     const user = req.user as User;
     return this.usersService.getCurrentProfile(+user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Delete('me/delete')
   async removeCurrentUser(@Req() req: Request) {
     const user = req.user as User;
@@ -32,11 +36,15 @@ export class UsersController {
     return this.usersService.removeCurrentUser(+user.id, access_token);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Patch('me/update')
-  async updateCurrentUser(@Body() dto: UpdateUserDto, @Req() req: Request) {
+  @Post('me/email/update/request')
+  request(@Body() dto: EmailChangeRequestDto, @Req() req: Request) {
     const user = req.user as User;
-    const userData = { ...dto };
-    return this.usersService.updateCurrentUser(+user.id, userData);
+    return this.emailChangeService.request(+user.id, dto);
+  }
+
+  @Post('me/email/update/confirm')
+  confirm(@Body() dto: EmailChangeConfirmDto, @Req() req: Request) {
+    const user = req.user as User;
+    return this.emailChangeService.confirm(+user.id, dto);
   }
 }

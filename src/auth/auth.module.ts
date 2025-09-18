@@ -8,6 +8,8 @@ import { LocalStrategy } from './strategies/local.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthService } from './auth.service';
+import { RegistrationService } from './registration.service';
+import { PasswordResetService } from './password-reset.service';
 import { TokensService } from './tokens.service';
 import { EnvService } from '../common/env-service/env.service';
 import { AuthController } from './auth.controller';
@@ -31,6 +33,8 @@ import { User } from '../users/entities/user.entity';
   ],
   providers: [
     AuthService,
+    RegistrationService,
+    PasswordResetService,
     LocalStrategy,
     JwtStrategy,
     JwtRefreshStrategy,

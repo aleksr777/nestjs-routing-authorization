@@ -20,6 +20,7 @@ import {
 
 @Injectable()
 export class AdminTransferService {
+  private readonly emailChangeExpiresIn: number;
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(User) private readonly usersRepository: Repository<User>,
@@ -27,12 +28,12 @@ export class AdminTransferService {
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly tokensService: TokensService,
-  ) {}
+  ) {
+    this.emailChangeExpiresIn =
+      this.envService.get('EMAIL_CHANGE_TOKEN_EXPIRES_IN', 'number') / 60;
+  }
 
-  /**
-   * Initiate the transfer of rights (creates a one-time token and sends an email to the target user).
-   */
-  async requestTransfer(adminId: number, userId: number) {
+  async initiateTransfer(adminId: number, userId: number) {
     if (adminId === userId) {
       this.errorsService.forbidden(ErrMsg.ADMIN_CANNOT_TRANSFER_THEMSELVES);
     }
@@ -52,13 +53,13 @@ export class AdminTransferService {
         select: [ID, EMAIL, NICKNAME, ROLE, IS_BLOCKED],
       });
     } catch (err) {
-      return this.errorsService.userNotFound(err, ErrMsg.ADMIN_NOT_FOUND);
-    }
-    if (from.role !== Role.ADMIN) {
-      this.errorsService.badRequest(ErrMsg.ONLY_ADMINISTRATOR_TRANSFER);
+      return this.errorsService.userNotFound(err, ErrMsg.USER_NOT_FOUND);
     }
     if (to.is_blocked) {
       this.errorsService.badRequest(ErrMsg.TARGET_USER_BLOCKED);
+    }
+    if (from.role !== Role.ADMIN) {
+      this.errorsService.badRequest(ErrMsg.ONLY_ADMINISTRATOR_TRANSFER);
     }
     if (to.role === Role.ADMIN) {
       this.errorsService.badRequest(ErrMsg.TARGET_USER_ALREADY_ADMINISTRATOR);
@@ -71,19 +72,15 @@ export class AdminTransferService {
     const greet = to.nickname ? `Hello, ${to.nickname}!` : 'Hello!';
     const text =
       `${greet}\n\nYou have been invited to receive administrator rights.\n` +
-      `To confirm, please follow the link: ${link}\n\n` +
+      `To confirm, please follow the link (within ${this.emailChangeExpiresIn} min): ${link}\n\n` +
       `If you did not request this, ignore the message.`;
     const html =
       `<p>${greet}</p><p>You have been invited to receive administrator rights.</p>` +
-      `<p>To confirm, please click the link: <a href="${link}">${link}</a></p>` +
+      `<p>To confirm, please click the link (within ${this.emailChangeExpiresIn} min): <a href="${link}">${link}</a></p>` +
       `<p>If you did not request this, ignore the message.</p>`;
     await this.mailService.send(to.email, subject, text, html);
   }
 
-  /**
-   * Confirm the transfer of rights (requires the login of the target user).
-   * currentUserId — id of the currently authorized user (must match toId from the token).
-   */
   async confirmTransfer(token: string, currentUserId: number) {
     const data = await this.tokensService.getDataByTransferToken(token);
     if (
@@ -118,12 +115,10 @@ export class AdminTransferService {
         this.errorsService.badRequest(ErrMsg.INITIATOR_IS_NO_ADMINISTRATOR);
       if (to.role === Role.ADMIN)
         this.errorsService.badRequest(ErrMsg.TARGET_USER_ALREADY_ADMINISTRATOR);
-      // Reassigning Roles
       await qr.manager.update(User, { id: fromId }, { role: Role.USER });
       await qr.manager.update(User, { id: toId }, { role: Role.ADMIN });
       await qr.commitTransaction();
       await this.tokensService.deleteTransferToken(token);
-      // Notifications (without impact on transaction)
       const subj = 'Administrator rights have been transferred';
       this.mailService
         .send(

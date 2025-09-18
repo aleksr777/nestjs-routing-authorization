@@ -35,6 +35,8 @@ export class ErrorsService {
         return ErrMsg.INVALID_REGISTRATION_TOKEN;
       case TokenType.ADMIN_TRANSFER:
         return ErrMsg.INVALID_ADMIN_TRANSFER_TOKEN;
+      case TokenType.EMAIL_CHANGE:
+        return ErrMsg.INVALID_EMAIL_CHANGE_TOKEN;
       default:
         return ErrMsg.INVALID_TOKEN;
     }
@@ -46,12 +48,14 @@ export class ErrorsService {
         return ErrMsg.ACCESS_TOKEN_NOT_DEFINED;
       case TokenType.REFRESH:
         return ErrMsg.REFRESH_TOKEN_NOT_DEFINED;
+      case TokenType.ADMIN_TRANSFER:
+        return ErrMsg.ADMIN_TRANSFER_TOKEN_NOT_DEFINED;
       case TokenType.RESET:
         return ErrMsg.RESET_TOKEN_NOT_DEFINED;
       case TokenType.REGISTRATION:
         return ErrMsg.REGISTRATION_TOKEN_NOT_DEFINED;
-      case TokenType.ADMIN_TRANSFER:
-        return ErrMsg.ADMIN_TRANSFER_TOKEN_NOT_DEFINED;
+      case TokenType.EMAIL_CHANGE:
+        return ErrMsg.EMAIL_CHANGE_TOKEN_NOT_DEFINED;
       default:
         return ErrMsg.TOKEN_NOT_DEFINED;
     }
@@ -86,7 +90,8 @@ export class ErrorsService {
     if (err instanceof Error) {
       if (
         err.name === 'TokenExpiredError' ||
-        err.name === 'JsonWebTokenError'
+        err.name === 'JsonWebTokenError' ||
+        err.name === 'NotBeforeError'
       ) {
         throw new UnauthorizedException(errMessage);
       }
@@ -139,7 +144,6 @@ export class ErrorsService {
   }
 
   confirmRegistration(err: unknown) {
-    if (err) console.error(`Error:`, err);
     if (
       err instanceof BadRequestException ||
       err instanceof UnauthorizedException

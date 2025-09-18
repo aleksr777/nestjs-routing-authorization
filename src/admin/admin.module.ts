@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
 import { AdminService } from './admin.service';
-import { AdminTransferService } from './admin-transfer.service';
+import { AdminTransferService } from './transfer-rights.service';
 import { AdminController } from './admin.controller';
-import { AdminTransferSecureController } from './admin-transfer.secure.controller';
+import { AdminTransferSecureController } from './transfer-rights.controller';
 import { User } from '../users/entities/user.entity';
 
 @Module({

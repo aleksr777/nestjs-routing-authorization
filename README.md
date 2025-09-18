@@ -9,9 +9,10 @@ JWT_ACCESS_SECRET='secret_access_key'
 JWT_REFRESH_SECRET='secret_refresh_key'
 JWT_ACCESS_EXPIRES_IN='15m'
 JWT_REFRESH_EXPIRES_IN='7d'
-RESET_TOKEN_EXPIRES_IN=900  # 15m
+ADMIN_TRANSFER_TOKEN_EXPIRES_IN=300  # 5m
 REGISTRATION_TOKEN_EXPIRES_IN=900  # 15m
-ADMIN_TRANSFER_TOKEN_EXPIRES_IN=900  # 15m
+RESET_TOKEN_EXPIRES_IN=600  # 10m
+EMAIL_CHANGE_TOKEN_EXPIRES_IN=600  # 10m
 
 REDIS_HOST='localhost'
 REDIS_PORT=6379
@@ -133,25 +134,28 @@ This will create an admin user with the provided email and password or update th
 
 ### Auth
 
-- `POST /api/auth/request-registration` — Request registration
-- `POST /api/auth/confirm-registration` — Confirm registration
 - `POST /api/auth/login` — Login and receive tokens
 - `POST /api/auth/logout` — Logout user
-- `POST /api/auth/refresh` — Refresh tokens
-- `POST /api/auth/request-password-reset` — Request password reset
-- `POST /api/auth/reset-password` — Reset password
+- `POST /api/auth/refresh-tokens` — Refresh tokens
+- `POST /api/auth/registration/request` — Request registration
+- `POST /api/auth/registration/confirm` — Confirm registration
+- `POST /api/auth/password-reset/request` — Request password reset
+- `POST /api/auth/password-reset/confirm` — Confirm password reset
 
 ### Users
 
 - `GET /api/users/me` — Get current user's profile
-- `PATCH /api/users/me/update` — Update current user
+- `POST /api/auth/email/update/request` — Request update email
+- `POST /api/auth/email/update/confirm` — Confirm update email
 - `DELETE /api/users/me/delete` — Delete current user
 
 ### Admin
 
 - `GET /api/admin/users/find` — Get list of users (with query support)
-- `DELETE /api/admin/users/block/:id` — Block user by ID
-- `DELETE /api/admin/users/unblock/:id` — Unblock user by ID
+- `PATCH /api/admin/users/block/:id` — Block user by ID
+- `PATCH /api/admin/users/unblock/:id` — Unblock user by ID
+- `POST /api/auth/transfer/initiate` — Initiate transfer of administrator rights
+- `POST /api/auth/transfer/confirm` — Confirm transfer of administrator rights
 - `DELETE /api/admin/users/delete/:id` — Delete user by ID
 
 
