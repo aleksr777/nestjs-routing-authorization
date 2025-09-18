@@ -6,13 +6,14 @@ import { User } from '../users/entities/user.entity';
 import { RedisService } from '../common/redis-service/redis.service';
 import { JwtService } from '@nestjs/jwt';
 import { EnvService } from '../common/env-service/env.service';
-import { ErrorsHandlerService } from '../common/errors-handler-service/errors-handler.service';
+import { ErrorsService } from '../common/errors-service/errors.service';
 import { JwtPayload } from '../common/types/jwt-payload.type';
 import { TokenType } from '../common/types/token-type.type';
 
 const RESET_REDIS_PREFIX = `reset:`;
 const REGISTER_REDIS_PREFIX = `register:`;
 const ADMIN_TRANSFER_REDIS_PREFIX = `admin:transfer:`;
+const EMAIL_CHANGE_REDIS_PREFIX = 'email-change:';
 
 @Injectable()
 export class TokensService {
@@ -20,21 +21,26 @@ export class TokensService {
   private readonly refreshSecret: string;
   private readonly accessExpiresIn: string;
   private readonly refreshExpiresIn: string;
+  private readonly transferExpiresIn: number;
   private readonly resetExpiresIn: number;
   private readonly registrationExpiresIn: number;
-  private readonly transferExpiresIn: number;
+  private readonly emailChangeTokenExpiresIn: number;
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly redisService: RedisService,
     private readonly envService: EnvService,
     private readonly jwtService: JwtService,
-    private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly errorsService: ErrorsService,
   ) {
     this.accessSecret = this.envService.get('JWT_ACCESS_SECRET');
     this.refreshSecret = this.envService.get('JWT_REFRESH_SECRET');
     this.accessExpiresIn = this.envService.get('JWT_ACCESS_EXPIRES_IN');
     this.refreshExpiresIn = this.envService.get('JWT_REFRESH_EXPIRES_IN');
+    this.transferExpiresIn = this.envService.get(
+      'ADMIN_TRANSFER_TOKEN_EXPIRES_IN',
+      'number',
+    );
     this.resetExpiresIn = this.envService.get(
       'RESET_TOKEN_EXPIRES_IN',
       'number',
@@ -43,8 +49,8 @@ export class TokensService {
       'REGISTRATION_TOKEN_EXPIRES_IN',
       'number',
     );
-    this.transferExpiresIn = this.envService.get(
-      'ADMIN_TRANSFER_TOKEN_EXPIRES_IN',
+    this.emailChangeTokenExpiresIn = this.envService.get(
+      'EMAIL_CHANGE_TOKEN_EXPIRES_IN',
       'number',
     );
   }
@@ -52,7 +58,7 @@ export class TokensService {
   private getJwtTokenExpiration(token: string, tokenType?: TokenType) {
     const decoded = this.jwtService.decode<JwtPayload>(token);
     if (!decoded?.exp) {
-      this.errorsHandlerService.invalidToken(null, tokenType);
+      this.errorsService.invalidToken(null, tokenType);
     }
     return decoded.exp;
   }
@@ -81,11 +87,11 @@ export class TokensService {
     const cleanedToken = this.stripJwtToken(token);
     const exp = this.getJwtTokenExpiration(cleanedToken, tokenType);
     if (typeof exp !== 'number' || isNaN(exp)) {
-      this.errorsHandlerService.invalidToken(null, tokenType);
+      this.errorsService.invalidToken(null, tokenType);
     } else {
       const ttl = exp - Math.floor(Date.now() / 1000);
       if (ttl <= 0) {
-        this.errorsHandlerService.invalidToken(null, tokenType);
+        this.errorsService.invalidToken(null, tokenType);
       }
       await this.redisService.set(cleanedToken, 'blacklisted', { EX: ttl });
     }
@@ -95,7 +101,7 @@ export class TokensService {
     const cleanedToken = this.stripJwtToken(token);
     const result = await this.redisService.get(cleanedToken);
     if (result) {
-      this.errorsHandlerService.jwtTokenBlacklisted();
+      this.errorsService.jwtTokenBlacklisted();
       return 'blacklisted';
     }
   }
@@ -109,10 +115,10 @@ export class TokensService {
         },
       );
       if (result.affected === 0) {
-        return this.errorsHandlerService.userNotFound();
+        return this.errorsService.userNotFound();
       }
     } catch (err: unknown) {
-      this.errorsHandlerService.default(err);
+      this.errorsService.default(err);
     }
   }
 
@@ -125,10 +131,10 @@ export class TokensService {
         },
       );
       if (result.affected === 0) {
-        return this.errorsHandlerService.userNotFound();
+        return this.errorsService.userNotFound();
       }
     } catch (err: unknown) {
-      this.errorsHandlerService.default(err);
+      this.errorsService.default(err);
     }
   }
 
@@ -158,6 +164,7 @@ export class TokensService {
     return uuidv4();
   }
 
+  /* Reset token */
   async saveResetToken(userId: number, token: string): Promise<void> {
     const id = userId.toString();
     await this.redisService.set(`${RESET_REDIS_PREFIX}${token}`, id, {
@@ -174,9 +181,10 @@ export class TokensService {
     await this.redisService.del(`${RESET_REDIS_PREFIX}${token}`);
   }
 
+  /* Registration token */
   async saveRegistrationToken(token: string, value: unknown) {
     if (!this.isRegistrationPayload(value)) {
-      throw new Error('Invalid registration payload');
+      this.errorsService.default(null, 'Invalid registration payload');
     }
     const json = JSON.stringify(value);
     await this.redisService.set(`${REGISTER_REDIS_PREFIX}${token}`, json, {
@@ -207,6 +215,7 @@ export class TokensService {
     await this.redisService.del(`${REGISTER_REDIS_PREFIX}${token}`);
   }
 
+  /* Transfer token */
   async saveTransferToken(token: string, fromId: number, toId: number) {
     await this.redisService.set(
       `${ADMIN_TRANSFER_REDIS_PREFIX}${token}`,
@@ -224,7 +233,7 @@ export class TokensService {
       `${ADMIN_TRANSFER_REDIS_PREFIX}${token}`,
     );
     if (!raw) {
-      this.errorsHandlerService.invalidToken(null, TokenType.ADMIN_TRANSFER);
+      return undefined;
     } else {
       const data = JSON.parse(raw) as {
         fromId: number;
@@ -236,5 +245,37 @@ export class TokensService {
 
   async deleteTransferToken(token: string) {
     await this.redisService.del(`${ADMIN_TRANSFER_REDIS_PREFIX}${token}`);
+  }
+
+  /* Email change token */
+  async saveEmailChangeToken(token: string, userId: number, new_email: string) {
+    await this.redisService.set(
+      `${EMAIL_CHANGE_REDIS_PREFIX}${token}`,
+      JSON.stringify({ userId: userId, new_email: new_email }),
+      {
+        EX: this.emailChangeTokenExpiresIn,
+      },
+    );
+  }
+
+  async getDataByEmailChangeToken(
+    token: string,
+  ): Promise<{ userId: number; new_email: string } | undefined> {
+    const raw = await this.redisService.get(
+      `${EMAIL_CHANGE_REDIS_PREFIX}${token}`,
+    );
+    if (!raw) {
+      return undefined;
+    } else {
+      const data = JSON.parse(raw) as {
+        userId: number;
+        new_email: string;
+      };
+      return data;
+    }
+  }
+
+  async deleteEmailChangeToken(token: string) {
+    await this.redisService.del(`${EMAIL_CHANGE_REDIS_PREFIX}${token}`);
   }
 }

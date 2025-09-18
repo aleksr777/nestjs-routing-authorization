@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ENV_VARIABLES } from './env.constants';
+import { ErrorsService } from '../../common/errors-service/errors.service';
 
 @Injectable()
 export class EnvService {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly errorsService: ErrorsService,
+  ) {}
   public get(key: string): string;
   public get(key: string, type: 'string'): string;
   public get(key: string, type: 'number'): number;
@@ -16,15 +20,15 @@ export class EnvService {
   ): string | number | boolean {
     const raw = this.configService.getOrThrow<string>(key);
     if (raw === undefined) {
-      throw new Error(`Env var "${key}" is not set`);
+      const msg = `Env var "${key}" is not set`;
+      this.errorsService.default(null, msg);
     }
     switch (type) {
       case 'number': {
         const parsed = Number(raw);
         if (Number.isNaN(parsed)) {
-          throw new Error(
-            `Env var "${key}" value "${raw}" is not a valid number`,
-          );
+          const msg = `Env var "${key}" value "${raw}" is not a valid number`;
+          this.errorsService.default(null, msg);
         }
         return parsed;
       }
@@ -32,9 +36,9 @@ export class EnvService {
         const normalized = raw.toLowerCase();
         if (normalized === 'true' || normalized === '1') return true;
         if (normalized === 'false' || normalized === '0') return false;
-        throw new Error(
-          `Env var "${key}" value "${raw}" is not a valid boolean`,
-        );
+        const msg = `Env var "${key}" value "${raw}" is not a valid boolean`;
+        this.errorsService.default(null, msg);
+        return false;
       }
       case 'string':
       default:
@@ -48,9 +52,16 @@ export class EnvService {
       return val === undefined || val.trim() === '';
     });
     if (missing.length) {
-      console.error(
-        `The following required environment variables are missing or empty: ${missing.join(', ')}`,
-      );
+      const msg = `The following required environment variables are missing or empty: ${missing.join(', ')}`;
+      this.errorsService.default(null, msg);
+      process.exit(1);
+    }
+    const smtpFrom = this.get('SMTP_FROM');
+    const adminEmail = this.get('ADMIN_EMAIL');
+    if (smtpFrom === adminEmail) {
+      const msg =
+        'Env validation error: SMTP_FROM and ADMIN_EMAIL must not be the same.';
+      this.errorsService.default(null, msg);
       process.exit(1);
     }
   }

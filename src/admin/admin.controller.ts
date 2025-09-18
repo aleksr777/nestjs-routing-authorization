@@ -17,9 +17,9 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/types/role.enum';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { BlockUserDto } from './dto/block-user.dto';
-import { InitiateTransferDto } from './dto/initiate-transfer.dto';
+import { TransferInitiateDto } from './dto/transfer-rights-initiate.dto';
 import { AdminService } from './admin.service';
-import { AdminTransferService } from './admin-transfer.service';
+import { AdminTransferService } from './transfer-rights.service';
 import { Request } from 'express';
 import { User } from '../users/entities/user.entity';
 
@@ -34,14 +34,13 @@ export class AdminController {
 
   @Post('transfer/initiate')
   async initiateTransfer(
-    @Body() dto: InitiateTransferDto,
+    @Body() dto: TransferInitiateDto,
     @Req() req: Request,
   ) {
     const admin = req.user as User;
     const adminId = +admin.id;
     const userId = +dto.id;
-    await this.transfer.requestTransfer(adminId, userId);
-    return { ok: true };
+    return await this.transfer.initiateTransfer(adminId, userId);
   }
 
   @Get('users/find')

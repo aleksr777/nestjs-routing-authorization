@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { EnvService } from '../env-service/env.service';
+import { ErrorsService } from '../errors-service/errors.service';
 
 @Injectable()
 export class MailService {
   private transporter: nodemailer.Transporter;
   private smtpFrom: string;
-  constructor(private readonly envService: EnvService) {
+  constructor(
+    private readonly envService: EnvService,
+    private readonly errorsService: ErrorsService,
+  ) {
     this.smtpFrom = this.envService.get('SMTP_FROM');
     this.transporter = nodemailer.createTransport({
       host: this.envService.get('SMTP_HOST'),
@@ -32,5 +36,11 @@ export class MailService {
       text,
       html,
     });
+  }
+
+  validateNotServiceEmail(email: string) {
+    if (this.smtpFrom === email) {
+      this.errorsService.throwIfServiceEmail();
+    }
   }
 }

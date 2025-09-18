@@ -1,13 +1,17 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { createClient, RedisClientType } from 'redis';
 import { EnvService } from '../../common/env-service/env.service';
+import { ErrorsService } from '../../common/errors-service/errors.service';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client: RedisClientType;
   private isShuttingDown = false; // Flag to prevent re-closing
 
-  constructor(private readonly envService: EnvService) {
+  constructor(
+    private readonly envService: EnvService,
+    private readonly errorsService: ErrorsService,
+  ) {
     const host = envService.get('REDIS_HOST');
     const port = envService.get('REDIS_PORT', 'number');
 
@@ -21,7 +25,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       process.on(signal, () => {
         if (this.isShuttingDown) return;
         this.isShuttingDown = true;
-
         this.client
           .quit()
           .then(() => {
@@ -29,7 +32,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
             process.exit(0);
           })
           .catch((err) => {
-            console.error(`Error closing Redis on ${signal}:`, err);
+            this.errorsService.default(err, 'Redis error (shutdownSignals).');
             process.exit(1);
           });
       });
@@ -38,24 +41,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     this.client.on('error', (err: unknown) => {
-      console.error(
-        'Redis Client Error',
-        err instanceof Error ? err.message : err,
-      );
+      this.errorsService.default(err, 'Redis error (onModuleInit).');
     });
-
     await this.client.connect();
   }
 
   async onModuleDestroy(): Promise<void> {
     if (this.isShuttingDown) return;
     this.isShuttingDown = true;
-
     try {
       await this.client.quit();
       console.log('Redis connection closed gracefully');
     } catch (err) {
-      console.error('Error closing Redis during onModuleDestroy:', err);
+      this.errorsService.default(err, 'Redis error (onModuleDestroy).');
     }
   }
 
@@ -67,8 +65,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.client.set(key, value, options);
     } catch (err) {
-      console.error(`Redis error (set):`, err);
-      throw new Error('RedisUnavailableException');
+      this.errorsService.default(err, 'Redis error (set).');
     }
   }
 
@@ -76,8 +73,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       return await this.client.get(key);
     } catch (err) {
-      console.error(`Redis error (get):`, err);
-      throw new Error('RedisUnavailableException');
+      this.errorsService.default(err, 'Redis error (get).');
     }
   }
 
@@ -85,8 +81,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.client.del(key);
     } catch (err) {
-      console.error(`Redis error (del):`, err);
-      throw new Error('RedisUnavailableException');
+      this.errorsService.default(err, 'Redis error (del).');
     }
   }
 }

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, ExtractJwt, StrategyOptionsWithRequest } from 'passport-jwt';
-import { ErrorsHandlerService } from '../../common/errors-handler-service/errors-handler.service';
+import { ErrorsService } from '../../common/errors-service/errors.service';
 import { AuthService } from '../../auth/auth.service';
 import { EnvService } from '../../common/env-service/env.service';
 import { JwtPayload } from '../../common/types/jwt-payload.type';
@@ -17,7 +17,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
   constructor(
     private readonly envService: EnvService,
     private readonly authService: AuthService,
-    private readonly errorsHandlerService: ErrorsHandlerService,
+    private readonly errorsService: ErrorsService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -32,7 +32,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
     const refresh_token = this.extractor(req);
     const userId = +payload.sub;
     if (!refresh_token) {
-      this.errorsHandlerService.tokenNotDefined(TokenType.REFRESH);
+      this.errorsService.tokenNotDefined(TokenType.REFRESH);
     } else {
       const user = await this.authService.validateUserByRefreshToken(
         userId,

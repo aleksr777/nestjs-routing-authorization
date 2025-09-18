@@ -1,34 +1,30 @@
 import { Post, Body, Req, UseGuards, Controller } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
+import { RegistrationService } from './registration.service';
+import { PasswordResetService } from './password-reset.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
-import { RequestRegistrationDto } from './dto/request-registration.dto';
-import { ConfirmRegistrationDto } from './dto/confirm-registration.dto';
-import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RegistrationRequestDto } from './dto/registration-request.dto';
+import { RegistrationConfirmDto } from './dto/registration-confirm.dto';
+import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
+import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { User } from '../users/entities/user.entity';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
-
-  @Post('request-registration')
-  async requestRegistration(@Body() dto: RequestRegistrationDto) {
-    return this.authService.requestRegistration(dto.email, dto.password);
-  }
-
-  @Post('confirm-registration')
-  async confirmRegistration(@Body() dto: ConfirmRegistrationDto) {
-    return this.authService.confirmRegistration(dto.token);
-  }
+  constructor(
+    private readonly authService: AuthService,
+    private readonly registrationService: RegistrationService,
+    private readonly passwordResetService: PasswordResetService,
+  ) {}
 
   @UseGuards(LocalAuthGuard)
   @Post('login')
   async login(@Req() req: Request) {
     const user = req.user as User;
-    return this.authService.login(+user.id);
+    return this.authService.login(user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -40,19 +36,28 @@ export class AuthController {
   }
 
   @UseGuards(RefreshTokenGuard)
-  @Post('refresh')
+  @Post('refresh-tokens')
   async refreshJwtTokens(@Req() req: Request) {
     const user = req.user as User;
     return this.authService.refreshJwtTokens(+user.id);
   }
-
-  @Post('request-password-reset')
-  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
-    return await this.authService.requestPasswordReset(dto.email);
+  @Post('registration/request')
+  async requestRegistration(@Body() dto: RegistrationRequestDto) {
+    return this.registrationService.request(dto.email, dto.password);
   }
 
-  @Post('reset-password')
-  resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto.token, dto.newPassword);
+  @Post('registration/confirm')
+  async confirmRegistration(@Body() dto: RegistrationConfirmDto) {
+    return this.registrationService.confirm(dto.token);
+  }
+
+  @Post('password-reset/request')
+  async requestPasswordReset(@Body() dto: PasswordResetRequestDto) {
+    return await this.passwordResetService.request(dto.email);
+  }
+
+  @Post('password-reset/confirm')
+  resetPassword(@Body() dto: PasswordResetConfirmDto) {
+    return this.passwordResetService.confirm(dto.token, dto.newPassword);
   }
 }
