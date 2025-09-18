@@ -154,8 +154,8 @@ This will create an admin user with the provided email and password or update th
 - `GET /api/admin/users/find` — Get list of users (with query support)
 - `PATCH /api/admin/users/block/:id` — Block user by ID
 - `PATCH /api/admin/users/unblock/:id` — Unblock user by ID
-- `POST /api/auth/transfer/initiate` — Initiate transfer of administrator rights
-- `POST /api/auth/transfer/confirm` — Confirm transfer of administrator rights
+- `POST /api/admin/transfer/initiate` — Initiate transfer of administrator rights
+- `POST /api/admin/transfer/confirm` — Confirm transfer of administrator rights
 - `DELETE /api/admin/users/delete/:id` — Delete user by ID
 
 
