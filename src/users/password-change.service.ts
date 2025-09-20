@@ -2,6 +2,7 @@ import { Injectable, HttpException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { User } from './entities/user.entity';
+import { AuthService } from '../auth/auth.service';
 import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { TokensService } from '../auth/tokens.service';
@@ -14,6 +15,7 @@ export class PasswordChangeService {
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(User) private readonly usersRepository: Repository<User>,
+    private readonly authService: AuthService,
     private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
     private readonly tokensService: TokensService,
@@ -75,7 +77,7 @@ export class PasswordChangeService {
           TokenType.ACCESS,
         );
       }
-      return this.tokensService.generateJwtTokens(userId);
+      return this.authService.login(userId);
     } catch (err) {
       await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;

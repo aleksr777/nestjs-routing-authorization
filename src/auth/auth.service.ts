@@ -56,12 +56,7 @@ export class AuthService {
     try {
       user = await this.usersRepository.findOneOrFail({
         where: { email },
-        select: [
-          ...USER_PROFILE_FIELDS,
-          PASSWORD,
-          IS_BLOCKED,
-          BLOCKED_REASON,
-        ],
+        select: [...USER_PROFILE_FIELDS, PASSWORD, IS_BLOCKED, BLOCKED_REASON],
       });
       const isPasswordValid = await this.hashService.compare(
         password,
