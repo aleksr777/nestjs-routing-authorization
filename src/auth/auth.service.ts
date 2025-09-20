@@ -10,8 +10,8 @@ import {
   ROLE,
   IS_BLOCKED,
   USER_PROFILE_FIELDS,
-  USER_PASSWORD,
-  USER_REFRESH_TOKEN,
+  PASSWORD,
+  REFRESH_TOKEN,
   BLOCKED_REASON,
 } from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
@@ -58,7 +58,7 @@ export class AuthService {
         where: { email },
         select: [
           ...USER_PROFILE_FIELDS,
-          USER_PASSWORD,
+          PASSWORD,
           IS_BLOCKED,
           BLOCKED_REASON,
         ],
@@ -95,7 +95,7 @@ export class AuthService {
         where: { id },
         select: [
           ...USER_PROFILE_FIELDS,
-          USER_REFRESH_TOKEN,
+          REFRESH_TOKEN,
           IS_BLOCKED,
           BLOCKED_REASON,
         ],

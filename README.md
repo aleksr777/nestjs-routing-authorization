@@ -13,6 +13,7 @@ ADMIN_TRANSFER_TOKEN_EXPIRES_IN=300  # 5m
 REGISTRATION_TOKEN_EXPIRES_IN=900  # 15m
 RESET_TOKEN_EXPIRES_IN=600  # 10m
 EMAIL_CHANGE_TOKEN_EXPIRES_IN=600  # 10m
+PASSWORD_CHANGE_TOKEN_EXPIRES_IN=600  # 10m
 
 REDIS_HOST='localhost'
 REDIS_PORT=6379
@@ -145,6 +146,8 @@ This will create an admin user with the provided email and password or update th
 ### Users
 
 - `GET /api/users/me` — Get current user's profile
+- `POST /users/me/password/verify-old` — Verifying old password
+- `POST /users/me/password/change` — Changing password after verifying old password
 - `POST /api/users/me/email/update/request` — Request update email
 - `POST /api/users/me/email/update/confirm` — Confirm update email
 - `DELETE /api/users/me/delete` — Delete current user

@@ -51,7 +51,6 @@ export class User {
 
   /* Email */
   @IsEmail()
-  @IsNotEmpty()
   @Length(6, 255)
   @Column({
     type: 'varchar',
@@ -91,7 +90,6 @@ export class User {
   nickname?: string | null;
 
   /* Password */
-  @IsNotEmpty()
   @IsString()
   @Length(8, 100)
   @Column({

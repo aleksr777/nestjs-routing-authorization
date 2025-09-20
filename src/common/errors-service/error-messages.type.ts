@@ -11,6 +11,7 @@ export enum ErrMsg {
   RESET_TOKEN_NOT_DEFINED = 'Reset token is not defined.',
   REGISTRATION_TOKEN_NOT_DEFINED = 'Registration token is not defined.',
   EMAIL_CHANGE_TOKEN_NOT_DEFINED = 'Email change token is not defined.',
+  PASSWORD_CHANGE_TOKEN_NOT_DEFINED = 'Password change token is not defined.',
 
   INVALID_TOKEN = 'Invalid token.',
   INVALID_ACCESS_TOKEN = 'Access token is expired or invalid.',
@@ -19,6 +20,7 @@ export enum ErrMsg {
   INVALID_RESET_TOKEN = 'Reset token is expired or invalid. Please request a new one.',
   INVALID_REGISTRATION_TOKEN = 'Registration token is expired or invalid. Please request a new one.',
   INVALID_EMAIL_CHANGE_TOKEN = 'Invalid email change token is expired or invalid. Please request a new one.',
+  INVALID_PASSWORD_CHANGE_TOKEN = 'Invalid password change token is expired or invalid. Please request a new one.',
 
   USER_NOT_FOUND = 'User was not found in the database.',
   ADMIN_NOT_FOUND = 'Admin was not found in the database.',
@@ -38,4 +40,7 @@ export enum ErrMsg {
 
   SERVICE_EMAIL_MATCH_USER_EMAIL = `The service mail must not match the user's email.`,
   NEW_EMAIL_MATCH_USER_EMAIL = 'The new email must not be the same as the current one.',
+
+  NEW_PASSWORD_MUST_DIFFER = 'New password must differ from old.',
+  OLD_PASSWORD_IS_INCORRECT = 'Old password is incorrect',
 }

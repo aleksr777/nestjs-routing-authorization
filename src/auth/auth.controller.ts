@@ -58,6 +58,6 @@ export class AuthController {
 
   @Post('password-reset/confirm')
   resetPassword(@Body() dto: PasswordResetConfirmDto) {
-    return this.passwordResetService.confirm(dto.token, dto.newPassword);
+    return this.passwordResetService.confirm(dto.token, dto.new_password);
   }
 }

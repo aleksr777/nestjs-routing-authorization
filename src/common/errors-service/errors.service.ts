@@ -37,6 +37,8 @@ export class ErrorsService {
         return ErrMsg.INVALID_ADMIN_TRANSFER_TOKEN;
       case TokenType.EMAIL_CHANGE:
         return ErrMsg.INVALID_EMAIL_CHANGE_TOKEN;
+      case TokenType.PASSWORD_CHANGE:
+        return ErrMsg.INVALID_PASSWORD_CHANGE_TOKEN;
       default:
         return ErrMsg.INVALID_TOKEN;
     }
@@ -56,6 +58,8 @@ export class ErrorsService {
         return ErrMsg.REGISTRATION_TOKEN_NOT_DEFINED;
       case TokenType.EMAIL_CHANGE:
         return ErrMsg.EMAIL_CHANGE_TOKEN_NOT_DEFINED;
+      case TokenType.PASSWORD_CHANGE:
+        return ErrMsg.PASSWORD_CHANGE_TOKEN_NOT_DEFINED;
       default:
         return ErrMsg.TOKEN_NOT_DEFINED;
     }

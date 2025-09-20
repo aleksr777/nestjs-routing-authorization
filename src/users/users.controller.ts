@@ -11,8 +11,11 @@ import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
 import { EmailChangeService } from './email-change.service';
+import { PasswordChangeService } from './password-change.service';
 import { EmailChangeRequestDto } from './dto/email-change-request.dto';
 import { EmailChangeConfirmDto } from './dto/email-change-confirm.dto';
+import { PasswordChangeByTokenDto } from './dto/password-change.dto';
+import { PasswordVerifyOldDto } from './dto/password-verify-old.dto';
 import { User } from './entities/user.entity';
 
 @UseGuards(JwtAuthGuard)
@@ -21,6 +24,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly emailChangeService: EmailChangeService,
+    private readonly passwordChangeService: PasswordChangeService,
   ) {}
 
   @Get('me')
@@ -46,5 +50,28 @@ export class UsersController {
   confirm(@Body() dto: EmailChangeConfirmDto, @Req() req: Request) {
     const user = req.user as User;
     return this.emailChangeService.confirm(+user.id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('me/password/verify-old')
+  verifyOld(@Body() dto: PasswordVerifyOldDto, @Req() req: Request) {
+    const user = req.user as User;
+    return this.passwordChangeService.issuePasswordChangeToken(
+      +user.id,
+      dto.old_password,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('me/password/change')
+  changeByToken(@Body() dto: PasswordChangeByTokenDto, @Req() req: Request) {
+    const user = req.user as User;
+    const access = req.headers.authorization;
+    return this.passwordChangeService.changePasswordByToken(
+      +user.id,
+      dto.token,
+      dto.new_password,
+      access,
+    );
   }
 }
