@@ -96,20 +96,26 @@ npm run start:dev
 ```
 
 ---
+
 ### 📦 Database Migrations
+
 Create a migration:
+
 ```bash
 npx typeorm-ts-node-commonjs migration:create src/migrations/MigrationName
 ```
+
 Run all pending migrations:
+
 ```bash
 npx typeorm-ts-node-commonjs migration:run -d data-source.ts
 ```
+
 Revert the last migration:
+
 ```bash
 npx typeorm-ts-node-commonjs migration:revert -d data-source.ts
 ```
-
 
 ### 📦 👑 Admin User Creation
 
@@ -118,6 +124,7 @@ We use a dedicated migration to create an administrator account automatically:
 Migration: CreateAdminUser<TIMESTAMP>.ts
 
 Uses .env variables:
+
 - ADMIN_EMAIL
 - ADMIN_PASSWORD
 - ADMIN_NICKNAME
@@ -125,11 +132,12 @@ Uses .env variables:
 Hashing is done using the HashService class
 
 Run:
+
 ```bash
 npx typeorm-ts-node-commonjs migration:run -d data-source.ts
 ```
-This will create an admin user with the provided email and password or update the data of an existing user.
----
+
+## This will create an admin user with the provided email and password or update the data of an existing user.
 
 ## 📡 API Endpoints
 
@@ -160,6 +168,5 @@ This will create an admin user with the provided email and password or update th
 - `POST /api/admin/transfer/initiate` — Initiate transfer of administrator rights
 - `POST /api/admin/transfer/confirm` — Confirm transfer of administrator rights
 - `DELETE /api/admin/users/delete/:id` — Delete user by ID
-
 
 ---
