@@ -3,8 +3,8 @@ export const NICKNAME = 'nickname';
 export const EMAIL = 'email';
 export const PHONE_NUMBER = 'phone_number';
 export const ROLE = 'role';
-export const USER_PASSWORD = 'password';
-export const USER_REFRESH_TOKEN = 'refresh_token';
+export const PASSWORD = 'password';
+export const REFRESH_TOKEN = 'refresh_token';
 
 export const LAST_ACTIVITY_AT = 'last_activity_at';
 export const CREATED_AT = 'created_at';
@@ -34,7 +34,7 @@ export const USER_CONFIDENTIAL_FIELDS = [
   ROLE,
 ] as const;
 
-export const USER_SECRET_FIELDS = [USER_PASSWORD, USER_REFRESH_TOKEN] as const;
+export const USER_SECRET_FIELDS = [PASSWORD, REFRESH_TOKEN] as const;
 
 export const USER_PROFILE_FIELDS = [
   ...USER_PUBLIC_FIELDS,

@@ -14,6 +14,7 @@ const RESET_REDIS_PREFIX = `reset:`;
 const REGISTER_REDIS_PREFIX = `register:`;
 const ADMIN_TRANSFER_REDIS_PREFIX = `admin:transfer:`;
 const EMAIL_CHANGE_REDIS_PREFIX = 'email-change:';
+const PASSWORD_CHANGE_PREFIX = 'password-change:';
 
 @Injectable()
 export class TokensService {
@@ -25,6 +26,7 @@ export class TokensService {
   private readonly resetExpiresIn: number;
   private readonly registrationExpiresIn: number;
   private readonly emailChangeTokenExpiresIn: number;
+  private readonly passwordChangeTokenExpiresIn: number;
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -51,6 +53,10 @@ export class TokensService {
     );
     this.emailChangeTokenExpiresIn = this.envService.get(
       'EMAIL_CHANGE_TOKEN_EXPIRES_IN',
+      'number',
+    );
+    this.passwordChangeTokenExpiresIn = this.envService.get(
+      'PASSWORD_CHANGE_TOKEN_EXPIRES_IN',
       'number',
     );
   }
@@ -277,5 +283,24 @@ export class TokensService {
 
   async deleteEmailChangeToken(token: string) {
     await this.redisService.del(`${EMAIL_CHANGE_REDIS_PREFIX}${token}`);
+  }
+
+  /* Password change token*/
+  async savePasswordChangeToken(token: string, userId: number) {
+    const ttl = this.passwordChangeTokenExpiresIn;
+    await this.redisService.set(
+      `${PASSWORD_CHANGE_PREFIX}${token}`,
+      String(userId),
+      { EX: ttl },
+    );
+  }
+
+  async getUserIdByPasswordChangeToken(token: string): Promise<number | null> {
+    const v = await this.redisService.get(`${PASSWORD_CHANGE_PREFIX}${token}`);
+    return v ? parseInt(v, 10) : null;
+  }
+
+  async deletePasswordChangeToken(token: string) {
+    await this.redisService.del(`${PASSWORD_CHANGE_PREFIX}${token}`);
   }
 }

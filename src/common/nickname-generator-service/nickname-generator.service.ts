@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class NicknameGeneratorService {
   private getPrefix(length: number): string {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    const letters = 'abcdefghijklmnopqrstuvwxyz';
     const digits = '0123456789';
     let result = '';
     for (let i = 0; i < length; i++) {
@@ -17,7 +17,7 @@ export class NicknameGeneratorService {
   }
 
   get(): string {
-    const nickname = `user_${this.getPrefix(12)}`;
+    const nickname = `User_${this.getPrefix(12)}`;
     return nickname;
   }
 }

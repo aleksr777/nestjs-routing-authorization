@@ -1,11 +1,11 @@
-import { IsString, Length, IsNotEmpty } from 'class-validator';
+import { IsNotEmpty, IsString, Length } from 'class-validator';
 
 export class PasswordResetConfirmDto {
+  @IsString()
   @IsNotEmpty()
   token!: string;
 
   @IsString()
-  @IsNotEmpty()
   @Length(8, 100)
-  newPassword!: string;
+  new_password!: string;
 }

@@ -1,12 +1,10 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-//import { HashService } from '../common/hash-service/hash.service';
 import { TokensService } from '../auth/tokens.service';
 import { AuthService } from '../auth/auth.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { User } from './entities/user.entity';
-/* import { UpdateUserDto } from './dto/update-user.dto'; */
 import {
   ID,
   ROLE,
@@ -26,7 +24,6 @@ export class UsersService {
     private usersRepository: Repository<User>,
     private readonly tokensService: TokensService,
     private readonly authService: AuthService,
-    //private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
   ) {}
 
@@ -79,41 +76,6 @@ export class UsersService {
       }
     }
   }
-
-  /* async updateCurrentUser(userId: number, userData: UpdateUserDto) {
-    const qr = this.dataSource.createQueryRunner();
-    await qr.connect();
-    await qr.startTransaction();
-    try {
-      if (userData.password) {
-        userData.password = await this.hashService.hash(userData.password);
-      }
-      const result = await qr.manager
-        .createQueryBuilder()
-        .update(User)
-        .set(userData)
-        .where('id = :id', { id: userId })
-        .execute();
-      if (result.affected === 0) {
-        await qr.rollbackTransaction();
-        return this.errorsService.userNotFound();
-      }
-      const user = await qr.manager
-        .createQueryBuilder(User, 'user')
-        .addSelect([...USER_PROFILE_FIELDS.map((f) => `user.${f}`)])
-        .where('user.id = :id', { id: userId })
-        .getOneOrFail();
-      await qr.commitTransaction();
-      return this.authService.removeSensitiveInfo(user, USER_SECRET_FIELDS);
-    } catch (err: unknown) {
-      await qr.rollbackTransaction();
-      this.errorsService.userNotFound(err);
-      this.errorsService.userConflict(err);
-      this.errorsService.default(err);
-    } finally {
-      await qr.release();
-    }
-  } */
 
   async getUsersQuery(limit: number, offset: number, nickname?: string) {
     try {
