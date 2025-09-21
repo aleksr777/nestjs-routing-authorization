@@ -2,6 +2,10 @@ export const ID = 'id';
 export const NICKNAME = 'nickname';
 export const EMAIL = 'email';
 export const PHONE_NUMBER = 'phone_number';
+
+export const NAME = 'name';
+export const AGE = 'age';
+
 export const ROLE = 'role';
 export const PASSWORD = 'password';
 export const REFRESH_TOKEN = 'refresh_token';
@@ -15,7 +19,12 @@ export const BLOCKED_AT = 'blocked_at';
 export const BLOCKED_BY = 'blocked_by';
 export const BLOCKED_REASON = 'blocked_reason';
 
-export const USER_SEARCHABLE_FIELDS = [NICKNAME, EMAIL, PHONE_NUMBER] as const;
+export const USER_SEARCHABLE_FIELDS = [
+  NAME,
+  NICKNAME,
+  EMAIL,
+  PHONE_NUMBER,
+] as const;
 
 export const IS_BLOCKED_FIELDS = [
   IS_BLOCKED,
@@ -24,7 +33,13 @@ export const IS_BLOCKED_FIELDS = [
   BLOCKED_REASON,
 ] as const;
 
-export const USER_PUBLIC_FIELDS = [ID, NICKNAME, LAST_ACTIVITY_AT] as const;
+export const USER_PUBLIC_FIELDS = [
+  ID,
+  NICKNAME,
+  NAME,
+  AGE,
+  LAST_ACTIVITY_AT,
+] as const;
 
 export const USER_CONFIDENTIAL_FIELDS = [
   CREATED_AT,

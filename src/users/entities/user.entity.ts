@@ -14,7 +14,9 @@ import {
   Length,
   IsNotEmpty,
   IsOptional,
+  Min,
   Max,
+  IsNumber,
 } from 'class-validator';
 
 @Entity()
@@ -162,4 +164,31 @@ export class User {
     default: null,
   })
   blocked_reason?: string | null;
+
+  /* Name */
+  @IsOptional()
+  @IsString()
+  @Length(2, 200)
+  @Column({
+    type: 'varchar',
+    name: 'name',
+    length: 200,
+    nullable: true,
+    default: null,
+  })
+  name?: string | null;
+
+  /* Age */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(120)
+  @Column({
+    type: 'varchar',
+    name: 'age',
+    length: 200,
+    nullable: true,
+    default: null,
+  })
+  age?: number | null;
 }
