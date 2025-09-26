@@ -60,3 +60,17 @@ export const ADMIN_FIELDS = [
   ...USER_PROFILE_FIELDS,
   ...IS_BLOCKED_FIELDS,
 ] as const;
+
+export const USER_UNIQUE_FIELDS = [NICKNAME, PHONE_NUMBER, EMAIL] as const;
+
+export const SPECIAL_UPDATE_FIELDS = [
+  ID,
+  EMAIL,
+  PHONE_NUMBER,
+  LAST_ACTIVITY_AT,
+  CREATED_AT,
+  UPDATED_AT,
+  ROLE,
+  ...IS_BLOCKED_FIELDS,
+  ...USER_SECRET_FIELDS,
+] as const;

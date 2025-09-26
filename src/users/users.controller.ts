@@ -6,6 +6,7 @@ import {
   Req,
   Delete,
   UseGuards,
+  Patch,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -16,6 +17,7 @@ import { EmailChangeRequestDto } from './dto/email-change-request.dto';
 import { EmailChangeConfirmDto } from './dto/email-change-confirm.dto';
 import { PasswordChangeByTokenDto } from './dto/password-change.dto';
 import { PasswordVerifyOldDto } from './dto/password-verify-old.dto';
+import { UpdatePartialUserDataDto } from './dto/update-partial-user-data.dto';
 import { User } from './entities/user.entity';
 
 @UseGuards(JwtAuthGuard)
@@ -34,27 +36,36 @@ export class UsersController {
   }
 
   @Delete('me/delete')
-  async removeCurrentUser(@Req() req: Request) {
+  async deleteCurrentUser(@Req() req: Request) {
     const user = req.user as User;
     const access_token = req.headers.authorization;
-    return this.usersService.removeCurrentUser(+user.id, access_token);
+    return this.usersService.deleteCurrentUser(+user.id, access_token);
+  }
+
+  @Patch('me/partial-data/update')
+  async updatePartialUserData(
+    @Body() dto: UpdatePartialUserDataDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as User;
+    return this.usersService.updatePartialUserData(+user.id, dto);
   }
 
   @Post('me/email/update/request')
-  request(@Body() dto: EmailChangeRequestDto, @Req() req: Request) {
+  requestUpdateEmail(@Body() dto: EmailChangeRequestDto, @Req() req: Request) {
     const user = req.user as User;
     return this.emailChangeService.request(+user.id, dto);
   }
 
   @Post('me/email/update/confirm')
-  confirm(@Body() dto: EmailChangeConfirmDto, @Req() req: Request) {
+  confirmUpdateEmail(@Body() dto: EmailChangeConfirmDto, @Req() req: Request) {
     const user = req.user as User;
     return this.emailChangeService.confirm(+user.id, dto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('me/password/verify-old')
-  verifyOld(@Body() dto: PasswordVerifyOldDto, @Req() req: Request) {
+  verifyOldPassword(@Body() dto: PasswordVerifyOldDto, @Req() req: Request) {
     const user = req.user as User;
     return this.passwordChangeService.issuePasswordChangeToken(
       +user.id,
@@ -64,7 +75,10 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Post('me/password/change')
-  changeByToken(@Body() dto: PasswordChangeByTokenDto, @Req() req: Request) {
+  changePasswordByToken(
+    @Body() dto: PasswordChangeByTokenDto,
+    @Req() req: Request,
+  ) {
     const user = req.user as User;
     const access = req.headers.authorization;
     return this.passwordChangeService.changePasswordByToken(

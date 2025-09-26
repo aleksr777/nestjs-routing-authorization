@@ -75,8 +75,7 @@ export class PasswordResetService {
         this.errorsService.userNotFound();
       }
       await this.tokensService.deleteResetToken(token);
-      const tokens = await this.authService.refreshJwtTokens(userId);
-      return tokens;
+      return this.authService.login(userId);
     } catch (err: unknown) {
       this.errorsService.resetPassword(err);
     }

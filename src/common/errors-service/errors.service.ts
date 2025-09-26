@@ -23,6 +23,20 @@ export class ErrorsService {
     );
   }
 
+  private parseColumnsFromDetail(detail?: string): string[] {
+    if (!detail) return [];
+    const re = /Key\s*\(([^)]+)\)\s*=\s*\(/gi;
+    const acc = new Set<string>();
+    for (const m of detail.matchAll(re)) {
+      m[1]
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((f) => acc.add(f));
+    }
+    return [...acc];
+  }
+
   private getInvalidTokenMessage(tokenType?: TokenType): string {
     switch (tokenType) {
       case TokenType.ACCESS:
@@ -71,9 +85,33 @@ export class ErrorsService {
     throw new InternalServerErrorException(msg);
   }
 
-  badRequest(message?: string) {
+  badRequest(message?: string, fields?: string[]) {
     const msg = message ?? 'Bad Request';
+    if (fields && fields.length > 0) {
+      throw new BadRequestException({
+        message: msg,
+        fields: [...fields],
+      });
+    }
     throw new BadRequestException(msg);
+  }
+
+  userConflict(err: unknown, fields?: string[]) {
+    if (this.isUniqueError(err)) {
+      if (fields && fields.length > 0) {
+        throw new ConflictException({
+          message: ErrMsg.CONFLICT_USER_EXISTS,
+          fields: [...fields],
+        });
+      }
+      throw new ConflictException(ErrMsg.CONFLICT_USER_EXISTS);
+    }
+  }
+
+  userNotFound(err?: unknown, message?: string) {
+    if (err instanceof EntityNotFoundError || !err) {
+      throw new NotFoundException(message ?? ErrMsg.USER_NOT_FOUND);
+    }
   }
 
   forbidden(message?: string) {
@@ -105,18 +143,6 @@ export class ErrorsService {
       err instanceof EntityNotFoundError
     ) {
       throw new UnauthorizedException(errMessage);
-    }
-  }
-
-  userConflict(err: unknown) {
-    if (this.isUniqueError(err)) {
-      throw new ConflictException(ErrMsg.CONFLICT_USER_EXISTS);
-    }
-  }
-
-  userNotFound(err?: unknown, message?: string) {
-    if (err instanceof EntityNotFoundError || !err) {
-      throw new NotFoundException(message ?? ErrMsg.USER_NOT_FOUND);
     }
   }
 

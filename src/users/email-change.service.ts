@@ -6,6 +6,7 @@ import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { TokensService } from '../auth/tokens.service';
+import { AuthService } from '../auth/auth.service';
 import { EmailChangeRequestDto } from './dto/email-change-request.dto';
 import { EmailChangeConfirmDto } from './dto/email-change-confirm.dto';
 import {
@@ -26,6 +27,7 @@ export class EmailChangeService {
     private readonly envService: EnvService,
     private readonly errorsService: ErrorsService,
     private readonly tokensService: TokensService,
+    private readonly authService: AuthService,
   ) {
     this.emailChangeTokenExpiresIn =
       this.envService.get('EMAIL_CHANGE_TOKEN_EXPIRES_IN', 'number') / 60;
@@ -97,6 +99,7 @@ export class EmailChangeService {
       await this.tokensService
         .deleteEmailChangeToken(dto.token)
         .catch(() => undefined);
+      return this.authService.login(user.id);
     } catch (err) {
       await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;

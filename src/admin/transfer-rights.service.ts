@@ -8,6 +8,7 @@ import { EnvService } from '../common/env-service/env.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokensService } from '../auth/tokens.service';
+import { AuthService } from '../auth/auth.service';
 import { Role } from '../common/types/role.enum';
 import { TokenType } from '../common/types/token-type.type';
 import {
@@ -28,6 +29,7 @@ export class AdminTransferService {
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly tokensService: TokensService,
+    private readonly authService: AuthService,
   ) {
     this.emailChangeExpiresIn =
       this.envService.get('EMAIL_CHANGE_TOKEN_EXPIRES_IN', 'number') / 60;
@@ -130,9 +132,10 @@ export class AdminTransferService {
       this.mailService
         .send(to.email, subj, 'You have received administrator rights.')
         .catch(() => undefined);
-    } catch (e) {
+      return this.authService.login(currentUserId);
+    } catch (err) {
       await qr.rollbackTransaction();
-      if (e instanceof HttpException) throw e;
+      if (err instanceof HttpException) throw err;
       this.errorsService.badRequest(ErrMsg.TRANSFER_FAILED);
     } finally {
       await qr.release();

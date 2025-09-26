@@ -43,4 +43,8 @@ export enum ErrMsg {
 
   NEW_PASSWORD_MUST_DIFFER = 'New password must differ from old.',
   OLD_PASSWORD_IS_INCORRECT = 'Old password is incorrect',
+
+  NO_FIELDS_FOR_UPDATE = 'No fields provided for update.',
+  FIELDS_CANNOT_BE_UPDATED = 'Some fields cannot be updated in this way.',
+  FIELDS_CANNOT_BE_EMPTY = 'Some fields cannot be empty.',
 }
