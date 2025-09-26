@@ -182,7 +182,7 @@ export class User {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  @Max(120)
+  @Max(200)
   @Column({
     type: 'varchar',
     name: 'age',
