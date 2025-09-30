@@ -61,12 +61,12 @@ export const ADMIN_FIELDS = [
   ...IS_BLOCKED_FIELDS,
 ] as const;
 
-export const USER_UNIQUE_FIELDS = [NICKNAME, PHONE_NUMBER, EMAIL] as const;
+export const USER_UNIQUE_FIELDS = [NICKNAME, EMAIL /* PHONE_NUMBER */] as const;
 
 export const SPECIAL_UPDATE_FIELDS = [
   ID,
   EMAIL,
-  PHONE_NUMBER,
+  /* PHONE_NUMBER, */
   LAST_ACTIVITY_AT,
   CREATED_AT,
   UPDATED_AT,

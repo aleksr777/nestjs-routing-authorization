@@ -41,13 +41,16 @@ export class PasswordChangeService {
 
   async changePasswordByToken(
     userId: number,
-    token: string,
+    changeToken: string,
     newPassword: string,
     accessToken?: string,
   ) {
+    if (!accessToken) {
+      return this.errorsService.invalidToken(null, TokenType.ACCESS);
+    }
     let same;
     const storedUserId =
-      await this.tokensService.getUserIdByPasswordChangeToken(token);
+      await this.tokensService.getUserIdByPasswordChangeToken(changeToken);
     if (!storedUserId || storedUserId !== userId) {
       return this.errorsService.invalidToken(null, TokenType.PASSWORD_CHANGE);
     }
@@ -69,7 +72,7 @@ export class PasswordChangeService {
       );
       await qr.commitTransaction();
       await this.tokensService
-        .deletePasswordChangeToken(token)
+        .deletePasswordChangeToken(changeToken)
         .catch(() => undefined);
       if (accessToken) {
         await this.tokensService.addJwtTokenToBlacklist(

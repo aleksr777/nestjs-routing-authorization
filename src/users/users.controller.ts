@@ -13,6 +13,9 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
 import { EmailChangeService } from './email-change.service';
 import { PasswordChangeService } from './password-change.service';
+import { PhoneVerificationService } from './phone-verification.service';
+import { PhoneVerificationRequestDto } from './dto/phone-verification-request.dto';
+import { PhoneVerificationConfirmDto } from './dto/phone-verification-confirm.dto';
 import { EmailChangeRequestDto } from './dto/email-change-request.dto';
 import { EmailChangeConfirmDto } from './dto/email-change-confirm.dto';
 import { PasswordChangeByTokenDto } from './dto/password-change.dto';
@@ -27,19 +30,22 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly emailChangeService: EmailChangeService,
     private readonly passwordChangeService: PasswordChangeService,
+    private readonly phoneVerificationService: PhoneVerificationService,
   ) {}
 
   @Get('me')
   async getCurrentProfile(@Req() req: Request) {
     const user = req.user as User;
-    return this.usersService.getCurrentProfile(+user.id);
+    const userId = +user.id;
+    return this.usersService.getCurrentProfile(userId);
   }
 
   @Delete('me/delete')
   async deleteCurrentUser(@Req() req: Request) {
     const user = req.user as User;
+    const userId = +user.id;
     const access_token = req.headers.authorization;
-    return this.usersService.deleteCurrentUser(+user.id, access_token);
+    return this.usersService.deleteCurrentUser(userId, access_token);
   }
 
   @Patch('me/partial-data/update')
@@ -48,44 +54,78 @@ export class UsersController {
     @Req() req: Request,
   ) {
     const user = req.user as User;
-    return this.usersService.updatePartialUserData(+user.id, dto);
+    const userId = +user.id;
+    return this.usersService.updatePartialUserData(userId, dto);
   }
 
   @Post('me/email/update/request')
   requestUpdateEmail(@Body() dto: EmailChangeRequestDto, @Req() req: Request) {
     const user = req.user as User;
-    return this.emailChangeService.request(+user.id, dto);
+    const userId = +user.id;
+    return this.emailChangeService.request(userId, dto);
   }
 
   @Post('me/email/update/confirm')
   confirmUpdateEmail(@Body() dto: EmailChangeConfirmDto, @Req() req: Request) {
     const user = req.user as User;
-    return this.emailChangeService.confirm(+user.id, dto);
+    const userId = +user.id;
+    return this.emailChangeService.confirm(userId, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('me/password/verify-old')
   verifyOldPassword(@Body() dto: PasswordVerifyOldDto, @Req() req: Request) {
     const user = req.user as User;
+    const userId = +user.id;
+    const oldPassword = dto.old_password;
     return this.passwordChangeService.issuePasswordChangeToken(
-      +user.id,
-      dto.old_password,
+      userId,
+      oldPassword,
     );
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('me/password/change')
   changePasswordByToken(
     @Body() dto: PasswordChangeByTokenDto,
     @Req() req: Request,
   ) {
     const user = req.user as User;
-    const access = req.headers.authorization;
+    const accessToken = req.headers.authorization;
+    const newPassword = dto.new_password;
+    const changeToken = dto.token;
+    const userId = +user.id;
     return this.passwordChangeService.changePasswordByToken(
-      +user.id,
-      dto.token,
-      dto.new_password,
-      access,
+      userId,
+      changeToken,
+      newPassword,
+      accessToken,
     );
+  }
+
+  @Post('request')
+  async request(@Body() dto: PhoneVerificationRequestDto, @Req() req: Request) {
+    const user = req.user as User;
+    const userId = +user.id;
+    const phone = dto.phone;
+    return this.phoneVerificationService.start(userId, phone);
+  }
+
+  @Post('confirm')
+  async confirm(@Body() dto: PhoneVerificationConfirmDto, @Req() req: Request) {
+    const user = req.user as User;
+    const userId = +user.id;
+    const code = dto.code;
+    const phone = await this.phoneVerificationService.confirm(userId, code);
+    if (phone) {
+      await this.usersService.setPhoneAfterConfirm(userId, phone);
+      return { phone_number: phone };
+    }
+  }
+
+  @Post('cancel')
+  async cancel(@Req() req: Request) {
+    const user = req.user as User;
+    const userId = +user.id;
+    await this.phoneVerificationService.cancel(userId);
+    return { cancelled: true };
   }
 }

@@ -96,6 +96,11 @@ export class ErrorsService {
     throw new BadRequestException(msg);
   }
 
+  conflict(message?: string) {
+    const msg = message ?? 'Conflict Exception';
+    throw new ConflictException(msg);
+  }
+
   userConflict(err: unknown, fields?: string[]) {
     if (this.isUniqueError(err)) {
       if (fields && fields.length > 0) {

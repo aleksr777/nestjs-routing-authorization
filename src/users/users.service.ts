@@ -109,18 +109,15 @@ export class UsersService {
     }
   }
 
-  async updatePartialUserData(
-    userId: number,
-    userData: UpdatePartialUserDataDto,
-  ) {
+  async updatePartialUserData(userId: number, dto: UpdatePartialUserDataDto) {
     const specialFields: string[] = [];
     const emptyFields: string[] = [];
     const conflictsFields: string[] = [];
-    const patch = userData as Record<string, unknown>;
-    if (!userData || Object.keys(userData).length === 0) {
+    const patch = dto as Record<string, unknown>;
+    if (!dto || Object.keys(dto).length === 0) {
       this.errorsService.badRequest(ErrMsg.NO_FIELDS_FOR_UPDATE);
     }
-    for (const key of Object.keys(userData)) {
+    for (const key of Object.keys(dto)) {
       const v = patch[key];
       if (!v) {
         emptyFields.push(key);
@@ -142,7 +139,7 @@ export class UsersService {
     await qr.connect();
     await qr.startTransaction();
     try {
-      for (const key of Object.keys(userData)) {
+      for (const key of Object.keys(dto)) {
         if (USER_UNIQUE_FIELDS.includes(key as userUniqueFields)) {
           const v = patch[key];
           const exists = await qr.manager.getRepository(User).exists({
@@ -154,7 +151,7 @@ export class UsersService {
       const result = await qr.manager
         .createQueryBuilder()
         .update(User)
-        .set(userData)
+        .set(dto)
         .where('id = :id', { id: userId })
         .execute();
       if (result.affected === 0) {
@@ -180,5 +177,16 @@ export class UsersService {
     } finally {
       await qr.release();
     }
+  }
+
+  async setPhoneAfterConfirm(userId: number, phone: string) {
+    const exists = await this.usersRepository.findOne({
+      where: { phone_number: phone },
+    });
+    if (exists && exists.id !== userId) {
+      return this.errorsService.conflict('Phone already in use.');
+    }
+    await this.usersRepository.update({ id: userId }, { phone_number: phone });
+    return this.usersRepository.findOneByOrFail({ id: userId });
   }
 }

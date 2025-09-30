@@ -67,11 +67,10 @@ export class User {
   /* Phone number */
   @IsPhoneNumber()
   @IsOptional()
-  @Length(4, 40)
   @Column({
     type: 'varchar',
     name: 'phone_number',
-    unique: true,
+    //unique: true,
     nullable: true,
     select: false,
     length: 30,
