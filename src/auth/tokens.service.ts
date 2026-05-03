@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { randomInt } from 'crypto';
 import { User } from '../users/entities/user.entity';
 import { RedisService } from '../common/redis-service/redis.service';
 import { JwtService } from '@nestjs/jwt';
@@ -166,8 +166,8 @@ export class TokensService {
     };
   }
 
-  generateVerificationToken() {
-    return uuidv4();
+  generateVerificationToken(): string {
+    return randomInt(0, 1000000).toString().padStart(6, '0');
   }
 
   /* Reset token */
