@@ -13,9 +13,6 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
 import { EmailChangeService } from './email-change.service';
 import { PasswordChangeService } from './password-change.service';
-import { PhoneVerificationService } from './phone-verification.service';
-import { PhoneVerificationRequestDto } from './dto/phone-verification-request.dto';
-import { PhoneVerificationConfirmDto } from './dto/phone-verification-confirm.dto';
 import { EmailChangeRequestDto } from './dto/email-change-request.dto';
 import { EmailChangeConfirmDto } from './dto/email-change-confirm.dto';
 import { PasswordChangeByTokenDto } from './dto/password-change.dto';
@@ -30,7 +27,6 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly emailChangeService: EmailChangeService,
     private readonly passwordChangeService: PasswordChangeService,
-    private readonly phoneVerificationService: PhoneVerificationService,
   ) {}
 
   @Get('me')
@@ -99,33 +95,5 @@ export class UsersController {
       newPassword,
       accessToken,
     );
-  }
-
-  @Post('request')
-  async request(@Body() dto: PhoneVerificationRequestDto, @Req() req: Request) {
-    const user = req.user as User;
-    const userId = +user.id;
-    const phone = dto.phone;
-    return this.phoneVerificationService.start(userId, phone);
-  }
-
-  @Post('confirm')
-  async confirm(@Body() dto: PhoneVerificationConfirmDto, @Req() req: Request) {
-    const user = req.user as User;
-    const userId = +user.id;
-    const code = dto.code;
-    const phone = await this.phoneVerificationService.confirm(userId, code);
-    if (phone) {
-      await this.usersService.setPhoneAfterConfirm(userId, phone);
-      return { phone_number: phone };
-    }
-  }
-
-  @Post('cancel')
-  async cancel(@Req() req: Request) {
-    const user = req.user as User;
-    const userId = +user.id;
-    await this.phoneVerificationService.cancel(userId);
-    return { cancelled: true };
   }
 }
