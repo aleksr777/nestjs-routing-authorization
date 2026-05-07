@@ -20,8 +20,8 @@ import { TokenType } from '../common/types/token-type.type';
 import { specialUpdateFields } from '../common/types/special-update-fields.type';
 import { userUniqueFields } from '../common/types/user-unique-fields.type';
 import { Role } from '../common/types/role.enum';
-import { ErrMsg } from 'src/common/errors-service/error-messages.type';
-import { PublicUser } from 'src/common/types/user-secret-key.type';
+import { ErrMsg } from '../common/errors-service/error-messages.type';
+import { PublicUser } from '../common/types/user-secret-key.type';
 
 @Injectable()
 export class UsersService {
