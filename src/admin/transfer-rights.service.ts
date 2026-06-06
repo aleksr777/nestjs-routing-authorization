@@ -66,25 +66,25 @@ export class AdminTransferService {
     if (to.role === Role.ADMIN) {
       this.errorsService.badRequest(ErrMsg.TARGET_USER_ALREADY_ADMINISTRATOR);
     }
-    const token = this.tokensService.generateVerificationToken();
-    await this.tokensService.saveTransferToken(token, from.id, to.id);
+    const code = this.tokensService.generateVerificationCode();
+    await this.tokensService.saveTransferToken(code, from.id, to.id);
     const frontendUrl = this.envService.get('FRONTEND_URL');
-    const link = `${frontendUrl}/confirm-admin?token=${token}`;
+    const link = `${frontendUrl}/confirm-admin?code=${code}`;
     const subject = 'Administrator rights invitation';
     const greet = to.nickname ? `Hello, ${to.nickname}!` : 'Hello!';
     const text =
       `${greet}\n\nYou have been invited to receive administrator rights.\n` +
-      `To confirm, please follow the link (within ${this.emailChangeExpiresIn} min): ${link}\n\n` +
+      `To confirm, please use the link below (within ${this.emailChangeExpiresIn} min): ${link}\n\n` +
       `If you did not request this, ignore the message.`;
     const html =
       `<p>${greet}</p><p>You have been invited to receive administrator rights.</p>` +
-      `<p>To confirm, please click the link (within ${this.emailChangeExpiresIn} min): <a href="${link}">${link}</a></p>` +
+      `<p>To confirm, please use the link below (within ${this.emailChangeExpiresIn} min): <a href="${link}">${link}</a></p>` +
       `<p>If you did not request this, ignore the message.</p>`;
     await this.mailService.send(to.email, subject, text, html);
   }
 
-  async confirmTransfer(token: string, currentUserId: number) {
-    const data = await this.tokensService.getDataByTransferToken(token);
+  async confirmTransfer(code: string, currentUserId: number) {
+    const data = await this.tokensService.getDataByTransferToken(code);
     if (
       !data ||
       typeof data.fromId !== 'number' ||
@@ -120,7 +120,7 @@ export class AdminTransferService {
       await qr.manager.update(User, { id: fromId }, { role: Role.USER });
       await qr.manager.update(User, { id: toId }, { role: Role.ADMIN });
       await qr.commitTransaction();
-      await this.tokensService.deleteTransferToken(token);
+      await this.tokensService.deleteTransferToken(code);
       const subj = 'Administrator rights have been transferred';
       this.mailService
         .send(

@@ -87,11 +87,11 @@ export class UsersController {
     const user = req.user as User;
     const accessToken = req.headers.authorization;
     const newPassword = dto.new_password;
-    const changeToken = dto.token;
+    const changeCode = dto.code;
     const userId = +user.id;
     return this.passwordChangeService.changePasswordByToken(
       userId,
-      changeToken,
+      changeCode,
       newPassword,
       accessToken,
     );

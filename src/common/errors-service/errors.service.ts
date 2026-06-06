@@ -44,15 +44,15 @@ export class ErrorsService {
       case TokenType.REFRESH:
         return ErrMsg.INVALID_REFRESH_TOKEN;
       case TokenType.RESET:
-        return ErrMsg.INVALID_RESET_TOKEN;
+        return ErrMsg.INVALID_RESET_CODE;
       case TokenType.REGISTRATION:
-        return ErrMsg.INVALID_REGISTRATION_TOKEN;
+        return ErrMsg.INVALID_REGISTRATION_CODE;
       case TokenType.ADMIN_TRANSFER:
-        return ErrMsg.INVALID_ADMIN_TRANSFER_TOKEN;
+        return ErrMsg.INVALID_ADMIN_TRANSFER_CODE;
       case TokenType.EMAIL_CHANGE:
-        return ErrMsg.INVALID_EMAIL_CHANGE_TOKEN;
+        return ErrMsg.INVALID_EMAIL_CHANGE_CODE;
       case TokenType.PASSWORD_CHANGE:
-        return ErrMsg.INVALID_PASSWORD_CHANGE_TOKEN;
+        return ErrMsg.INVALID_PASSWORD_CHANGE_CODE;
       default:
         return ErrMsg.INVALID_TOKEN;
     }
@@ -65,15 +65,15 @@ export class ErrorsService {
       case TokenType.REFRESH:
         return ErrMsg.REFRESH_TOKEN_NOT_DEFINED;
       case TokenType.ADMIN_TRANSFER:
-        return ErrMsg.ADMIN_TRANSFER_TOKEN_NOT_DEFINED;
+        return ErrMsg.ADMIN_TRANSFER_CODE_NOT_DEFINED;
       case TokenType.RESET:
-        return ErrMsg.RESET_TOKEN_NOT_DEFINED;
+        return ErrMsg.RESET_CODE_NOT_DEFINED;
       case TokenType.REGISTRATION:
-        return ErrMsg.REGISTRATION_TOKEN_NOT_DEFINED;
+        return ErrMsg.REGISTRATION_CODE_NOT_DEFINED;
       case TokenType.EMAIL_CHANGE:
-        return ErrMsg.EMAIL_CHANGE_TOKEN_NOT_DEFINED;
+        return ErrMsg.EMAIL_CHANGE_CODE_NOT_DEFINED;
       case TokenType.PASSWORD_CHANGE:
-        return ErrMsg.PASSWORD_CHANGE_TOKEN_NOT_DEFINED;
+        return ErrMsg.PASSWORD_CHANGE_CODE_NOT_DEFINED;
       default:
         return ErrMsg.TOKEN_NOT_DEFINED;
     }

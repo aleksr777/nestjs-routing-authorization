@@ -34,14 +34,14 @@ export class PasswordChangeService {
     );
     if (!ok)
       return this.errorsService.badRequest(ErrMsg.OLD_PASSWORD_IS_INCORRECT);
-    const token = this.tokensService.generateVerificationToken();
-    await this.tokensService.savePasswordChangeToken(token, userId);
-    return { token };
+    const code = this.tokensService.generateVerificationCode();
+    await this.tokensService.savePasswordChangeToken(code, userId);
+    return { code };
   }
 
   async changePasswordByToken(
     userId: number,
-    changeToken: string,
+    changeCode: string,
     newPassword: string,
     accessToken?: string,
   ) {
@@ -50,7 +50,7 @@ export class PasswordChangeService {
     }
     let same;
     const storedUserId =
-      await this.tokensService.getUserIdByPasswordChangeToken(changeToken);
+      await this.tokensService.getUserIdByPasswordChangeToken(changeCode);
     if (!storedUserId || storedUserId !== userId) {
       return this.errorsService.invalidToken(null, TokenType.PASSWORD_CHANGE);
     }
@@ -72,7 +72,7 @@ export class PasswordChangeService {
       );
       await qr.commitTransaction();
       await this.tokensService
-        .deletePasswordChangeToken(changeToken)
+        .deletePasswordChangeToken(changeCode)
         .catch(() => undefined);
       if (accessToken) {
         await this.tokensService.addJwtTokenToBlacklist(

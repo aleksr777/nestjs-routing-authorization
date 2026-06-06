@@ -47,23 +47,24 @@ export class EmailChangeService {
       this.errorsService.badRequest(ErrMsg.CURRENT_USER_BLOCKED);
     }
     this.mailService.validateNotServiceEmail(newEmail);
-    const token = this.tokensService.generateVerificationToken();
-    await this.tokensService.saveEmailChangeToken(token, userId, newEmail);
+    const code = this.tokensService.generateVerificationCode();
+    await this.tokensService.saveEmailChangeToken(code, userId, newEmail);
     const frontendUrl = this.envService.get('FRONTEND_URL');
-    const link = `${frontendUrl}/confirm-email?token=${token}`;
+    const link = `${frontendUrl}/confirm-email?code=${code}`;
     const subject = 'Confirm your new email';
     const text =
       `You requested to change your account email to ${newEmail}.\n` +
-      `To confirm, follow the link (within ${this.emailChangeTokenExpiresIn} min): ${link}\n\nIf it wasn't you, ignore this message.`;
-    const html =
-      `<p>You requested to change your account email to ${newEmail}.</p>` +
-      `<p>To confirm, click (within ${this.emailChangeTokenExpiresIn} min): <a href="${link}">${link}</a></p>` +
-      `<p>If it wasn't you, ignore this message.</p>`;
+      `To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): ${link}\n\nIf it wasn't you, ignore this message.`;
+    const html = `
+      <p>You requested to change your account email to ${newEmail}.</p>
+      <p>To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): 
+      <p style="font-weight: bold; font-size: 30px;">${code}</p>
+      <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
     await this.mailService.send(newEmail, subject, text, html);
   }
 
   async confirm(currentUserId: number, dto: EmailChangeConfirmDto) {
-    const data = await this.tokensService.getDataByEmailChangeToken(dto.token);
+    const data = await this.tokensService.getDataByEmailChangeToken(dto.code);
     if (
       !data ||
       typeof data.userId !== 'number' ||
@@ -97,7 +98,7 @@ export class EmailChangeService {
       await qr.manager.save(user);
       await qr.commitTransaction();
       await this.tokensService
-        .deleteEmailChangeToken(dto.token)
+        .deleteEmailChangeToken(dto.code)
         .catch(() => undefined);
       return this.authService.login(user.id);
     } catch (err) {

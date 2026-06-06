@@ -178,15 +178,4 @@ export class UsersService {
       await qr.release();
     }
   }
-
-  async setPhoneAfterConfirm(userId: number, phone: string) {
-    const exists = await this.usersRepository.findOne({
-      where: { phone_number: phone },
-    });
-    if (exists && exists.id !== userId) {
-      return this.errorsService.conflict('Phone already in use.');
-    }
-    await this.usersRepository.update({ id: userId }, { phone_number: phone });
-    return this.usersRepository.findOneByOrFail({ id: userId });
-  }
 }
