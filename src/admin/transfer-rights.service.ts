@@ -69,17 +69,15 @@ export class AdminTransferService {
     const code = this.tokensService.generateVerificationCode();
     await this.tokensService.saveTransferToken(code, from.id, to.id);
     const frontendUrl = this.envService.get('FRONTEND_URL');
-    const link = `${frontendUrl}/confirm-admin?code=${code}`;
+    const link = `${frontendUrl}/confirm-admin`;
     const subject = 'Administrator rights invitation';
     const greet = to.nickname ? `Hello, ${to.nickname}!` : 'Hello!';
-    const text =
-      `${greet}\n\nYou have been invited to receive administrator rights.\n` +
-      `To confirm, please use the link below (within ${this.emailChangeExpiresIn} min): ${link}\n\n` +
-      `If you did not request this, ignore the message.`;
-    const html =
-      `<p>${greet}</p><p>You have been invited to receive administrator rights.</p>` +
-      `<p>To confirm, please use the link below (within ${this.emailChangeExpiresIn} min): <a href="${link}">${link}</a></p>` +
-      `<p>If you did not request this, ignore the message.</p>`;
+    const text = `${greet}\n\nYou have been invited to receive administrator rights.\n To confirm, please follow the link and enter the code below (within ${this.emailChangeExpiresIn} min): ${link}\n\n ${code}\n\n If you did not request this, ignore the message.`;
+    const html = `
+      <p>${greet}</p><p>You have been invited to receive administrator rights.</p>
+      <p>To confirm, please follow the link and enter the code below (within ${this.emailChangeExpiresIn} min): <a href="${link}">${link}</a></p>
+      <p style="font-weight: bold; font-size: 30px;">${code}</p>
+      <p>If you did not request this, ignore the message.</p>`;
     await this.mailService.send(to.email, subject, text, html);
   }
 
