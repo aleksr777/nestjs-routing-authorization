@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { createClient, RedisClientType } from 'redis';
+import type { SetOptions } from '@redis/client/dist/lib/commands/SET';
 import { EnvService } from '../../common/env-service/env.service';
 import { ErrorsService } from '../../common/errors-service/errors.service';
 
@@ -31,8 +32,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
             console.log(`Redis connection closed on ${signal}`);
             process.exit(0);
           })
-          .catch((err) => {
-            this.errorsService.default(err, 'Redis error (shutdownSignals).');
+          .catch(() => {
+            console.error('Redis error (shutdownSignals)');
             process.exit(1);
           });
       });
@@ -61,9 +62,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return this.client;
   }
 
-  async set(key: string, value: string, options?: Record<string, any>) {
+  async set(
+    key: string,
+    value: string,
+    options?: SetOptions,
+  ): Promise<string | null> {
     try {
-      await this.client.set(key, value, options);
+      return await this.client.set(key, value, options);
     } catch (err) {
       this.errorsService.default(err, 'Redis error (set).');
     }
@@ -79,7 +84,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async del(key: string) {
     try {
-      await this.client.del(key);
+      return await this.client.del(key);
     } catch (err) {
       this.errorsService.default(err, 'Redis error (del).');
     }

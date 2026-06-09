@@ -23,36 +23,22 @@ export class ErrorsService {
     );
   }
 
-  private parseColumnsFromDetail(detail?: string): string[] {
-    if (!detail) return [];
-    const re = /Key\s*\(([^)]+)\)\s*=\s*\(/gi;
-    const acc = new Set<string>();
-    for (const m of detail.matchAll(re)) {
-      m[1]
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .forEach((f) => acc.add(f));
-    }
-    return [...acc];
-  }
-
   private getInvalidTokenMessage(tokenType?: TokenType): string {
     switch (tokenType) {
       case TokenType.ACCESS:
         return ErrMsg.INVALID_ACCESS_TOKEN;
       case TokenType.REFRESH:
         return ErrMsg.INVALID_REFRESH_TOKEN;
-      case TokenType.RESET:
-        return ErrMsg.INVALID_RESET_CODE;
       case TokenType.REGISTRATION:
         return ErrMsg.INVALID_REGISTRATION_CODE;
-      case TokenType.ADMIN_TRANSFER:
-        return ErrMsg.INVALID_ADMIN_TRANSFER_CODE;
+      case TokenType.RESET:
+        return ErrMsg.INVALID_RESET_CODE;
       case TokenType.EMAIL_CHANGE:
         return ErrMsg.INVALID_EMAIL_CHANGE_CODE;
       case TokenType.PASSWORD_CHANGE:
         return ErrMsg.INVALID_PASSWORD_CHANGE_CODE;
+      case TokenType.ADMIN_TRANSFER:
+        return ErrMsg.INVALID_ADMIN_TRANSFER_CODE;
       default:
         return ErrMsg.INVALID_TOKEN;
     }
@@ -79,13 +65,13 @@ export class ErrorsService {
     }
   }
 
-  default(err?: unknown, message?: string) {
+  default(err?: unknown, message?: string): never {
     const msg = message ?? ErrMsg.INTERNAL_SERVER_ERROR;
     if (err) console.error(msg, err);
     throw new InternalServerErrorException(msg);
   }
 
-  badRequest(message?: string, fields?: string[]) {
+  badRequest(message?: string, fields?: string[]): never {
     const msg = message ?? 'Bad Request';
     if (fields && fields.length > 0) {
       throw new BadRequestException({
@@ -96,7 +82,7 @@ export class ErrorsService {
     throw new BadRequestException(msg);
   }
 
-  conflict(message?: string) {
+  conflict(message?: string): never {
     const msg = message ?? 'Conflict Exception';
     throw new ConflictException(msg);
   }
@@ -119,17 +105,17 @@ export class ErrorsService {
     }
   }
 
-  forbidden(message?: string) {
+  forbidden(message?: string): never {
     const msg = message ?? 'Forbidden';
     throw new ForbiddenException(msg);
   }
 
-  tokenNotDefined(tokenType?: TokenType) {
+  tokenNotDefined(tokenType?: TokenType): never {
     const errMessage = this.getTokenNotDefinedMessage(tokenType);
     throw new UnauthorizedException(errMessage);
   }
 
-  invalidToken(err: unknown, tokenType?: TokenType) {
+  invalidToken(err: unknown, tokenType?: TokenType): never {
     const errMessage = this.getInvalidTokenMessage(tokenType);
     if (!err) {
       throw new UnauthorizedException(errMessage);
@@ -149,6 +135,7 @@ export class ErrorsService {
     ) {
       throw new UnauthorizedException(errMessage);
     }
+    throw new UnauthorizedException(errMessage);
   }
 
   invalidEmailOrPassword(err: unknown, isPasswordValid?: boolean) {
@@ -163,11 +150,11 @@ export class ErrorsService {
     }
   }
 
-  jwtTokenBlacklisted() {
+  jwtTokenBlacklisted(): never {
     throw new UnauthorizedException(ErrMsg.ACCESS_TOKEN_IS_BLACKLISTED);
   }
 
-  resetPassword(err: unknown) {
+  resetPassword(err: unknown): never {
     if (
       err instanceof BadRequestException ||
       err instanceof UnauthorizedException ||
@@ -178,7 +165,7 @@ export class ErrorsService {
     this.default(err);
   }
 
-  confirmRegistration(err: unknown) {
+  confirmRegistration(err: unknown): never {
     if (
       err instanceof BadRequestException ||
       err instanceof UnauthorizedException
@@ -188,14 +175,14 @@ export class ErrorsService {
     this.default(err);
   }
 
-  accountBlocked(reason: string | null | undefined) {
+  accountBlocked(reason: string | null | undefined): never {
     const message = reason
       ? `${ErrMsg.ACCOUNT_BLOCKED} Reason: ${reason}`
       : ErrMsg.ACCOUNT_BLOCKED;
     throw new UnauthorizedException(message);
   }
 
-  throwIfServiceEmail() {
+  throwIfServiceEmail(): never {
     throw new BadRequestException(ErrMsg.SERVICE_EMAIL_MATCH_USER_EMAIL);
   }
 }

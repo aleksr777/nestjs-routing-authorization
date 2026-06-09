@@ -37,8 +37,7 @@ export class PasswordResetService {
         select: [ID],
       });
       if (user) {
-        const code = this.tokensService.generateVerificationCode();
-        await this.tokensService.saveResetToken(user.id, code);
+        const code = await this.tokensService.getResetCode(user.id);
         const text = `Hi, this is an automated message, please do not reply! You can reset your password by using the code below (within ${this.resetExpiresIn} min): ${code}`;
         const html = `
           <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
@@ -57,7 +56,7 @@ export class PasswordResetService {
 
   async confirm(code: string, newPassword: string) {
     try {
-      const userId = await this.tokensService.getUserIdByResetToken(code);
+      const userId = await this.tokensService.getIdByResetCode(code);
       if (!userId) {
         this.errorsService.invalidToken(null, TokenType.RESET);
         return;
@@ -70,7 +69,7 @@ export class PasswordResetService {
       if (result.affected === 0) {
         this.errorsService.userNotFound();
       }
-      await this.tokensService.deleteResetToken(code);
+      await this.tokensService.deletePassResetCode(code);
       return this.authService.login(userId);
     } catch (err: unknown) {
       this.errorsService.resetPassword(err);

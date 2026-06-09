@@ -7,7 +7,6 @@ export enum ErrMsg {
   TOKEN_NOT_DEFINED = 'Token is not defined.',
   ACCESS_TOKEN_NOT_DEFINED = 'Access token is not defined.',
   REFRESH_TOKEN_NOT_DEFINED = 'Refresh token is not defined.',
-
   ADMIN_TRANSFER_CODE_NOT_DEFINED = 'Admin transfer code is not defined.',
   RESET_CODE_NOT_DEFINED = 'Reset code is not defined.',
   REGISTRATION_CODE_NOT_DEFINED = 'Registration code is not defined.',
@@ -15,14 +14,22 @@ export enum ErrMsg {
   PASSWORD_CHANGE_CODE_NOT_DEFINED = 'Password change code is not defined.',
 
   INVALID_TOKEN = 'Invalid token.',
+
   INVALID_ACCESS_TOKEN = 'Access token is expired or invalid.',
   INVALID_REFRESH_TOKEN = 'Refresh token is expired or invalid.',
-
-  INVALID_ADMIN_TRANSFER_CODE = 'Admin transfer code is expired or invalid. Please request a new one.',
-  INVALID_RESET_CODE = 'Reset code is expired or invalid. Please request a new one.',
   INVALID_REGISTRATION_CODE = 'Registration code is expired or invalid. Please request a new one.',
-  INVALID_EMAIL_CHANGE_CODE = 'Invalid email change code is expired or invalid. Please request a new one.',
-  INVALID_PASSWORD_CHANGE_CODE = 'Invalid password change code is expired or invalid. Please request a new one.',
+  INVALID_RESET_CODE = 'Reset code is expired or invalid. Please request a new one.',
+  INVALID_EMAIL_CHANGE_CODE = 'Email change code is expired or invalid. Please request a new one.',
+  INVALID_PASSWORD_CHANGE_CODE = 'Password change code is expired or invalid. Please request a new one.',
+  INVALID_ADMIN_TRANSFER_CODE = 'Admin transfer code is expired or invalid. Please request a new one.',
+
+  UNABLE_GENERATE_UNIQUE_CODE = 'Unable to generate unique code.',
+
+  INVALID_REGISTRATION_PAYLOAD = 'Invalid registration payload',
+
+  USER_ID_NOT_DEFINED = 'User id is not defined',
+
+  PAYLOAD_NOT_DEFINED = 'Payload is not defined',
 
   USER_NOT_FOUND = 'User was not found in the database.',
   ADMIN_NOT_FOUND = 'Admin was not found in the database.',

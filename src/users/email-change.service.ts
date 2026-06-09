@@ -13,6 +13,7 @@ import {
   ID,
   EMAIL,
   IS_BLOCKED,
+  ROLE,
 } from '../common/constants/user-select-fields.constants';
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokenType } from '../common/types/token-type.type';
@@ -39,75 +40,90 @@ export class EmailChangeService {
       .catch((err) => this.errorsService.userNotFound(err));
     const currentUser = user as User;
     const currentEmail = currentUser.email;
-    const newEmail = dto.new_email;
+    const newEmail = dto.new_email.trim().toLowerCase();
+    this.mailService.validateNotServiceEmail(newEmail);
     if (currentEmail === newEmail) {
       this.errorsService.forbidden(ErrMsg.NEW_EMAIL_MATCH_USER_EMAIL);
     }
     if (currentUser.is_blocked) {
       this.errorsService.badRequest(ErrMsg.CURRENT_USER_BLOCKED);
     }
-    this.mailService.validateNotServiceEmail(newEmail);
-    const code = this.tokensService.generateVerificationCode();
-    await this.tokensService.saveEmailChangeToken(code, userId, newEmail);
-    const frontendUrl = this.envService.get('FRONTEND_URL');
-    const link = `${frontendUrl}/confirm-email?code=${code}`;
-    const subject = 'Confirm your new email';
+    const existingUser = await this.usersRepository.findOne({
+      where: { email: newEmail },
+      select: [ID],
+    });
+    if (existingUser) {
+      this.errorsService.conflict(ErrMsg.CONFLICT_USER_EXISTS);
+    }
+    const redisValue = { user_id: userId, new_email: newEmail };
+    const code = await this.tokensService.getEmailChangeCode(redisValue);
     const text =
       `You requested to change your account email to ${newEmail}.\n` +
-      `To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): ${link}\n\nIf it wasn't you, ignore this message.`;
+      `To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): ${code}\n\nIf it wasn't you, ignore this message.`;
     const html = `
       <p>You requested to change your account email to ${newEmail}.</p>
       <p>To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): 
       <p style="font-weight: bold; font-size: 30px;">${code}</p>
       <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
-    await this.mailService.send(newEmail, subject, text, html);
+    await this.mailService.send(newEmail, 'Confirm your new email', text, html);
   }
 
-  async confirm(currentUserId: number, dto: EmailChangeConfirmDto) {
-    const data = await this.tokensService.getDataByEmailChangeToken(dto.code);
-    if (
-      !data ||
-      typeof data.userId !== 'number' ||
-      typeof data.new_email !== 'string'
-    ) {
-      return this.errorsService.invalidToken(null, TokenType.EMAIL_CHANGE);
-    }
-    this.mailService.validateNotServiceEmail(data.new_email);
-    if (
-      !data ||
-      typeof data.userId !== 'number' ||
-      typeof data.new_email !== 'string'
-    ) {
-      return this.errorsService.invalidToken(null, TokenType.EMAIL_CHANGE);
-    }
-    if (data.userId !== currentUserId) {
-      throw new ForbiddenException(ErrMsg.TOKEN_NOT_ISSUED_FOR_CURRENT_USER);
-    }
-    const qr = this.dataSource.createQueryRunner();
-    await qr.connect();
-    await qr.startTransaction();
-    try {
-      const user = await qr.manager.findOneOrFail(User, {
-        where: { id: currentUserId },
-        select: [ID, EMAIL, IS_BLOCKED],
-      });
-      if (user?.is_blocked) {
-        this.errorsService.badRequest(ErrMsg.CURRENT_USER_BLOCKED);
+  async confirm(
+    currentUserId: number,
+    dto: EmailChangeConfirmDto,
+    access_token: string | undefined,
+  ) {
+    if (!access_token) {
+      this.errorsService.tokenNotDefined(TokenType.ACCESS);
+    } else {
+      const data = await this.tokensService.getDataByEmailChangeCode(dto.code);
+      if (
+        !data ||
+        typeof data.user_id !== 'number' ||
+        typeof data.new_email !== 'string'
+      ) {
+        this.errorsService.invalidToken(null, TokenType.EMAIL_CHANGE);
       }
-      user.email = data.new_email;
-      await qr.manager.save(user);
-      await qr.commitTransaction();
-      await this.tokensService
-        .deleteEmailChangeToken(dto.code)
-        .catch(() => undefined);
-      return this.authService.login(user.id);
-    } catch (err) {
-      await qr.rollbackTransaction();
-      if (err instanceof HttpException) throw err;
-      this.errorsService.userConflict(err);
-      this.errorsService.default(err);
-    } finally {
-      await qr.release();
+      if (data.user_id !== currentUserId) {
+        throw new ForbiddenException(ErrMsg.TOKEN_NOT_ISSUED_FOR_CURRENT_USER);
+      }
+      const newEmail = data.new_email.trim().toLowerCase();
+      this.mailService.validateNotServiceEmail(newEmail);
+      try {
+        const user = await this.usersRepository.findOneOrFail({
+          where: { id: currentUserId },
+          select: [ID, EMAIL, IS_BLOCKED, ROLE],
+        });
+        if (user.is_blocked) {
+          this.errorsService.badRequest(ErrMsg.CURRENT_USER_BLOCKED);
+        }
+        if (user.email.trim().toLowerCase() === newEmail) {
+          this.errorsService.forbidden(ErrMsg.NEW_EMAIL_MATCH_USER_EMAIL);
+        }
+        const isEmailTaken = await this.usersRepository.exists({
+          where: { email: newEmail },
+        });
+        if (isEmailTaken) {
+          this.errorsService.conflict(ErrMsg.CONFLICT_USER_EXISTS);
+        }
+        user.email = newEmail;
+        await this.usersRepository.save(user);
+        await this.tokensService
+          .deleteEmailChangeCode(dto.code)
+          .catch(() => undefined);
+        await this.tokensService.addJwtTokenToBlacklist(
+          access_token,
+          TokenType.ACCESS,
+        );
+        return this.authService.login(user.id);
+      } catch (err) {
+        if (err instanceof HttpException) {
+          throw err;
+        }
+        this.errorsService.userNotFound(err);
+        this.errorsService.userConflict(err, [EMAIL]);
+        this.errorsService.default(err);
+      }
     }
   }
 }

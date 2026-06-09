@@ -7,6 +7,7 @@ import { RedisService } from '../common/redis-service/redis.service';
 import { JwtService } from '@nestjs/jwt';
 import { EnvService } from '../common/env-service/env.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
+import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { JwtPayload } from '../common/types/jwt-payload.type';
 import { TokenType } from '../common/types/token-type.type';
 
@@ -170,35 +171,40 @@ export class TokensService {
     return randomInt(100_000, 1_000_000).toString();
   }
 
-  /* Reset token */
-  async saveResetToken(userId: number, code: string): Promise<void> {
-    const id = userId.toString();
-    await this.redisService.set(`${RESET_REDIS_PREFIX}${code}`, id, {
-      EX: this.resetExpiresIn,
-    });
+  private async saveVerificationToken(
+    prefix: string,
+    value: string,
+    expiresIn: number,
+  ): Promise<string> {
+    const maxAttempts = 100;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const code = this.generateVerificationCode();
+      const key = `${prefix}${code}`;
+      const result = await this.redisService.set(key, value, {
+        EX: expiresIn,
+        NX: true,
+      });
+      if (result === 'OK') {
+        return code;
+      }
+    }
+    this.errorsService.default(null, ErrMsg.UNABLE_GENERATE_UNIQUE_CODE);
   }
 
-  async getUserIdByResetToken(code: string): Promise<number | null> {
-    const userId = await this.redisService.get(`${RESET_REDIS_PREFIX}${code}`);
-    return userId ? parseInt(userId, 10) : null;
-  }
-
-  async deleteResetToken(code: string) {
-    await this.redisService.del(`${RESET_REDIS_PREFIX}${code}`);
-  }
-
-  /* Registration token */
-  async saveRegistrationToken(code: string, value: unknown) {
+  /* REGISTRATION CODE */
+  async getRegistrationCode(value: { email: string; password: string }) {
     if (!this.isRegistrationPayload(value)) {
-      this.errorsService.default(null, 'Invalid registration payload');
+      this.errorsService.default(null, ErrMsg.INVALID_REGISTRATION_PAYLOAD);
     }
     const json = JSON.stringify(value);
-    await this.redisService.set(`${REGISTER_REDIS_PREFIX}${code}`, json, {
-      EX: this.registrationExpiresIn,
-    });
+    return this.saveVerificationToken(
+      REGISTER_REDIS_PREFIX,
+      json,
+      this.registrationExpiresIn,
+    );
   }
 
-  async getDataByRegistrationToken(
+  async getDataByRegistrationCode(
     code: string,
   ): Promise<{ email: string; password: string } | null> {
     const json = await this.redisService.get(`${REGISTER_REDIS_PREFIX}${code}`);
@@ -215,11 +221,84 @@ export class TokensService {
     return null;
   }
 
-  async deleteRegistrationToken(code: string) {
+  async deleteRegistrationCode(code: string) {
     await this.redisService.del(`${REGISTER_REDIS_PREFIX}${code}`);
   }
 
-  /* Transfer token */
+  /* RESET CODE */
+  async getResetCode(userId: number) {
+    if (!userId) {
+      this.errorsService.default(null, ErrMsg.USER_ID_NOT_DEFINED);
+    }
+    const id = userId.toString();
+    return this.saveVerificationToken(
+      RESET_REDIS_PREFIX,
+      id,
+      this.resetExpiresIn,
+    );
+  }
+
+  async getIdByResetCode(code: string): Promise<number | null> {
+    const userId = await this.redisService.get(`${RESET_REDIS_PREFIX}${code}`);
+    return userId ? parseInt(userId, 10) : null;
+  }
+
+  async deletePassResetCode(code: string) {
+    await this.redisService.del(`${RESET_REDIS_PREFIX}${code}`);
+  }
+
+  /* EMAIL CHANGE CODE */
+  async getEmailChangeCode(value: { user_id: number; new_email: string }) {
+    if (!value) {
+      this.errorsService.default(null, ErrMsg.PAYLOAD_NOT_DEFINED);
+    }
+    const json = JSON.stringify(value);
+    return this.saveVerificationToken(
+      EMAIL_CHANGE_REDIS_PREFIX,
+      json,
+      this.emailChangeTokenExpiresIn,
+    );
+  }
+
+  async getDataByEmailChangeCode(code: string) {
+    const raw = await this.redisService.get(
+      `${EMAIL_CHANGE_REDIS_PREFIX}${code}`,
+    );
+    if (!raw) {
+      return undefined;
+    } else {
+      const data = JSON.parse(raw) as {
+        user_id: number;
+        new_email: string;
+      };
+      return data;
+    }
+  }
+
+  async deleteEmailChangeCode(code: string) {
+    await this.redisService.del(`${EMAIL_CHANGE_REDIS_PREFIX}${code}`);
+  }
+
+  /* PASSWORD CHANGE CODE*/
+  async savePasswordChangeToken(code: string, userId: number) {
+    const ttl = this.passwordChangeTokenExpiresIn;
+    await this.redisService.set(
+      `${PASSWORD_CHANGE_PREFIX}${code}`,
+      String(userId),
+      { EX: ttl },
+    );
+  }
+
+  async getUserIdByPasswordChangeToken(code: string): Promise<number | null> {
+    const v = await this.redisService.get(`${PASSWORD_CHANGE_PREFIX}${code}`);
+    return v ? parseInt(v, 10) : null;
+  }
+
+  async deletePasswordChangeToken(code: string) {
+    await this.redisService.del(`${PASSWORD_CHANGE_PREFIX}${code}`);
+  }
+
+  /* ADMIN TRANSFER CODE */
   async saveTransferToken(code: string, fromId: number, toId: number) {
     await this.redisService.set(
       `${ADMIN_TRANSFER_REDIS_PREFIX}${code}`,
@@ -249,56 +328,5 @@ export class TokensService {
 
   async deleteTransferToken(code: string) {
     await this.redisService.del(`${ADMIN_TRANSFER_REDIS_PREFIX}${code}`);
-  }
-
-  /* Email change token */
-  async saveEmailChangeToken(code: string, userId: number, new_email: string) {
-    await this.redisService.set(
-      `${EMAIL_CHANGE_REDIS_PREFIX}${code}`,
-      JSON.stringify({ userId: userId, new_email: new_email }),
-      {
-        EX: this.emailChangeTokenExpiresIn,
-      },
-    );
-  }
-
-  async getDataByEmailChangeToken(
-    code: string,
-  ): Promise<{ userId: number; new_email: string } | undefined> {
-    const raw = await this.redisService.get(
-      `${EMAIL_CHANGE_REDIS_PREFIX}${code}`,
-    );
-    if (!raw) {
-      return undefined;
-    } else {
-      const data = JSON.parse(raw) as {
-        userId: number;
-        new_email: string;
-      };
-      return data;
-    }
-  }
-
-  async deleteEmailChangeToken(code: string) {
-    await this.redisService.del(`${EMAIL_CHANGE_REDIS_PREFIX}${code}`);
-  }
-
-  /* Password change token*/
-  async savePasswordChangeToken(code: string, userId: number) {
-    const ttl = this.passwordChangeTokenExpiresIn;
-    await this.redisService.set(
-      `${PASSWORD_CHANGE_PREFIX}${code}`,
-      String(userId),
-      { EX: ttl },
-    );
-  }
-
-  async getUserIdByPasswordChangeToken(code: string): Promise<number | null> {
-    const v = await this.redisService.get(`${PASSWORD_CHANGE_PREFIX}${code}`);
-    return v ? parseInt(v, 10) : null;
-  }
-
-  async deletePasswordChangeToken(code: string) {
-    await this.redisService.del(`${PASSWORD_CHANGE_PREFIX}${code}`);
   }
 }

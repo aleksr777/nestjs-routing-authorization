@@ -55,10 +55,9 @@ export class RegistrationService {
         `;
         await this.mailService.send(email, `Password recovery`, text, html);
       } else {
-        const code = this.tokensService.generateVerificationCode();
         const hashedPassword = await this.hashService.hash(password);
         const redisValue = { email: email, password: hashedPassword };
-        await this.tokensService.saveRegistrationToken(code, redisValue);
+        const code = await this.tokensService.getRegistrationCode(redisValue);
         const text = `Hi, this is an automated message, please do not reply! You can confirm your registration by using the code below (within ${this.registrationExpiresIn} min): ${code}`;
         const html = `
           <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
@@ -81,7 +80,7 @@ export class RegistrationService {
     await qr.connect();
     await qr.startTransaction();
     try {
-      const data = await this.tokensService.getDataByRegistrationToken(code);
+      const data = await this.tokensService.getDataByRegistrationCode(code);
       if (!data) {
         this.errorsService.invalidToken(null, TokenType.REGISTRATION);
         return;
@@ -107,7 +106,7 @@ export class RegistrationService {
       });
       await qr.manager.save(User, newUser);
       await qr.commitTransaction();
-      await this.tokensService.deleteRegistrationToken(code);
+      await this.tokensService.deleteRegistrationCode(code);
       return this.authService.login(newUser.id);
     } catch (err: unknown) {
       await qr.rollbackTransaction();

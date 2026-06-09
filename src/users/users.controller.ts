@@ -65,7 +65,8 @@ export class UsersController {
   confirmUpdateEmail(@Body() dto: EmailChangeConfirmDto, @Req() req: Request) {
     const user = req.user as User;
     const userId = +user.id;
-    return this.emailChangeService.confirm(userId, dto);
+    const access_token = req.headers.authorization;
+    return this.emailChangeService.confirm(userId, dto, access_token);
   }
 
   @Post('me/password/verify-old')
