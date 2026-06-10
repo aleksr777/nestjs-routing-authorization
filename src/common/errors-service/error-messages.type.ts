@@ -33,10 +33,18 @@ export enum ErrMsg {
 
   USER_NOT_FOUND = 'User was not found in the database.',
   ADMIN_NOT_FOUND = 'Admin was not found in the database.',
+
   CONFLICT_USER_EXISTS = 'A user with such unique data already exists in the database.',
+
   INSUFFICIENT_ACCESS_RIGHTS = 'The current user has insufficient access rights.',
+
   AUTHORIZED = 'User is not authorized.',
-  ACCOUNT_BLOCKED = 'Account has been blocked by the administrator.',
+
+  ACCOUNT_BLOCKED = 'Account has been blocked.',
+  ACCOUNT_ALREADY_BLOCKED = 'This account has already been blocked.',
+  ACCOUNT_NOT_BLOCKED = 'This account is not blocked.',
+  ADMINISTRATOR_CANNOT_BE_BLOCKED = 'The administrator cannot be blocked.',
+  ADMINISTRATOR_CANNOT_BE_DELETED = 'The administrator cannot be deleted.',
 
   ONLY_ADMINISTRATOR_TRANSFER = 'Only administrator can initiate a transfer.',
   CURRENT_USER_BLOCKED = 'Current user is blocked.',
@@ -56,4 +64,6 @@ export enum ErrMsg {
   NO_FIELDS_FOR_UPDATE = 'No fields provided for update.',
   FIELDS_CANNOT_BE_UPDATED = 'Some fields cannot be updated in this way.',
   FIELDS_CANNOT_BE_EMPTY = 'Some fields cannot be empty.',
+
+  INVALID_PAGINATION_PARAMETERS = 'Invalid pagination parameters.',
 }

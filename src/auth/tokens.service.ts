@@ -280,21 +280,26 @@ export class TokensService {
   }
 
   /* PASSWORD CHANGE CODE*/
-  async savePasswordChangeToken(code: string, userId: number) {
-    const ttl = this.passwordChangeTokenExpiresIn;
-    await this.redisService.set(
-      `${PASSWORD_CHANGE_PREFIX}${code}`,
-      String(userId),
-      { EX: ttl },
+  async getPasswordChangeCode(userId: number) {
+    if (!userId) {
+      this.errorsService.default(null, ErrMsg.USER_ID_NOT_DEFINED);
+    }
+    const id = userId.toString();
+    return this.saveVerificationToken(
+      PASSWORD_CHANGE_PREFIX,
+      id,
+      this.passwordChangeTokenExpiresIn,
     );
   }
 
-  async getUserIdByPasswordChangeToken(code: string): Promise<number | null> {
-    const v = await this.redisService.get(`${PASSWORD_CHANGE_PREFIX}${code}`);
-    return v ? parseInt(v, 10) : null;
+  async getIdByPasswordChangeCode(code: string): Promise<number | null> {
+    const userId = await this.redisService.get(
+      `${PASSWORD_CHANGE_PREFIX}${code}`,
+    );
+    return userId ? parseInt(userId, 10) : null;
   }
 
-  async deletePasswordChangeToken(code: string) {
+  async deletePasswordChangeCode(code: string) {
     await this.redisService.del(`${PASSWORD_CHANGE_PREFIX}${code}`);
   }
 

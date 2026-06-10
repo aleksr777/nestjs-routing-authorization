@@ -13,7 +13,6 @@ import {
   ID,
   EMAIL,
   IS_BLOCKED,
-  ROLE,
 } from '../common/constants/user-select-fields.constants';
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokenType } from '../common/types/token-type.type';
@@ -71,59 +70,59 @@ export class EmailChangeService {
   async confirm(
     currentUserId: number,
     dto: EmailChangeConfirmDto,
-    access_token: string | undefined,
+    accessToken: string | undefined,
   ) {
-    if (!access_token) {
+    if (!accessToken) {
       this.errorsService.tokenNotDefined(TokenType.ACCESS);
-    } else {
-      const data = await this.tokensService.getDataByEmailChangeCode(dto.code);
-      if (
-        !data ||
-        typeof data.user_id !== 'number' ||
-        typeof data.new_email !== 'string'
-      ) {
-        this.errorsService.invalidToken(null, TokenType.EMAIL_CHANGE);
+    }
+    const data = await this.tokensService.getDataByEmailChangeCode(dto.code);
+    if (
+      !data ||
+      typeof data.user_id !== 'number' ||
+      typeof data.new_email !== 'string'
+    ) {
+      this.errorsService.invalidToken(null, TokenType.EMAIL_CHANGE);
+    }
+    if (data.user_id !== currentUserId) {
+      throw new ForbiddenException(ErrMsg.TOKEN_NOT_ISSUED_FOR_CURRENT_USER);
+    }
+    const newEmail = data.new_email.trim().toLowerCase();
+    this.mailService.validateNotServiceEmail(newEmail);
+    try {
+      const user = await this.usersRepository.findOneOrFail({
+        where: { id: currentUserId },
+        select: [ID, EMAIL, IS_BLOCKED],
+      });
+      if (user.is_blocked) {
+        this.errorsService.badRequest(ErrMsg.CURRENT_USER_BLOCKED);
       }
-      if (data.user_id !== currentUserId) {
-        throw new ForbiddenException(ErrMsg.TOKEN_NOT_ISSUED_FOR_CURRENT_USER);
+      if (user.email.trim().toLowerCase() === newEmail) {
+        this.errorsService.forbidden(ErrMsg.NEW_EMAIL_MATCH_USER_EMAIL);
       }
-      const newEmail = data.new_email.trim().toLowerCase();
-      this.mailService.validateNotServiceEmail(newEmail);
-      try {
-        const user = await this.usersRepository.findOneOrFail({
-          where: { id: currentUserId },
-          select: [ID, EMAIL, IS_BLOCKED, ROLE],
-        });
-        if (user.is_blocked) {
-          this.errorsService.badRequest(ErrMsg.CURRENT_USER_BLOCKED);
-        }
-        if (user.email.trim().toLowerCase() === newEmail) {
-          this.errorsService.forbidden(ErrMsg.NEW_EMAIL_MATCH_USER_EMAIL);
-        }
-        const isEmailTaken = await this.usersRepository.exists({
-          where: { email: newEmail },
-        });
-        if (isEmailTaken) {
-          this.errorsService.conflict(ErrMsg.CONFLICT_USER_EXISTS);
-        }
-        user.email = newEmail;
-        await this.usersRepository.save(user);
-        await this.tokensService
-          .deleteEmailChangeCode(dto.code)
-          .catch(() => undefined);
-        await this.tokensService.addJwtTokenToBlacklist(
-          access_token,
-          TokenType.ACCESS,
-        );
-        return this.authService.login(user.id);
-      } catch (err) {
-        if (err instanceof HttpException) {
-          throw err;
-        }
-        this.errorsService.userNotFound(err);
-        this.errorsService.userConflict(err, [EMAIL]);
-        this.errorsService.default(err);
+      const isEmailTaken = await this.usersRepository.exists({
+        where: { email: newEmail },
+      });
+      if (isEmailTaken) {
+        this.errorsService.conflict(ErrMsg.CONFLICT_USER_EXISTS);
       }
+      user.email = newEmail;
+      await this.usersRepository.save(user);
+      await this.tokensService
+        .deleteEmailChangeCode(dto.code)
+        .catch(() => undefined);
+      await this.tokensService.removeRefreshToken(user.id);
+      await this.tokensService.addJwtTokenToBlacklist(
+        accessToken,
+        TokenType.ACCESS,
+      );
+      return this.authService.login(user.id);
+    } catch (err) {
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      this.errorsService.userNotFound(err);
+      this.errorsService.userConflict(err, [EMAIL]);
+      this.errorsService.default(err);
     }
   }
 }

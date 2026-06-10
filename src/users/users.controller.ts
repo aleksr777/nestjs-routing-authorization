@@ -73,11 +73,7 @@ export class UsersController {
   verifyOldPassword(@Body() dto: PasswordVerifyOldDto, @Req() req: Request) {
     const user = req.user as User;
     const userId = +user.id;
-    const oldPassword = dto.old_password;
-    return this.passwordChangeService.issuePasswordChangeToken(
-      userId,
-      oldPassword,
-    );
+    return this.passwordChangeService.request(userId, dto.old_password);
   }
 
   @Post('me/password/change')
@@ -86,14 +82,12 @@ export class UsersController {
     @Req() req: Request,
   ) {
     const user = req.user as User;
-    const accessToken = req.headers.authorization;
-    const newPassword = dto.new_password;
-    const changeCode = dto.code;
     const userId = +user.id;
-    return this.passwordChangeService.changePasswordByToken(
+    const accessToken = req.headers.authorization;
+    return this.passwordChangeService.confirm(
       userId,
-      changeCode,
-      newPassword,
+      dto.code,
+      dto.new_password,
       accessToken,
     );
   }

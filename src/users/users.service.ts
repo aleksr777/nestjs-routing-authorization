@@ -51,36 +51,33 @@ export class UsersService {
   async deleteCurrentUser(userId: number, access_token: string | undefined) {
     if (!access_token) {
       this.errorsService.tokenNotDefined(TokenType.ACCESS);
-    } else {
-      const qr = this.dataSource.createQueryRunner();
-      await qr.connect();
-      await qr.startTransaction();
-      try {
-        const user = await qr.manager.findOneOrFail(User, {
-          where: { id: userId },
-          select: [ID, ROLE],
-        });
-        if (user.role === Role.ADMIN) {
-          this.errorsService.badRequest(
-            'Administrator account cannot be deleted.',
-          );
-        }
-        await qr.manager.delete(User, { id: userId });
-        await this.tokensService.addJwtTokenToBlacklist(
-          access_token,
-          TokenType.ACCESS,
-        );
-        await qr.commitTransaction();
-      } catch (err: unknown) {
-        await qr.rollbackTransaction();
-        if (err instanceof HttpException) {
-          throw err;
-        }
-        this.errorsService.userNotFound(err);
-        this.errorsService.default(err);
-      } finally {
-        await qr.release();
+    }
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const user = await qr.manager.findOneOrFail(User, {
+        where: { id: userId },
+        select: [ID, ROLE],
+      });
+      if (user.role === Role.ADMIN) {
+        this.errorsService.badRequest(ErrMsg.ADMINISTRATOR_CANNOT_BE_DELETED);
       }
+      await qr.manager.delete(User, { id: userId });
+      await this.tokensService.addJwtTokenToBlacklist(
+        access_token,
+        TokenType.ACCESS,
+      );
+      await qr.commitTransaction();
+    } catch (err: unknown) {
+      await qr.rollbackTransaction();
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      this.errorsService.userNotFound(err);
+      this.errorsService.default(err);
+    } finally {
+      await qr.release();
     }
   }
 
