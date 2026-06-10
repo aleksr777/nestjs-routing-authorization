@@ -69,14 +69,14 @@ export class UsersController {
     return this.emailChangeService.confirm(userId, dto, access_token);
   }
 
-  @Post('me/password/verify-old')
+  @Post('me/password/change/request')
   verifyOldPassword(@Body() dto: PasswordVerifyOldDto, @Req() req: Request) {
     const user = req.user as User;
     const userId = +user.id;
     return this.passwordChangeService.request(userId, dto.old_password);
   }
 
-  @Post('me/password/change')
+  @Post('me/password/change/confirm')
   changePasswordByToken(
     @Body() dto: PasswordChangeByTokenDto,
     @Req() req: Request,

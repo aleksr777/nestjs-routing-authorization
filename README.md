@@ -125,8 +125,8 @@ npx typeorm-ts-node-commonjs migration:run -d data-source.ts
 ### Users
 
 - `GET /api/users/me` — Get current user's profile
-- `POST /users/me/password/verify-old` — Verifying old password
-- `POST /users/me/password/change` — Changing password after verifying old password
+- `POST /users/me/password/change/request` — Request a password change with verification of the old password
+- `POST /users/me/password/change/confirm` — Confirm a password change
 - `POST /api/users/me/email/update/request` — Request update email
 - `POST /api/users/me/email/update/confirm` — Confirm update email
 - `DELETE /api/users/me/delete` — Delete current user
