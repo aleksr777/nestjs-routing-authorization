@@ -2,7 +2,6 @@ import { randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { randomInt } from 'crypto';
 import { User } from '../users/entities/user.entity';
 import { RedisService } from '../common/redis-service/redis.service';
 import { JwtService } from '@nestjs/jwt';
