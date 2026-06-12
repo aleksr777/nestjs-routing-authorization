@@ -14,7 +14,6 @@ import { TokenType } from '../common/types/token-type.type';
 @Injectable()
 export class PasswordResetService {
   config: any;
-  private readonly frontendUrl: string;
   private readonly resetExpiresIn: number;
   constructor(
     @InjectRepository(User)
@@ -26,7 +25,6 @@ export class PasswordResetService {
     private readonly mailService: MailService,
     private readonly envService: EnvService,
   ) {
-    this.frontendUrl = this.envService.get('FRONTEND_URL');
     this.resetExpiresIn =
       this.envService.get('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
   }
@@ -39,29 +37,26 @@ export class PasswordResetService {
         select: [ID],
       });
       if (user) {
-        const token = this.tokensService.generateVerificationToken();
-        await this.tokensService.saveResetToken(user.id, token);
-        const resetUrl = `${this.frontendUrl}/reset-password?token=${token}`;
-        const text = `Hi, this is an automated message, please do not reply! You can reset your password by clicking the link below (within ${this.resetExpiresIn} min): ${resetUrl}`;
+        const code = await this.tokensService.getResetCode(user.id);
+        const text = `Hi, this is an automated message, please do not reply! You can reset your password by using the code below (within ${this.resetExpiresIn} min): ${code}`;
         const html = `
           <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
-          <p style="font-weight: bold; font-size: 17px;">You can reset your password by clicking the link below (within ${this.resetExpiresIn} min):</p>
-          <p style="font-weight: bold; font-size: 17px;">
-            <a href="${resetUrl}" style="font-weight: bold;">${resetUrl}</a>
-          </p>`;
+          <p style="font-weight: bold; font-size: 17px;">You can reset your password by using the code below (within ${this.resetExpiresIn} min):</p>
+          <p style="font-weight: bold; font-size: 30px;">${code}</p>
+          <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
         await this.mailService.send(email, `Password recovery`, text, html);
       }
       return {
-        message: 'If the email exists, we’ve sent you a password reset link.',
+        message: 'If the email exists, we’ve sent you a password reset code.',
       };
     } catch (err: unknown) {
       this.errorsService.default(err);
     }
   }
 
-  async confirm(token: string, newPassword: string) {
+  async confirm(code: string, newPassword: string) {
     try {
-      const userId = await this.tokensService.getUserIdByResetToken(token);
+      const userId = await this.tokensService.getIdByResetCode(code);
       if (!userId) {
         this.errorsService.invalidToken(null, TokenType.RESET);
         return;
@@ -74,9 +69,8 @@ export class PasswordResetService {
       if (result.affected === 0) {
         this.errorsService.userNotFound();
       }
-      await this.tokensService.deleteResetToken(token);
-      const tokens = await this.authService.refreshJwtTokens(userId);
-      return tokens;
+      await this.tokensService.deletePassResetCode(code);
+      return this.authService.login(userId);
     } catch (err: unknown) {
       this.errorsService.resetPassword(err);
     }

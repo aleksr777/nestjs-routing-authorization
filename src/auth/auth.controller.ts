@@ -48,7 +48,7 @@ export class AuthController {
 
   @Post('registration/confirm')
   async confirmRegistration(@Body() dto: RegistrationConfirmDto) {
-    return this.registrationService.confirm(dto.token);
+    return this.registrationService.confirm(dto.code);
   }
 
   @Post('password-reset/request')
@@ -58,6 +58,6 @@ export class AuthController {
 
   @Post('password-reset/confirm')
   resetPassword(@Body() dto: PasswordResetConfirmDto) {
-    return this.passwordResetService.confirm(dto.token, dto.new_password);
+    return this.passwordResetService.confirm(dto.code, dto.new_password);
   }
 }

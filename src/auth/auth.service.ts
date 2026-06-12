@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  HttpException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TokensService } from './tokens.service';
@@ -80,11 +85,13 @@ export class AuthService {
     } catch (err: unknown) {
       this.errorsService.userNotFound(err);
       this.errorsService.default(err);
-      throw err;
     }
   }
 
-  async validateUserByRefreshToken(id: number, refresh_token: string) {
+  async validateUserByRefreshToken(
+    id: number,
+    refresh_token: string,
+  ): Promise<User> {
     try {
       const user = await this.usersRepository.findOneOrFail({
         where: { id },
@@ -97,12 +104,11 @@ export class AuthService {
       });
       const isTokensMatch = refresh_token === user.refresh_token;
       if (!isTokensMatch) {
-        return this.errorsService.invalidToken(null, TokenType.REFRESH);
+        this.errorsService.invalidToken(null, TokenType.REFRESH);
       }
       return user;
     } catch (err: unknown) {
       this.errorsService.invalidToken(err, TokenType.REFRESH);
-      this.errorsService.default(err);
     }
   }
 
@@ -119,17 +125,18 @@ export class AuthService {
   async logout(userId: number, access_token: string | undefined) {
     if (!access_token) {
       this.errorsService.tokenNotDefined(TokenType.ACCESS);
-    } else {
-      try {
-        await this.tokensService.removeRefreshToken(userId);
-        await this.tokensService.addJwtTokenToBlacklist(
-          access_token,
-          TokenType.ACCESS,
-        );
-      } catch (err: unknown) {
+    }
+    try {
+      await this.tokensService.removeRefreshToken(userId);
+      await this.tokensService.addJwtTokenToBlacklist(
+        access_token,
+        TokenType.ACCESS,
+      );
+    } catch (err: unknown) {
+      if (err instanceof UnauthorizedException) {
         this.errorsService.invalidToken(err, TokenType.ACCESS);
-        this.errorsService.default(err);
       }
+      this.errorsService.default(err);
     }
   }
 
@@ -139,7 +146,15 @@ export class AuthService {
       await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
       return tokens;
     } catch (err: unknown) {
-      this.errorsService.invalidToken(err, TokenType.REFRESH);
+      if (
+        err instanceof UnauthorizedException ||
+        err instanceof NotFoundException
+      ) {
+        this.errorsService.invalidToken(err, TokenType.REFRESH);
+      }
+      if (err instanceof HttpException) {
+        throw err;
+      }
       this.errorsService.default(err);
     }
   }

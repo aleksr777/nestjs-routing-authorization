@@ -8,6 +8,7 @@ import { EnvService } from '../common/env-service/env.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokensService } from '../auth/tokens.service';
+import { AuthService } from '../auth/auth.service';
 import { Role } from '../common/types/role.enum';
 import { TokenType } from '../common/types/token-type.type';
 import {
@@ -28,6 +29,7 @@ export class AdminTransferService {
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly tokensService: TokensService,
+    private readonly authService: AuthService,
   ) {
     this.emailChangeExpiresIn =
       this.envService.get('EMAIL_CHANGE_TOKEN_EXPIRES_IN', 'number') / 60;
@@ -64,25 +66,23 @@ export class AdminTransferService {
     if (to.role === Role.ADMIN) {
       this.errorsService.badRequest(ErrMsg.TARGET_USER_ALREADY_ADMINISTRATOR);
     }
-    const token = this.tokensService.generateVerificationToken();
-    await this.tokensService.saveTransferToken(token, from.id, to.id);
+    const code = this.tokensService.generateVerificationCode();
+    await this.tokensService.saveTransferToken(code, from.id, to.id);
     const frontendUrl = this.envService.get('FRONTEND_URL');
-    const link = `${frontendUrl}/confirm-admin?token=${token}`;
+    const link = `${frontendUrl}/confirm-admin`;
     const subject = 'Administrator rights invitation';
     const greet = to.nickname ? `Hello, ${to.nickname}!` : 'Hello!';
-    const text =
-      `${greet}\n\nYou have been invited to receive administrator rights.\n` +
-      `To confirm, please follow the link (within ${this.emailChangeExpiresIn} min): ${link}\n\n` +
-      `If you did not request this, ignore the message.`;
-    const html =
-      `<p>${greet}</p><p>You have been invited to receive administrator rights.</p>` +
-      `<p>To confirm, please click the link (within ${this.emailChangeExpiresIn} min): <a href="${link}">${link}</a></p>` +
-      `<p>If you did not request this, ignore the message.</p>`;
+    const text = `${greet}\n\nYou have been invited to receive administrator rights.\n To confirm, please follow the link and enter the code below (within ${this.emailChangeExpiresIn} min): ${link}\n\n ${code}\n\n If you did not request this, ignore the message.`;
+    const html = `
+      <p>${greet}</p><p>You have been invited to receive administrator rights.</p>
+      <p>To confirm, please follow the link and enter the code below (within ${this.emailChangeExpiresIn} min): <a href="${link}">${link}</a></p>
+      <p style="font-weight: bold; font-size: 30px;">${code}</p>
+      <p>If you did not request this, ignore the message.</p>`;
     await this.mailService.send(to.email, subject, text, html);
   }
 
-  async confirmTransfer(token: string, currentUserId: number) {
-    const data = await this.tokensService.getDataByTransferToken(token);
+  async confirmTransfer(code: string, currentUserId: number) {
+    const data = await this.tokensService.getDataByTransferToken(code);
     if (
       !data ||
       typeof data.fromId !== 'number' ||
@@ -118,7 +118,7 @@ export class AdminTransferService {
       await qr.manager.update(User, { id: fromId }, { role: Role.USER });
       await qr.manager.update(User, { id: toId }, { role: Role.ADMIN });
       await qr.commitTransaction();
-      await this.tokensService.deleteTransferToken(token);
+      await this.tokensService.deleteTransferToken(code);
       const subj = 'Administrator rights have been transferred';
       this.mailService
         .send(
@@ -130,9 +130,10 @@ export class AdminTransferService {
       this.mailService
         .send(to.email, subj, 'You have received administrator rights.')
         .catch(() => undefined);
-    } catch (e) {
+      return this.authService.login(currentUserId);
+    } catch (err) {
       await qr.rollbackTransaction();
-      if (e instanceof HttpException) throw e;
+      if (err instanceof HttpException) throw err;
       this.errorsService.badRequest(ErrMsg.TRANSFER_FAILED);
     } finally {
       await qr.release();

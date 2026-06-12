@@ -42,51 +42,45 @@ export class RegistrationService {
         select: [ID],
       });
       if (user) {
-        const resetUrl = `${this.frontendUrl}/reset-password?email=${encodeURIComponent(email)}`;
-        const text = `Hi, this is an automated message, please do not reply! It looks like there is already an account associated with this email address. If you’ve forgotten your password, you can reset it by clicking the link below: ${resetUrl}`;
+        const resetUrl = `${this.frontendUrl}/reset-password/`;
+        const text = `Hi, this is an automated message, please do not reply! It looks like there is already an account associated with this email address. If you’ve forgotten your password, you can reset it by using the link below: ${resetUrl}`;
         const html = `
           <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
           <p style="font-weight: bold; font-size: 17px;">It looks like there is already an account associated with this email address.</p>
-          <p style="font-weight: bold; font-size: 17px;">If you’ve forgotten your password, you can reset it by clicking the link below:</p>
+          <p style="font-weight: bold; font-size: 17px;">If you’ve forgotten your password, you can reset it by using the link below:</p>
           <p style="font-weight: bold; font-size: 17px;">
               <a href="${resetUrl}" style="font-weight: bold;">${resetUrl}</a>
           </p>
           <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
-          <p style="font-weight: bold; font-size: 17px;">Best regards,<br>Your App Team</p>
         `;
         await this.mailService.send(email, `Password recovery`, text, html);
       } else {
-        const token = this.tokensService.generateVerificationToken();
         const hashedPassword = await this.hashService.hash(password);
         const redisValue = { email: email, password: hashedPassword };
-        await this.tokensService.saveRegistrationToken(token, redisValue);
-        const confirmUrl = `${this.frontendUrl}/confirm-registration?token=${token}`;
-        const text = `Hi, this is an automated message, please do not reply! You can confirm your registration by clicking the link below (within ${this.registrationExpiresIn} min): ${confirmUrl}`;
+        const code = await this.tokensService.getRegistrationCode(redisValue);
+        const text = `Hi, this is an automated message, please do not reply! You can confirm your registration by using the code below (within ${this.registrationExpiresIn} min): ${code}`;
         const html = `
           <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
-          <p style="font-weight: bold; font-size: 17px;">You can confirm your registration by clicking the link below (within ${this.registrationExpiresIn} min):</p>
-          <p style="font-weight: bold; font-size: 17px;">          
-            <a href="${confirmUrl}" style="font-weight: bold;">${confirmUrl}</a>
-          </p>
+          <p style="font-weight: bold; font-size: 17px;">You can confirm your registration by using the code below (within ${this.registrationExpiresIn} min):</p>
+          <p style="font-weight: bold; font-size: 30px;">${code}</p>
           <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
-          <p style="font-weight: bold; font-size: 17px;">Best regards,<br>Your App Team</p>
         `;
         await this.mailService.send(email, `Confirm registration`, text, html);
       }
       return {
-        message: 'If the email exists, we’ve sent you a link.',
+        message: 'If the email exists, we’ve sent you a code.',
       };
     } catch (err: unknown) {
       this.errorsService.default(err);
     }
   }
 
-  async confirm(token: string) {
+  async confirm(code: string) {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
     try {
-      const data = await this.tokensService.getDataByRegistrationToken(token);
+      const data = await this.tokensService.getDataByRegistrationCode(code);
       if (!data) {
         this.errorsService.invalidToken(null, TokenType.REGISTRATION);
         return;
@@ -112,7 +106,7 @@ export class RegistrationService {
       });
       await qr.manager.save(User, newUser);
       await qr.commitTransaction();
-      await this.tokensService.deleteRegistrationToken(token);
+      await this.tokensService.deleteRegistrationCode(code);
       return this.authService.login(newUser.id);
     } catch (err: unknown) {
       await qr.rollbackTransaction();

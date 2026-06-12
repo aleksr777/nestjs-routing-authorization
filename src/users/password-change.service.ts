@@ -21,33 +21,36 @@ export class PasswordChangeService {
     private readonly tokensService: TokensService,
   ) {}
 
-  async issuePasswordChangeToken(userId: number, oldPassword: string) {
+  async request(userId: number, oldPassword: string) {
     const user = await this.usersRepository
       .findOneOrFail({
         where: { id: userId },
         select: [ID, PASSWORD],
       })
-      .catch((err) => this.errorsService.userNotFound(err));
-    const ok = await this.hashService.compare(
-      oldPassword,
-      (user as User).password,
-    );
-    if (!ok)
+      .catch((err) => {
+        this.errorsService.userNotFound(err);
+        this.errorsService.default(err);
+      });
+    const ok = await this.hashService.compare(oldPassword, user.password);
+    if (!ok) {
       return this.errorsService.badRequest(ErrMsg.OLD_PASSWORD_IS_INCORRECT);
-    const token = this.tokensService.generateVerificationToken();
-    await this.tokensService.savePasswordChangeToken(token, userId);
-    return { token };
+    }
+    const code = await this.tokensService.getPasswordChangeCode(userId);
+    return { code };
   }
 
-  async changePasswordByToken(
+  async confirm(
     userId: number,
-    token: string,
+    code: string,
     newPassword: string,
     accessToken?: string,
   ) {
+    if (!accessToken) {
+      return this.errorsService.invalidToken(null, TokenType.ACCESS);
+    }
     let same;
     const storedUserId =
-      await this.tokensService.getUserIdByPasswordChangeToken(token);
+      await this.tokensService.getIdByPasswordChangeCode(code);
     if (!storedUserId || storedUserId !== userId) {
       return this.errorsService.invalidToken(null, TokenType.PASSWORD_CHANGE);
     }
@@ -69,14 +72,12 @@ export class PasswordChangeService {
       );
       await qr.commitTransaction();
       await this.tokensService
-        .deletePasswordChangeToken(token)
+        .deletePasswordChangeCode(code)
         .catch(() => undefined);
-      if (accessToken) {
-        await this.tokensService.addJwtTokenToBlacklist(
-          accessToken,
-          TokenType.ACCESS,
-        );
-      }
+      await this.tokensService.addJwtTokenToBlacklist(
+        accessToken,
+        TokenType.ACCESS,
+      );
       return this.authService.login(userId);
     } catch (err) {
       await qr.rollbackTransaction();

@@ -5,6 +5,7 @@ import { AuthService } from '../auth/auth.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { RedisService } from '../common/redis-service/redis.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
+import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { User } from '../users/entities/user.entity';
 import {
   ID,
@@ -38,7 +39,7 @@ export class AdminService {
   ) {
     try {
       if (limit <= 0 || offset < 0)
-        this.errorsService.badRequest('Invalid pagination parameters');
+        this.errorsService.badRequest(ErrMsg.INVALID_PAGINATION_PARAMETERS);
       const qb = this.usersRepository
         .createQueryBuilder('user')
         .select(ADMIN_FIELDS.map((f) => `user.${f}`))
@@ -76,7 +77,7 @@ export class AdminService {
         select: [ID, EMAIL, NICKNAME, ROLE],
       });
       if (user.role === Role.ADMIN) {
-        this.errorsService.badRequest('Admin cannot delete themselves!');
+        this.errorsService.badRequest(ErrMsg.ADMINISTRATOR_CANNOT_BE_DELETED);
       }
       await qr.manager.delete(User, { id: userId });
       await qr.commitTransaction();
@@ -108,8 +109,11 @@ export class AdminService {
     blocked_reason: string,
   ): Promise<void> {
     if (userId === adminId) {
-      this.errorsService.badRequest('Admin cannot block themselves!');
+      this.errorsService.badRequest(ErrMsg.ADMINISTRATOR_CANNOT_BE_BLOCKED);
     }
+    const reason = blocked_reason.trim();
+    let email: string | null = null;
+    let nickname: string | null = null;
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
@@ -117,13 +121,13 @@ export class AdminService {
       const user = await qr.manager.findOneOrFail(User, {
         where: { id: userId },
         select: [ID, EMAIL, NICKNAME, ROLE, IS_BLOCKED],
+        lock: { mode: 'pessimistic_write' },
       });
       if (user.role === Role.ADMIN) {
-        this.errorsService.badRequest('Admin cannot block themselves!');
+        this.errorsService.badRequest(ErrMsg.ADMINISTRATOR_CANNOT_BE_BLOCKED);
       }
       if (user.is_blocked) {
-        await qr.rollbackTransaction();
-        return;
+        this.errorsService.badRequest(ErrMsg.ACCOUNT_ALREADY_BLOCKED);
       }
       await qr.manager.update(
         User,
@@ -132,33 +136,43 @@ export class AdminService {
           is_blocked: true,
           blocked_at: new Date(),
           blocked_by: adminId,
-          blocked_reason: blocked_reason,
+          blocked_reason: reason || null,
         },
       );
       await qr.commitTransaction();
-      this.redisService
-        .del(`${LAST_ACTIVITY_KEY_PREFIX}:${userId}`)
-        .catch(() => undefined);
-      const subject = 'Account has been blocked';
-      const greet = user.nickname ? `Hello, ${user.nickname}!` : 'Hello!';
-      const text =
-        `${greet}\n\nYour account has been blocked by an administrator.` +
-        (blocked_reason ? `\nReason: ${blocked_reason}` : '');
-      const html =
-        `<p>${greet}</p><p>Your account has been blocked by an administrator.</p>` +
-        (blocked_reason ? `<p>Reason: ${blocked_reason}</p>` : '');
-      await this.mailService.send(user.email, subject, text, html);
+      email = user.email;
+      nickname = user.nickname ?? null;
     } catch (err: unknown) {
-      await qr.rollbackTransaction();
-      if (err instanceof HttpException) throw err;
+      if (qr.isTransactionActive) {
+        await qr.rollbackTransaction();
+      }
+      if (err instanceof HttpException) {
+        throw err;
+      }
       this.errorsService.userNotFound(err);
       this.errorsService.default(err);
     } finally {
       await qr.release();
     }
+    await this.redisService
+      .del(`${LAST_ACTIVITY_KEY_PREFIX}:${userId}`)
+      .catch(() => undefined);
+    if (email) {
+      const subject = 'Account has been blocked.';
+      const greet = nickname ? `Hello, ${nickname}!` : 'Hello!';
+      const text =
+        `${greet}\n\nYour account has been blocked by an administrator.` +
+        (reason ? `\nReason: ${reason}` : '');
+      const html =
+        `<p>${greet}</p><p>Your account has been blocked by an administrator.</p>` +
+        (reason ? `<p>Reason: ${reason}</p>` : '');
+      await this.mailService.send(email, subject, text, html);
+    }
   }
 
-  async unblockUserById(userId: number) {
+  async unblockUserById(userId: number): Promise<void> {
+    let email: string | null = null;
+    let nickname: string | null = null;
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
@@ -166,10 +180,10 @@ export class AdminService {
       const user = await qr.manager.findOneOrFail(User, {
         where: { id: userId },
         select: [ID, EMAIL, NICKNAME, IS_BLOCKED],
+        lock: { mode: 'pessimistic_write' },
       });
       if (!user.is_blocked) {
-        await qr.rollbackTransaction();
-        return;
+        this.errorsService.badRequest(ErrMsg.ACCOUNT_NOT_BLOCKED);
       }
       await qr.manager.update(
         User,
@@ -182,18 +196,26 @@ export class AdminService {
         },
       );
       await qr.commitTransaction();
-      const subject = 'Account has been unblocked';
-      const greet = user.nickname ? `Hello, ${user.nickname}!` : 'Hello!';
-      const text = `${greet}\n\nYour account has been unblocked by an administrator.`;
-      const html = `<p>${greet}</p><p>Your account has been unblocked by an administrator.</p>`;
-      await this.mailService.send(user.email, subject, text, html);
+      email = user.email;
+      nickname = user.nickname ?? null;
     } catch (err: unknown) {
-      await qr.rollbackTransaction();
-      if (err instanceof HttpException) throw err;
+      if (qr.isTransactionActive) {
+        await qr.rollbackTransaction();
+      }
+      if (err instanceof HttpException) {
+        throw err;
+      }
       this.errorsService.userNotFound(err);
       this.errorsService.default(err);
     } finally {
       await qr.release();
+    }
+    if (email) {
+      const subject = 'Account has been unblocked';
+      const greet = nickname ? `Hello, ${nickname}!` : 'Hello!';
+      const text = `${greet}\n\nYour account has been unblocked by an administrator.`;
+      const html = `<p>${greet}</p><p>Your account has been unblocked by an administrator.</p>`;
+      await this.mailService.send(email, subject, text, html);
     }
   }
 }

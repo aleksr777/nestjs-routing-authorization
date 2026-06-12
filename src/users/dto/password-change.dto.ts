@@ -1,9 +1,9 @@
 import { IsString, IsNotEmpty, Length } from 'class-validator';
 
 export class PasswordChangeByTokenDto {
-  @IsNotEmpty()
   @IsString()
-  token!: string;
+  @IsNotEmpty()
+  code!: string;
 
   @IsString()
   @Length(8, 100)

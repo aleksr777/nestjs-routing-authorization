@@ -7,27 +7,44 @@ export enum ErrMsg {
   TOKEN_NOT_DEFINED = 'Token is not defined.',
   ACCESS_TOKEN_NOT_DEFINED = 'Access token is not defined.',
   REFRESH_TOKEN_NOT_DEFINED = 'Refresh token is not defined.',
-  ADMIN_TRANSFER_TOKEN_NOT_DEFINED = 'Admin transfer token is not defined.',
-  RESET_TOKEN_NOT_DEFINED = 'Reset token is not defined.',
-  REGISTRATION_TOKEN_NOT_DEFINED = 'Registration token is not defined.',
-  EMAIL_CHANGE_TOKEN_NOT_DEFINED = 'Email change token is not defined.',
-  PASSWORD_CHANGE_TOKEN_NOT_DEFINED = 'Password change token is not defined.',
+  ADMIN_TRANSFER_CODE_NOT_DEFINED = 'Admin transfer code is not defined.',
+  RESET_CODE_NOT_DEFINED = 'Reset code is not defined.',
+  REGISTRATION_CODE_NOT_DEFINED = 'Registration code is not defined.',
+  EMAIL_CHANGE_CODE_NOT_DEFINED = 'Email change code is not defined.',
+  PASSWORD_CHANGE_CODE_NOT_DEFINED = 'Password change code is not defined.',
 
   INVALID_TOKEN = 'Invalid token.',
+
   INVALID_ACCESS_TOKEN = 'Access token is expired or invalid.',
   INVALID_REFRESH_TOKEN = 'Refresh token is expired or invalid.',
-  INVALID_ADMIN_TRANSFER_TOKEN = 'Admin transfer token is expired or invalid. Please request a new one.',
-  INVALID_RESET_TOKEN = 'Reset token is expired or invalid. Please request a new one.',
-  INVALID_REGISTRATION_TOKEN = 'Registration token is expired or invalid. Please request a new one.',
-  INVALID_EMAIL_CHANGE_TOKEN = 'Invalid email change token is expired or invalid. Please request a new one.',
-  INVALID_PASSWORD_CHANGE_TOKEN = 'Invalid password change token is expired or invalid. Please request a new one.',
+  INVALID_REGISTRATION_CODE = 'Registration code is expired or invalid. Please request a new one.',
+  INVALID_RESET_CODE = 'Reset code is expired or invalid. Please request a new one.',
+  INVALID_EMAIL_CHANGE_CODE = 'Email change code is expired or invalid. Please request a new one.',
+  INVALID_PASSWORD_CHANGE_CODE = 'Password change code is expired or invalid. Please request a new one.',
+  INVALID_ADMIN_TRANSFER_CODE = 'Admin transfer code is expired or invalid. Please request a new one.',
+
+  UNABLE_GENERATE_UNIQUE_CODE = 'Unable to generate unique code.',
+
+  INVALID_REGISTRATION_PAYLOAD = 'Invalid registration payload',
+
+  USER_ID_NOT_DEFINED = 'User id is not defined',
+
+  PAYLOAD_NOT_DEFINED = 'Payload is not defined',
 
   USER_NOT_FOUND = 'User was not found in the database.',
   ADMIN_NOT_FOUND = 'Admin was not found in the database.',
+
   CONFLICT_USER_EXISTS = 'A user with such unique data already exists in the database.',
+
   INSUFFICIENT_ACCESS_RIGHTS = 'The current user has insufficient access rights.',
+
   AUTHORIZED = 'User is not authorized.',
-  ACCOUNT_BLOCKED = 'Account has been blocked by the administrator.',
+
+  ACCOUNT_BLOCKED = 'Account has been blocked.',
+  ACCOUNT_ALREADY_BLOCKED = 'This account has already been blocked.',
+  ACCOUNT_NOT_BLOCKED = 'This account is not blocked.',
+  ADMINISTRATOR_CANNOT_BE_BLOCKED = 'The administrator cannot be blocked.',
+  ADMINISTRATOR_CANNOT_BE_DELETED = 'The administrator cannot be deleted.',
 
   ONLY_ADMINISTRATOR_TRANSFER = 'Only administrator can initiate a transfer.',
   CURRENT_USER_BLOCKED = 'Current user is blocked.',
@@ -43,4 +60,10 @@ export enum ErrMsg {
 
   NEW_PASSWORD_MUST_DIFFER = 'New password must differ from old.',
   OLD_PASSWORD_IS_INCORRECT = 'Old password is incorrect',
+
+  NO_FIELDS_FOR_UPDATE = 'No fields provided for update.',
+  FIELDS_CANNOT_BE_UPDATED = 'Some fields cannot be updated in this way.',
+  FIELDS_CANNOT_BE_EMPTY = 'Some fields cannot be empty.',
+
+  INVALID_PAGINATION_PARAMETERS = 'Invalid pagination parameters.',
 }

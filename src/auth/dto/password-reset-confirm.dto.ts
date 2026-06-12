@@ -3,7 +3,7 @@ import { IsNotEmpty, IsString, Length } from 'class-validator';
 export class PasswordResetConfirmDto {
   @IsString()
   @IsNotEmpty()
-  token!: string;
+  code!: string;
 
   @IsString()
   @Length(8, 100)

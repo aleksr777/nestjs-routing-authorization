@@ -7,10 +7,12 @@ A template for basic routing and authorization.
 ```env
 JWT_ACCESS_SECRET='secret_access_key'
 JWT_REFRESH_SECRET='secret_refresh_key'
+
 JWT_ACCESS_EXPIRES_IN='15m'
 JWT_REFRESH_EXPIRES_IN='7d'
+
 ADMIN_TRANSFER_TOKEN_EXPIRES_IN=300  # 5m
-REGISTRATION_TOKEN_EXPIRES_IN=900  # 15m
+REGISTRATION_TOKEN_EXPIRES_IN=600  # 10m
 RESET_TOKEN_EXPIRES_IN=600  # 10m
 EMAIL_CHANGE_TOKEN_EXPIRES_IN=600  # 10m
 PASSWORD_CHANGE_TOKEN_EXPIRES_IN=600  # 10m
@@ -18,27 +20,27 @@ PASSWORD_CHANGE_TOKEN_EXPIRES_IN=600  # 10m
 REDIS_HOST='localhost'
 REDIS_PORT=6379
 
-SERVER_PORT=1603
-FRONTEND_URL='http://localhost:1403'
+SERVER_PORT=1234
+FRONTEND_URL='http://localhost:5678'
 
 DB_TYPE='postgres'
 DB_HOST='localhost'
 DB_PORT=5432
-DB_NAME='db_name'
+DB_NAME='DB_NAME'
 DB_USERNAME='postgres'
-DB_PASSWORD='db_password'
+DB_PASSWORD='DB_PASSWORD'
 DB_TYPEORM_SYNC=true
 
 SMTP_HOST='smtp.gmail.com'
 SMTP_PORT=465
 SMTP_SECURE=true
-SMTP_USER='service-email@gmail.com'
-SMTP_PASS='aaaa bbbb cccc dddd'
-SMTP_FROM='service-email@gmail.com'
+SMTP_USER='service@gmail.com'
+SMTP_FROM='service@gmail.com''
+SMTP_PASS='SMTP_PASS'
 
-ADMIN_EMAIL='admin@gmail.com'
-ADMIN_PASSWORD='admin-password'
-ADMIN_NICKNAME='admin-nickname'
+ADMIN_EMAIL='user@gmail.com'  
+ADMIN_PASSWORD='ADMIN_PASSWORD'
+ADMIN_NICKNAME='ADMIN_NICKNAME'
 ```
 
 ---
@@ -65,18 +67,7 @@ docker-compose up -d
 
 This will:
 
-- Download and start a `postgres:17.5` and `redis:7.2` containers
-
-To stop the containers:
-
-```bash
-docker-compose down
-```
-
-To stop and remove all data:
-
-```bash
-docker-compose down -v
+- Download and start a `postgres` and `redis` containers
 ```
 
 ---
@@ -96,26 +87,6 @@ npm run start:dev
 ```
 
 ---
-
-### 📦 Database Migrations
-
-Create a migration:
-
-```bash
-npx typeorm-ts-node-commonjs migration:create src/migrations/MigrationName
-```
-
-Run all pending migrations:
-
-```bash
-npx typeorm-ts-node-commonjs migration:run -d data-source.ts
-```
-
-Revert the last migration:
-
-```bash
-npx typeorm-ts-node-commonjs migration:revert -d data-source.ts
-```
 
 ### 📦 👑 Admin User Creation
 
@@ -154,8 +125,8 @@ npx typeorm-ts-node-commonjs migration:run -d data-source.ts
 ### Users
 
 - `GET /api/users/me` — Get current user's profile
-- `POST /users/me/password/verify-old` — Verifying old password
-- `POST /users/me/password/change` — Changing password after verifying old password
+- `POST /users/me/password/change/request` — Request a password change with verification of the old password
+- `POST /users/me/password/change/confirm` — Confirm a password change
 - `POST /api/users/me/email/update/request` — Request update email
 - `POST /api/users/me/email/update/confirm` — Confirm update email
 - `DELETE /api/users/me/delete` — Delete current user
