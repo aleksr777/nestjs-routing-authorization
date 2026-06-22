@@ -9,6 +9,12 @@ async function bootstrap() {
   const envService = app.get(EnvService);
   envService.validateVariables();
 
+  app.enableCors({
+    origin: envService.get('FRONTEND_URL'),
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
   // Global DTO validation
   app.useGlobalPipes(
     new ValidationPipe({
