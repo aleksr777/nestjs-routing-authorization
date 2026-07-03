@@ -11,21 +11,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { User } from '../users/entities/user.entity';
-
-const REFRESH_COOKIE_NAME = 'refresh_token';
-const REFRESH_COOKIE_PATH = '/api/auth';
-
-type JwtTokens = {
-  access_token: string;
-  refresh_token: string;
-  access_token_expires: number | null;
-  refresh_token_expires: number | null;
-};
-
-type AuthResponse = {
-  access_token: string;
-  access_token_expires: number | null;
-};
+import { JwtTokens, AuthResponse } from '../common/types/jwt-tokens.type';
 
 @Controller('auth')
 export class AuthController {
@@ -40,7 +26,7 @@ export class AuthController {
       httpOnly: true,
       secure: false,
       sameSite: 'lax',
-      path: REFRESH_COOKIE_PATH,
+      path: '/api/auth',
       ...(maxAge !== undefined ? { maxAge } : {}),
     };
   }
@@ -52,14 +38,14 @@ export class AuthController {
         : undefined;
 
     res.cookie(
-      REFRESH_COOKIE_NAME,
+      'refresh_token',
       tokens.refresh_token,
       this.getRefreshCookieOptions(maxAge),
     );
   }
 
   private clearRefreshCookie(res: Response): void {
-    res.clearCookie(REFRESH_COOKIE_NAME, this.getRefreshCookieOptions());
+    res.clearCookie('refresh_token', this.getRefreshCookieOptions());
   }
 
   private getAuthResponse(tokens: JwtTokens): AuthResponse {

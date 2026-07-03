@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { ActivityService } from './activity.service';
-import { JwtPayload } from '../common/types/jwt-payload.type';
+import { JwtPayload } from '../common/types/jwt-tokens.type';
 
 type ReqUser = Partial<JwtPayload> & { id?: number };
 

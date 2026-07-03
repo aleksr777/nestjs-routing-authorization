@@ -8,7 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { EnvService } from '../common/env-service/env.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { ErrMsg } from '../common/errors-service/error-messages.type';
-import { JwtPayload } from '../common/types/jwt-payload.type';
+import { JwtPayload } from '../common/types/jwt-tokens.type';
 import { TokenType } from '../common/types/token-type.type';
 
 const RESET_REDIS_PREFIX = `reset:`;

@@ -5,10 +5,8 @@ import { Request } from 'express';
 import { AuthService } from '../auth.service';
 import { EnvService } from '../../common/env-service/env.service';
 import { ErrorsService } from '../../common/errors-service/errors.service';
-import { JwtPayload } from '../../common/types/jwt-payload.type';
+import { JwtPayload } from '../../common/types/jwt-tokens.type';
 import { TokenType } from '../../common/types/token-type.type';
-
-const REFRESH_COOKIE_NAME = 'refresh_token';
 
 type RequestWithSafeCookies = Omit<Request, 'cookies'> & {
   cookies?: Record<string, unknown>;
@@ -16,7 +14,7 @@ type RequestWithSafeCookies = Omit<Request, 'cookies'> & {
 
 const getRefreshTokenFromCookie = (req: Request): string | null => {
   const request = req as RequestWithSafeCookies;
-  const token = request.cookies?.[REFRESH_COOKIE_NAME];
+  const token = request.cookies?.['refresh_token'];
 
   return typeof token === 'string' ? token : null;
 };
