@@ -16,6 +16,7 @@
     "incremental": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
     "noFallthroughCasesInSwitch": false
   }
 }
