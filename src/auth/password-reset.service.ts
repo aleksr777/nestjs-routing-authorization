@@ -58,7 +58,7 @@ export class PasswordResetService {
     try {
       const userId = await this.tokensService.getIdByResetCode(code);
       if (!userId) {
-        this.errorsService.invalidToken(null, TokenType.RESET);
+        this.errorsService.invalidToken(null, TokenType.PASSWORD_RESET);
         return;
       }
       const hashedPassword = await this.hashService.hash(newPassword);
