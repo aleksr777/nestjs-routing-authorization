@@ -98,4 +98,28 @@ export class UsersController {
     setRefreshCookie(res, tokens);
     return getAuthResponse(tokens);
   }
+
+  @Post('me/password/reset/request')
+  requestCurrentUserPasswordReset(@Req() req: Request) {
+    const user = req.user as User;
+    return this.passwordChangeService.requestReset(+user.id);
+  }
+
+  @Post('me/password/reset/confirm')
+  async confirmCurrentUserPasswordReset(
+    @Body() dto: PasswordChangeByTokenDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const user = req.user as User;
+    const tokens = await this.passwordChangeService.confirmReset(
+      +user.id,
+      dto.code,
+      dto.new_password,
+      req.headers.authorization,
+    );
+    if (!tokens) return tokens;
+    setRefreshCookie(res, tokens);
+    return getAuthResponse(tokens);
+  }
 }
