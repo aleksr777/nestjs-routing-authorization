@@ -12,6 +12,7 @@ import { JwtPayload } from '../common/types/jwt-tokens.type';
 import { TokenType } from '../common/types/token-type.type';
 
 const RESET_REDIS_PREFIX = `reset:`;
+const CURRENT_USER_PASSWORD_RESET_REDIS_PREFIX = 'current-user-password-reset:';
 const REGISTER_REDIS_PREFIX = `register:`;
 const ADMIN_TRANSFER_REDIS_PREFIX = `admin:transfer:`;
 const EMAIL_CHANGE_REDIS_PREFIX = 'email-change:';
@@ -225,7 +226,7 @@ export class TokensService {
     await this.redisService.del(`${REGISTER_REDIS_PREFIX}${code}`);
   }
 
-  /* RESET CODE */
+  /* PASSWORD RESET CODE */
   async getResetCode(userId: number) {
     if (!userId) {
       this.errorsService.default(null, ErrMsg.USER_ID_NOT_DEFINED);
@@ -245,6 +246,34 @@ export class TokensService {
 
   async deletePassResetCode(code: string) {
     await this.redisService.del(`${RESET_REDIS_PREFIX}${code}`);
+  }
+
+  /* CURRENT USER PASSWORD RESET CODE */
+  async getCurrentUserPasswordResetCode(userId: number) {
+    if (!userId) {
+      this.errorsService.default(null, ErrMsg.USER_ID_NOT_DEFINED);
+    }
+    const id = userId.toString();
+    return this.saveVerificationToken(
+      CURRENT_USER_PASSWORD_RESET_REDIS_PREFIX,
+      id,
+      this.resetExpiresIn,
+    );
+  }
+
+  async getIdByCurrentUserPasswordResetCode(
+    code: string,
+  ): Promise<number | null> {
+    const userId = await this.redisService.get(
+      `${CURRENT_USER_PASSWORD_RESET_REDIS_PREFIX}${code}`,
+    );
+    return userId ? parseInt(userId, 10) : null;
+  }
+
+  async deleteCurrentUserPasswordResetCode(code: string) {
+    await this.redisService.del(
+      `${CURRENT_USER_PASSWORD_RESET_REDIS_PREFIX}${code}`,
+    );
   }
 
   /* EMAIL CHANGE CODE */
