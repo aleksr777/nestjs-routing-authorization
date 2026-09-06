@@ -31,8 +31,10 @@ export class ErrorsService {
         return ErrMsg.INVALID_REFRESH_TOKEN;
       case TokenType.REGISTRATION:
         return ErrMsg.INVALID_REGISTRATION_CODE;
-      case TokenType.RESET:
-        return ErrMsg.INVALID_RESET_CODE;
+      case TokenType.PASSWORD_RESET:
+        return ErrMsg.INVALID_PASSWORD_RESET_CODE;
+      case TokenType.CURRENT_USER_PASSWORD_RESET:
+        return ErrMsg.INVALID_CURRENT_USER_PASSWORD_RESET_CODE;
       case TokenType.EMAIL_CHANGE:
         return ErrMsg.INVALID_EMAIL_CHANGE_CODE;
       case TokenType.PASSWORD_CHANGE:
@@ -52,8 +54,10 @@ export class ErrorsService {
         return ErrMsg.REFRESH_TOKEN_NOT_DEFINED;
       case TokenType.ADMIN_TRANSFER:
         return ErrMsg.ADMIN_TRANSFER_CODE_NOT_DEFINED;
-      case TokenType.RESET:
-        return ErrMsg.RESET_CODE_NOT_DEFINED;
+      case TokenType.PASSWORD_RESET:
+        return ErrMsg.PASSWORD_RESET_CODE_NOT_DEFINED;
+      case TokenType.CURRENT_USER_PASSWORD_RESET:
+        return ErrMsg.CURRENT_USER_PASSWORD_RESET_CODE_NOT_DEFINED;
       case TokenType.REGISTRATION:
         return ErrMsg.REGISTRATION_CODE_NOT_DEFINED;
       case TokenType.EMAIL_CHANGE:
