@@ -15,7 +15,11 @@ export const setRefreshCookie = (res: Response, tokens: JwtTokens): void => {
       ? Math.max(tokens.refresh_token_expires * 1000 - Date.now(), 0)
       : undefined;
 
-  res.cookie('refresh_token', tokens.refresh_token, getRefreshCookieOptions(maxAge));
+  res.cookie(
+    'refresh_token',
+    tokens.refresh_token,
+    getRefreshCookieOptions(maxAge),
+  );
 };
 
 export const getAuthResponse = (tokens: JwtTokens): AuthResponse => ({

@@ -40,7 +40,10 @@ export class UsersController {
   @Delete('me/delete')
   async deleteCurrentUser(@Req() req: Request) {
     const user = req.user as User;
-    return this.usersService.deleteCurrentUser(+user.id, req.headers.authorization);
+    return this.usersService.deleteCurrentUser(
+      +user.id,
+      req.headers.authorization,
+    );
   }
 
   @Patch('me/partial-data/update')

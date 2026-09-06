@@ -8,7 +8,11 @@ import { ErrorsService } from '../common/errors-service/errors.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
 import { TokensService } from '../auth/tokens.service';
-import { EMAIL, ID, PASSWORD } from '../common/constants/user-select-fields.constants';
+import {
+  EMAIL,
+  ID,
+  PASSWORD,
+} from '../common/constants/user-select-fields.constants';
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokenType } from '../common/types/token-type.type';
 
@@ -64,7 +68,12 @@ export class PasswordChangeService {
         <p>Use this code within ${this.resetExpiresIn} min:</p>
         <p style="font-weight: bold; font-size: 30px;">${code}</p>
         <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
-      await this.mailService.send(user.email, 'Confirm password change', text, html);
+      await this.mailService.send(
+        user.email,
+        'Confirm password change',
+        text,
+        html,
+      );
       return { message: 'Confirmation code sent to your email.' };
     } catch (err: unknown) {
       this.errorsService.userNotFound(err);
