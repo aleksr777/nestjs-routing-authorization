@@ -4,12 +4,14 @@ import {
   Controller,
   Get,
   Req,
+  Res,
   Delete,
   UseGuards,
   Patch,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { getAuthResponse, setRefreshCookie } from '../auth/auth-response.util';
 import { UsersService } from './users.service';
 import { EmailChangeService } from './email-change.service';
 import { PasswordChangeService } from './password-change.service';
@@ -32,16 +34,13 @@ export class UsersController {
   @Get('me')
   async getCurrentProfile(@Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
-    return this.usersService.getCurrentProfile(userId);
+    return this.usersService.getCurrentProfile(+user.id);
   }
 
   @Delete('me/delete')
   async deleteCurrentUser(@Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
-    const access_token = req.headers.authorization;
-    return this.usersService.deleteCurrentUser(userId, access_token);
+    return this.usersService.deleteCurrentUser(+user.id, req.headers.authorization);
   }
 
   @Patch('me/partial-data/update')
@@ -50,45 +49,53 @@ export class UsersController {
     @Req() req: Request,
   ) {
     const user = req.user as User;
-    const userId = +user.id;
-    return this.usersService.updatePartialUserData(userId, dto);
+    return this.usersService.updatePartialUserData(+user.id, dto);
   }
 
   @Post('me/email/update/request')
   requestUpdateEmail(@Body() dto: EmailChangeRequestDto, @Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
-    return this.emailChangeService.request(userId, dto);
+    return this.emailChangeService.request(+user.id, dto);
   }
 
   @Post('me/email/update/confirm')
-  confirmUpdateEmail(@Body() dto: EmailChangeConfirmDto, @Req() req: Request) {
+  async confirmUpdateEmail(
+    @Body() dto: EmailChangeConfirmDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const user = req.user as User;
-    const userId = +user.id;
-    const access_token = req.headers.authorization;
-    return this.emailChangeService.confirm(userId, dto, access_token);
+    const tokens = await this.emailChangeService.confirm(
+      +user.id,
+      dto,
+      req.headers.authorization,
+    );
+    if (!tokens) return tokens;
+    setRefreshCookie(res, tokens);
+    return getAuthResponse(tokens);
   }
 
   @Post('me/password/change/request')
   verifyOldPassword(@Body() dto: PasswordVerifyOldDto, @Req() req: Request) {
     const user = req.user as User;
-    const userId = +user.id;
-    return this.passwordChangeService.request(userId, dto.old_password);
+    return this.passwordChangeService.request(+user.id, dto.old_password);
   }
 
   @Post('me/password/change/confirm')
-  changePasswordByToken(
+  async changePasswordByToken(
     @Body() dto: PasswordChangeByTokenDto,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    const userId = +user.id;
-    const accessToken = req.headers.authorization;
-    return this.passwordChangeService.confirm(
-      userId,
+    const tokens = await this.passwordChangeService.confirm(
+      +user.id,
       dto.code,
       dto.new_password,
-      accessToken,
+      req.headers.authorization,
     );
+    if (!tokens) return tokens;
+    setRefreshCookie(res, tokens);
+    return getAuthResponse(tokens);
   }
 }
