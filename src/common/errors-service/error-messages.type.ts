@@ -8,7 +8,9 @@ export enum ErrMsg {
   ACCESS_TOKEN_NOT_DEFINED = 'Access token is not defined.',
   REFRESH_TOKEN_NOT_DEFINED = 'Refresh token is not defined.',
   ADMIN_TRANSFER_CODE_NOT_DEFINED = 'Admin transfer code is not defined.',
-  RESET_CODE_NOT_DEFINED = 'Reset code is not defined.',
+  PASSWORD_RESET_CODE_NOT_DEFINED = 'Password reset code is not defined.',
+  CURRENT_USER_PASSWORD_RESET_CODE_NOT_DEFINED =
+    'Current user password reset code is not defined.',
   REGISTRATION_CODE_NOT_DEFINED = 'Registration code is not defined.',
   EMAIL_CHANGE_CODE_NOT_DEFINED = 'Email change code is not defined.',
   PASSWORD_CHANGE_CODE_NOT_DEFINED = 'Password change code is not defined.',
@@ -18,7 +20,10 @@ export enum ErrMsg {
   INVALID_ACCESS_TOKEN = 'Access token is expired or invalid.',
   INVALID_REFRESH_TOKEN = 'Refresh token is expired or invalid.',
   INVALID_REGISTRATION_CODE = 'Registration code is expired or invalid. Please request a new one.',
-  INVALID_RESET_CODE = 'Reset code is expired or invalid. Please request a new one.',
+  INVALID_PASSWORD_RESET_CODE =
+    'Password reset code is expired or invalid. Please request a new one.',
+  INVALID_CURRENT_USER_PASSWORD_RESET_CODE =
+    'Current user password reset code is expired or invalid. Please request a new one.',
   INVALID_EMAIL_CHANGE_CODE = 'Email change code is expired or invalid. Please request a new one.',
   INVALID_PASSWORD_CHANGE_CODE = 'Password change code is expired or invalid. Please request a new one.',
   INVALID_ADMIN_TRANSFER_CODE = 'Admin transfer code is expired or invalid. Please request a new one.',
