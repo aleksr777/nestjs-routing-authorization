@@ -58,7 +58,9 @@ export class PasswordChangeService {
         where: { id: userId },
         select: [ID, EMAIL],
       });
-      const code = await this.tokensService.getResetCode(user.id);
+      const code = await this.tokensService.getCurrentUserPasswordResetCode(
+        user.id,
+      );
       const text =
         `You requested to change your password.\n` +
         `Use this code within ${this.resetExpiresIn} min: ${code}\n\n` +
@@ -90,12 +92,18 @@ export class PasswordChangeService {
     if (!accessToken) {
       return this.errorsService.invalidToken(null, TokenType.ACCESS);
     }
-    const storedUserId = await this.tokensService.getIdByResetCode(code);
+    const storedUserId =
+      await this.tokensService.getIdByCurrentUserPasswordResetCode(code);
     if (!storedUserId || storedUserId !== userId) {
-      return this.errorsService.invalidToken(null, TokenType.RESET);
+      return this.errorsService.invalidToken(
+        null,
+        TokenType.CURRENT_USER_PASSWORD_RESET,
+      );
     }
     const tokens = await this.updatePassword(userId, newPassword, accessToken);
-    await this.tokensService.deletePassResetCode(code).catch(() => undefined);
+    await this.tokensService
+      .deleteCurrentUserPasswordResetCode(code)
+      .catch(() => undefined);
     return tokens;
   }
 
