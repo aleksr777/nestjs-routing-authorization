@@ -3,12 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
 import { TokensService } from '../auth/tokens.service';
 import { AuthService } from '../auth/auth.service';
+import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { User } from './entities/user.entity';
 import { UpdatePartialUserDataDto } from './dto/update-partial-user-data.dto';
 import {
   ID,
   ROLE,
+  PASSWORD,
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
   USER_SECRET_FIELDS,
@@ -31,6 +33,7 @@ export class UsersService {
     private usersRepository: Repository<User>,
     private readonly tokensService: TokensService,
     private readonly authService: AuthService,
+    private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
   ) {}
 
@@ -48,7 +51,12 @@ export class UsersService {
       this.errorsService.default(err);
     }
   }
-  async deleteCurrentUser(userId: number, access_token: string | undefined) {
+
+  async deleteCurrentUser(
+    userId: number,
+    password: string,
+    access_token: string | undefined,
+  ) {
     if (!access_token) {
       this.errorsService.tokenNotDefined(TokenType.ACCESS);
     }
@@ -58,10 +66,14 @@ export class UsersService {
     try {
       const user = await qr.manager.findOneOrFail(User, {
         where: { id: userId },
-        select: [ID, ROLE],
+        select: [ID, ROLE, PASSWORD],
       });
       if (user.role === Role.ADMIN) {
         this.errorsService.badRequest(ErrMsg.ADMINISTRATOR_CANNOT_BE_DELETED);
+      }
+      const isPasswordValid = await this.hashService.compare(password, user.password);
+      if (!isPasswordValid) {
+        this.errorsService.badRequest(ErrMsg.OLD_PASSWORD_IS_INCORRECT);
       }
       await qr.manager.delete(User, { id: userId });
       await this.tokensService.addJwtTokenToBlacklist(
