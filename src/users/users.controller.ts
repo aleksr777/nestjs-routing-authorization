@@ -11,10 +11,15 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { getAuthResponse, setRefreshCookie } from '../auth/auth-response.util';
+import {
+  clearRefreshCookie,
+  getAuthResponse,
+  setRefreshCookie,
+} from '../auth/auth-response.util';
 import { UsersService } from './users.service';
 import { EmailChangeService } from './email-change.service';
 import { PasswordChangeService } from './password-change.service';
+import { DeleteCurrentUserDto } from './dto/delete-current-user.dto';
 import { EmailChangeRequestDto } from './dto/email-change-request.dto';
 import { EmailChangeConfirmDto } from './dto/email-change-confirm.dto';
 import { PasswordChangeByTokenDto } from './dto/password-change.dto';
@@ -38,12 +43,18 @@ export class UsersController {
   }
 
   @Delete('me/delete')
-  async deleteCurrentUser(@Req() req: Request) {
+  async deleteCurrentUser(
+    @Body() dto: DeleteCurrentUserDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const user = req.user as User;
-    return this.usersService.deleteCurrentUser(
+    await this.usersService.deleteCurrentUser(
       +user.id,
+      dto.password,
       req.headers.authorization,
     );
+    clearRefreshCookie(res);
   }
 
   @Patch('me/partial-data/update')
