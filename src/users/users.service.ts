@@ -71,7 +71,10 @@ export class UsersService {
       if (user.role === Role.ADMIN) {
         this.errorsService.badRequest(ErrMsg.ADMINISTRATOR_CANNOT_BE_DELETED);
       }
-      const isPasswordValid = await this.hashService.compare(password, user.password);
+      const isPasswordValid = await this.hashService.compare(
+        password,
+        user.password,
+      );
       if (!isPasswordValid) {
         this.errorsService.badRequest(ErrMsg.OLD_PASSWORD_IS_INCORRECT);
       }
