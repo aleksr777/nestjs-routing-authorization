@@ -22,6 +22,10 @@ export const setRefreshCookie = (res: Response, tokens: JwtTokens): void => {
   );
 };
 
+export const clearRefreshCookie = (res: Response): void => {
+  res.clearCookie('refresh_token', getRefreshCookieOptions());
+};
+
 export const getAuthResponse = (tokens: JwtTokens): AuthResponse => ({
   access_token: tokens.access_token,
   access_token_expires: tokens.access_token_expires,
