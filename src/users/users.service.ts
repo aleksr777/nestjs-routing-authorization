@@ -125,13 +125,17 @@ export class UsersService {
     const specialFields: string[] = [];
     const emptyFields: string[] = [];
     const conflictsFields: string[] = [];
-    const patch = dto as Record<string, unknown>;
-    if (!dto || Object.keys(dto).length === 0) {
+    const patch = Object.fromEntries(
+      Object.entries(dto).filter(([, value]) => value !== undefined),
+    ) as Record<string, unknown>;
+    if (Object.keys(patch).length === 0) {
       this.errorsService.badRequest(ErrMsg.NO_FIELDS_FOR_UPDATE);
     }
-    for (const key of Object.keys(dto)) {
-      const v = patch[key];
-      if (!v) {
+    for (const [key, value] of Object.entries(patch)) {
+      if (
+        value === null ||
+        (typeof value === 'string' && value.trim().length === 0)
+      ) {
         emptyFields.push(key);
       }
       if (SPECIAL_UPDATE_FIELDS.includes(key as specialUpdateFields)) {
@@ -151,11 +155,11 @@ export class UsersService {
     await qr.connect();
     await qr.startTransaction();
     try {
-      for (const key of Object.keys(dto)) {
+      for (const key of Object.keys(patch)) {
         if (USER_UNIQUE_FIELDS.includes(key as userUniqueFields)) {
-          const v = patch[key];
+          const value = patch[key];
           const exists = await qr.manager.getRepository(User).exists({
-            where: { [key]: v, id: Not(userId) },
+            where: { [key]: value, id: Not(userId) },
           });
           if (exists) conflictsFields.push(key);
         }
@@ -163,7 +167,7 @@ export class UsersService {
       const result = await qr.manager
         .createQueryBuilder()
         .update(User)
-        .set(dto)
+        .set(patch)
         .where('id = :id', { id: userId })
         .execute();
       if (result.affected === 0) {
