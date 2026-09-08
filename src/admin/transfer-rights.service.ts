@@ -175,11 +175,11 @@ export class AdminTransferService {
     const link = `${frontendUrl}/admin/transfer/confirm`;
     const subject = 'Administrator rights invitation';
     const greet = to.nickname ? `Hello, ${to.nickname}!` : 'Hello!';
-    const text = `${greet}\n\nYou have been invited to receive administrator rights.\nTo confirm, follow the link and enter the code below within ${this.transferExpiresInMinutes} min: ${link}\n\n${code}\n\nIf you did not request this, ignore the message.`;
+    const text = `${greet}\n\nYou have been invited to receive administrator rights.\nTo confirm, follow the link within ${this.transferExpiresInMinutes} min and enter the code below together with your current account password: ${link}\n\n${code}\n\nIf you did not request this, ignore the message.`;
     const html = `
       <p>${greet}</p>
       <p>You have been invited to receive administrator rights.</p>
-      <p>To confirm, follow the link and enter the code below within ${this.transferExpiresInMinutes} min: <a href="${link}">${link}</a></p>
+      <p>To confirm, follow the link within ${this.transferExpiresInMinutes} min and enter the code below together with your current account password: <a href="${link}">${link}</a></p>
       <p style="font-weight: bold; font-size: 30px;">${code}</p>
       <p>If you did not request this, ignore the message.</p>`;
 
@@ -280,7 +280,10 @@ export class AdminTransferService {
         this.errorsService.badRequest(ErrMsg.TARGET_USER_BLOCKED);
       }
 
-      const isPasswordValid = await this.hashService.compare(password, to.password);
+      const isPasswordValid = await this.hashService.compare(
+        password,
+        to.password,
+      );
       if (!isPasswordValid) {
         this.errorsService.badRequest(ErrMsg.CURRENT_PASSWORD_IS_INCORRECT);
       }
