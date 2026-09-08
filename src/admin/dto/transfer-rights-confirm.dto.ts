@@ -1,7 +1,7 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsString, Matches } from 'class-validator';
 
 export class TransferConfirmDto {
   @IsString()
-  @IsNotEmpty()
+  @Matches(/^\d{6}$/, { message: 'Code must contain exactly 6 digits' })
   code!: string;
 }
