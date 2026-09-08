@@ -38,9 +38,9 @@ SMTP_USER='service@gmail.com'
 SMTP_FROM='service@gmail.com''
 SMTP_PASS='SMTP_PASS'
 
-ADMIN_EMAIL='user@gmail.com'  
-ADMIN_PASSWORD='ADMIN_PASSWORD'
-ADMIN_NICKNAME='ADMIN_NICKNAME'
+INITIAL_ADMIN_EMAIL='user@gmail.com'  
+INITIAL_ADMIN_PASSWORD='INITIAL_ADMIN_PASSWORD'
+INITIAL_ADMIN_NICKNAME='INITIAL_ADMIN_NICKNAME'
 ```
 
 ---
@@ -90,15 +90,15 @@ npm run start:dev
 
 ### 📦 👑 Admin User Creation
 
-We use a dedicated migration to create an administrator account automatically:
+We use a dedicated migration to create the initial administrator account automatically:
 
 Migration: CreateAdminUser<TIMESTAMP>.ts
 
-Uses .env variables:
+Uses .env variables only for initial administrator creation:
 
-- ADMIN_EMAIL
-- ADMIN_PASSWORD
-- ADMIN_NICKNAME
+- INITIAL_ADMIN_EMAIL
+- INITIAL_ADMIN_PASSWORD
+- INITIAL_ADMIN_NICKNAME
 
 Hashing is done using the HashService class
 
