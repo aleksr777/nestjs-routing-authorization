@@ -32,6 +32,11 @@ export class AdminController {
     private readonly transfer: AdminTransferService,
   ) {}
 
+  @Get('transfer/status')
+  getTransferStatus() {
+    return this.transfer.getTransferStatus();
+  }
+
   @Post('transfer/initiate')
   async initiateTransfer(
     @Body() dto: TransferInitiateDto,
