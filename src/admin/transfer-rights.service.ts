@@ -68,6 +68,17 @@ export class AdminTransferService {
     return null;
   }
 
+  private isSameTransfer(
+    first: PendingAdminTransfer | null,
+    second: PendingAdminTransfer,
+  ): boolean {
+    return (
+      first?.code === second.code &&
+      first.fromId === second.fromId &&
+      first.toId === second.toId
+    );
+  }
+
   private async reserveTransfer(
     code: string,
     fromId: number,
@@ -162,6 +173,50 @@ export class AdminTransferService {
     return { message: 'Administrator rights invitation sent.' };
   }
 
+  async cancelTransfer(adminId: number) {
+    const pending = await this.getPendingTransfer();
+    if (!pending) {
+      this.errorsService.conflict(ErrMsg.ADMIN_TRANSFER_NOT_PENDING);
+    }
+    if (pending.fromId !== adminId) {
+      this.errorsService.forbidden(ErrMsg.ONLY_TRANSFER_INITIATOR_CAN_CANCEL);
+    }
+
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+
+    try {
+      const from = await qr.manager.findOneOrFail(User, {
+        where: { id: pending.fromId },
+        select: [ID, ROLE],
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (from.role !== Role.ADMIN) {
+        this.errorsService.conflict(ErrMsg.ADMIN_TRANSFER_CANNOT_CANCEL);
+      }
+
+      const currentPending = await this.getPendingTransfer();
+      if (!this.isSameTransfer(currentPending, pending)) {
+        this.errorsService.conflict(ErrMsg.ADMIN_TRANSFER_CANNOT_CANCEL);
+      }
+
+      await this.releaseTransfer(pending.code);
+      await qr.commitTransaction();
+    } catch (err: unknown) {
+      if (qr.isTransactionActive) {
+        await qr.rollbackTransaction();
+      }
+      if (err instanceof HttpException) throw err;
+      this.errorsService.badRequest(ErrMsg.TRANSFER_FAILED);
+    } finally {
+      await qr.release();
+    }
+
+    return { message: 'Administrator rights transfer cancelled.' };
+  }
+
   async confirmTransfer(code: string, currentUserId: number) {
     const data = await this.tokensService.getDataByTransferToken(code);
     const pending = await this.getPendingTransfer();
@@ -197,6 +252,12 @@ export class AdminTransferService {
         select: [ID, EMAIL, ROLE, IS_BLOCKED],
         lock: { mode: 'pessimistic_write' },
       });
+
+      const currentPending = await this.getPendingTransfer();
+      if (!this.isSameTransfer(currentPending, { code, fromId, toId })) {
+        this.errorsService.invalidToken(null, TokenType.ADMIN_TRANSFER);
+      }
+
       const to = await qr.manager.findOneOrFail(User, {
         where: { id: toId },
         select: [ID, EMAIL, ROLE, IS_BLOCKED],
