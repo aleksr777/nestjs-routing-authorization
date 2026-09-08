@@ -84,11 +84,7 @@ export class AdminTransferService {
     if (!pending) return null;
 
     const data = await this.tokensService.getDataByTransferToken(pending.code);
-    if (
-      !data ||
-      data.fromId !== pending.fromId ||
-      data.toId !== pending.toId
-    ) {
+    if (!data || data.fromId !== pending.fromId || data.toId !== pending.toId) {
       await this.redisService.del(ADMIN_TRANSFER_PENDING_KEY);
       return null;
     }
@@ -102,10 +98,14 @@ export class AdminTransferService {
     toId: number,
   ): Promise<void> {
     const value = JSON.stringify({ code, fromId, toId });
-    const result = await this.redisService.set(ADMIN_TRANSFER_PENDING_KEY, value, {
-      EX: this.transferExpiresIn,
-      NX: true,
-    });
+    const result = await this.redisService.set(
+      ADMIN_TRANSFER_PENDING_KEY,
+      value,
+      {
+        EX: this.transferExpiresIn,
+        NX: true,
+      },
+    );
 
     if (result !== 'OK') {
       await this.tokensService.deleteTransferToken(code).catch(() => undefined);
