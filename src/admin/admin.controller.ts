@@ -53,6 +53,11 @@ export class AdminController {
     );
   }
 
+  @Get('users/:id')
+  getUser(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.getUserById(id);
+  }
+
   @Delete('users/delete/:id')
   async deleteUser(@Param('id', ParseIntPipe) id: number) {
     await this.adminService.deleteUserById(id);
