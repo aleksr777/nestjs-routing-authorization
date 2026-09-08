@@ -48,6 +48,12 @@ export class AdminController {
     return await this.transfer.initiateTransfer(adminId, userId);
   }
 
+  @Delete('transfer/cancel')
+  async cancelTransfer(@Req() req: Request) {
+    const admin = req.user as User;
+    return await this.transfer.cancelTransfer(+admin.id);
+  }
+
   @Get('users/find')
   getUsers(@Query() q: GetUsersQueryDto) {
     return this.adminService.getUsersByQuery(
