@@ -42,7 +42,7 @@ export class RegistrationService {
         select: [ID],
       });
       if (user) {
-        const resetUrl = `${this.frontendUrl}/reset-password/`;
+        const resetUrl = `${this.frontendUrl}/auth/password-reset`;
         const text = `Hi, this is an automated message, please do not reply! It looks like there is already an account associated with this email address. If you’ve forgotten your password, you can reset it by using the link below: ${resetUrl}`;
         const html = `
           <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
