@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../users/entities/user.entity';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
+import { RedisService } from '../common/redis-service/redis.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokensService } from '../auth/tokens.service';
@@ -17,8 +18,17 @@ import {
   IS_BLOCKED,
 } from '../common/constants/user-select-fields.constants';
 
+const ADMIN_TRANSFER_PENDING_KEY = 'admin:transfer:pending';
+
+type PendingAdminTransfer = {
+  code: string;
+  fromId: number;
+  toId: number;
+};
+
 @Injectable()
 export class AdminTransferService {
+  private readonly transferExpiresIn: number;
   private readonly transferExpiresInMinutes: number;
 
   constructor(
@@ -27,10 +37,68 @@ export class AdminTransferService {
     private readonly errorsService: ErrorsService,
     private readonly mailService: MailService,
     private readonly envService: EnvService,
+    private readonly redisService: RedisService,
     private readonly tokensService: TokensService,
   ) {
-    this.transferExpiresInMinutes =
-      this.envService.get('ADMIN_TRANSFER_TOKEN_EXPIRES_IN', 'number') / 60;
+    this.transferExpiresIn = this.envService.get(
+      'ADMIN_TRANSFER_TOKEN_EXPIRES_IN',
+      'number',
+    );
+    this.transferExpiresInMinutes = this.transferExpiresIn / 60;
+  }
+
+  private async getPendingTransfer(): Promise<PendingAdminTransfer | null> {
+    const raw = await this.redisService.get(ADMIN_TRANSFER_PENDING_KEY);
+    if (!raw) return null;
+
+    try {
+      const data = JSON.parse(raw) as Partial<PendingAdminTransfer>;
+      if (
+        typeof data.code === 'string' &&
+        typeof data.fromId === 'number' &&
+        typeof data.toId === 'number'
+      ) {
+        return data as PendingAdminTransfer;
+      }
+    } catch {
+      // Invalid lock data is treated as stale and removed below.
+    }
+
+    await this.redisService.del(ADMIN_TRANSFER_PENDING_KEY);
+    return null;
+  }
+
+  private async reserveTransfer(
+    code: string,
+    fromId: number,
+    toId: number,
+  ): Promise<void> {
+    const value = JSON.stringify({ code, fromId, toId });
+    const result = await this.redisService.set(ADMIN_TRANSFER_PENDING_KEY, value, {
+      EX: this.transferExpiresIn,
+      NX: true,
+    });
+
+    if (result !== 'OK') {
+      await this.tokensService.deleteTransferToken(code).catch(() => undefined);
+      this.errorsService.conflict(ErrMsg.ADMIN_TRANSFER_ALREADY_PENDING);
+    }
+  }
+
+  private async releaseTransfer(code: string): Promise<void> {
+    const pending = await this.getPendingTransfer();
+    if (pending?.code === code) {
+      await this.redisService.del(ADMIN_TRANSFER_PENDING_KEY);
+    }
+    await this.tokensService.deleteTransferToken(code);
+  }
+
+  async getTransferStatus() {
+    const pending = await this.getPendingTransfer();
+    return {
+      pending: pending !== null,
+      target_user_id: pending?.toId ?? null,
+    };
   }
 
   async initiateTransfer(adminId: number, userId: number) {
@@ -70,6 +138,8 @@ export class AdminTransferService {
     }
 
     const code = await this.tokensService.getTransferCode(from.id, to.id);
+    await this.reserveTransfer(code, from.id, to.id);
+
     const frontendUrl = this.envService.get('FRONTEND_URL');
     const link = `${frontendUrl}/admin/transfer/confirm`;
     const subject = 'Administrator rights invitation';
@@ -85,7 +155,7 @@ export class AdminTransferService {
     try {
       await this.mailService.send(to.email, subject, text, html);
     } catch (err: unknown) {
-      await this.tokensService.deleteTransferToken(code).catch(() => undefined);
+      await this.releaseTransfer(code).catch(() => undefined);
       this.errorsService.default(err);
     }
 
@@ -94,10 +164,14 @@ export class AdminTransferService {
 
   async confirmTransfer(code: string, currentUserId: number) {
     const data = await this.tokensService.getDataByTransferToken(code);
+    const pending = await this.getPendingTransfer();
+
     if (
       !data ||
-      typeof data.fromId !== 'number' ||
-      typeof data.toId !== 'number'
+      !pending ||
+      pending.code !== code ||
+      pending.fromId !== data.fromId ||
+      pending.toId !== data.toId
     ) {
       return this.errorsService.invalidToken(null, TokenType.ADMIN_TRANSFER);
     }
@@ -155,7 +229,7 @@ export class AdminTransferService {
       await qr.release();
     }
 
-    await this.tokensService.deleteTransferToken(code).catch(() => undefined);
+    await this.releaseTransfer(code).catch(() => undefined);
 
     const subject = 'Administrator rights have been transferred';
     this.mailService
