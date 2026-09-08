@@ -67,6 +67,21 @@ export class AdminService {
     }
   }
 
+  async getUserById(userId: number) {
+    try {
+      const user = await this.usersRepository.findOneOrFail({
+        where: { id: userId },
+        select: [...ADMIN_FIELDS],
+      });
+      return this.authService.removeSensitiveInfo(user, [
+        ...USER_SECRET_FIELDS,
+      ]);
+    } catch (err: unknown) {
+      this.errorsService.userNotFound(err);
+      this.errorsService.default(err);
+    }
+  }
+
   async deleteUserById(userId: number): Promise<void> {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
