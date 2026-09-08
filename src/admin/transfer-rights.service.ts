@@ -114,16 +114,16 @@ export class AdminTransferService {
     await qr.connect();
     await qr.startTransaction();
 
-    let from: User;
-    let to: User;
+    let fromEmail = '';
+    let toEmail = '';
 
     try {
-      from = await qr.manager.findOneOrFail(User, {
+      const from = await qr.manager.findOneOrFail(User, {
         where: { id: fromId },
         select: [ID, EMAIL, ROLE, IS_BLOCKED],
         lock: { mode: 'pessimistic_write' },
       });
-      to = await qr.manager.findOneOrFail(User, {
+      const to = await qr.manager.findOneOrFail(User, {
         where: { id: toId },
         select: [ID, EMAIL, ROLE, IS_BLOCKED],
         lock: { mode: 'pessimistic_write' },
@@ -138,6 +138,9 @@ export class AdminTransferService {
       if (to.role === Role.ADMIN) {
         this.errorsService.badRequest(ErrMsg.TARGET_USER_ALREADY_ADMINISTRATOR);
       }
+
+      fromEmail = from.email;
+      toEmail = to.email;
 
       await qr.manager.update(User, { id: fromId }, { role: Role.USER });
       await qr.manager.update(User, { id: toId }, { role: Role.ADMIN });
@@ -157,13 +160,13 @@ export class AdminTransferService {
     const subject = 'Administrator rights have been transferred';
     this.mailService
       .send(
-        from.email,
+        fromEmail,
         subject,
         'Your administrator rights have been transferred to another user.',
       )
       .catch(() => undefined);
     this.mailService
-      .send(to.email, subject, 'You have received administrator rights.')
+      .send(toEmail, subject, 'You have received administrator rights.')
       .catch(() => undefined);
 
     return { message: 'Administrator rights transferred successfully.' };
