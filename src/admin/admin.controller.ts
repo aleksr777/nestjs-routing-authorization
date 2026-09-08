@@ -45,7 +45,7 @@ export class AdminController {
     const admin = req.user as User;
     const adminId = +admin.id;
     const userId = +dto.id;
-    return await this.transfer.initiateTransfer(adminId, userId);
+    return await this.transfer.initiateTransfer(adminId, userId, dto.password);
   }
 
   @Delete('transfer/cancel')
