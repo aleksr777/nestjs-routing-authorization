@@ -79,6 +79,23 @@ export class AdminTransferService {
     );
   }
 
+  private async getActivePendingTransfer(): Promise<PendingAdminTransfer | null> {
+    const pending = await this.getPendingTransfer();
+    if (!pending) return null;
+
+    const data = await this.tokensService.getDataByTransferToken(pending.code);
+    if (
+      !data ||
+      data.fromId !== pending.fromId ||
+      data.toId !== pending.toId
+    ) {
+      await this.redisService.del(ADMIN_TRANSFER_PENDING_KEY);
+      return null;
+    }
+
+    return pending;
+  }
+
   private async reserveTransfer(
     code: string,
     fromId: number,
@@ -105,7 +122,7 @@ export class AdminTransferService {
   }
 
   async getTransferStatus() {
-    const pending = await this.getPendingTransfer();
+    const pending = await this.getActivePendingTransfer();
     return {
       pending: pending !== null,
       target_user_id: pending?.toId ?? null,
@@ -174,7 +191,7 @@ export class AdminTransferService {
   }
 
   async cancelTransfer(adminId: number) {
-    const pending = await this.getPendingTransfer();
+    const pending = await this.getActivePendingTransfer();
     if (!pending) {
       this.errorsService.conflict(ErrMsg.ADMIN_TRANSFER_NOT_PENDING);
     }
@@ -197,7 +214,7 @@ export class AdminTransferService {
         this.errorsService.conflict(ErrMsg.ADMIN_TRANSFER_CANNOT_CANCEL);
       }
 
-      const currentPending = await this.getPendingTransfer();
+      const currentPending = await this.getActivePendingTransfer();
       if (!this.isSameTransfer(currentPending, pending)) {
         this.errorsService.conflict(ErrMsg.ADMIN_TRANSFER_CANNOT_CANCEL);
       }
@@ -218,20 +235,12 @@ export class AdminTransferService {
   }
 
   async confirmTransfer(code: string, currentUserId: number) {
-    const data = await this.tokensService.getDataByTransferToken(code);
-    const pending = await this.getPendingTransfer();
-
-    if (
-      !data ||
-      !pending ||
-      pending.code !== code ||
-      pending.fromId !== data.fromId ||
-      pending.toId !== data.toId
-    ) {
+    const pending = await this.getActivePendingTransfer();
+    if (!pending || pending.code !== code) {
       return this.errorsService.invalidToken(null, TokenType.ADMIN_TRANSFER);
     }
 
-    const { fromId, toId } = data;
+    const { fromId, toId } = pending;
     if (fromId === toId) {
       this.errorsService.badRequest(ErrMsg.ADMIN_CANNOT_TRANSFER_THEMSELVES);
     }
@@ -253,8 +262,8 @@ export class AdminTransferService {
         lock: { mode: 'pessimistic_write' },
       });
 
-      const currentPending = await this.getPendingTransfer();
-      if (!this.isSameTransfer(currentPending, { code, fromId, toId })) {
+      const currentPending = await this.getActivePendingTransfer();
+      if (!this.isSameTransfer(currentPending, pending)) {
         this.errorsService.invalidToken(null, TokenType.ADMIN_TRANSFER);
       }
 
