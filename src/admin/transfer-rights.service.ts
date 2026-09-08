@@ -5,6 +5,7 @@ import { User } from '../users/entities/user.entity';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
 import { RedisService } from '../common/redis-service/redis.service';
+import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokensService } from '../auth/tokens.service';
@@ -15,6 +16,7 @@ import {
   ROLE,
   EMAIL,
   NICKNAME,
+  PASSWORD,
   IS_BLOCKED,
 } from '../common/constants/user-select-fields.constants';
 
@@ -38,6 +40,7 @@ export class AdminTransferService {
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly redisService: RedisService,
+    private readonly hashService: HashService,
     private readonly tokensService: TokensService,
   ) {
     this.transferExpiresIn = this.envService.get(
@@ -234,7 +237,7 @@ export class AdminTransferService {
     return { message: 'Administrator rights transfer cancelled.' };
   }
 
-  async confirmTransfer(code: string, currentUserId: number) {
+  async confirmTransfer(code: string, currentUserId: number, password: string) {
     const pending = await this.getActivePendingTransfer();
     if (!pending || pending.code !== code) {
       return this.errorsService.invalidToken(null, TokenType.ADMIN_TRANSFER);
@@ -269,13 +272,19 @@ export class AdminTransferService {
 
       const to = await qr.manager.findOneOrFail(User, {
         where: { id: toId },
-        select: [ID, EMAIL, ROLE, IS_BLOCKED],
+        select: [ID, EMAIL, PASSWORD, ROLE, IS_BLOCKED],
         lock: { mode: 'pessimistic_write' },
       });
 
       if (to.is_blocked) {
         this.errorsService.badRequest(ErrMsg.TARGET_USER_BLOCKED);
       }
+
+      const isPasswordValid = await this.hashService.compare(password, to.password);
+      if (!isPasswordValid) {
+        this.errorsService.badRequest(ErrMsg.CURRENT_PASSWORD_IS_INCORRECT);
+      }
+
       if (from.role !== Role.ADMIN) {
         this.errorsService.badRequest(ErrMsg.INITIATOR_IS_NO_ADMINISTRATOR);
       }
