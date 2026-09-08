@@ -1,4 +1,3 @@
-// admin/admin-transfer.service.ts
 import { Injectable, HttpException } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -8,7 +7,6 @@ import { EnvService } from '../common/env-service/env.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokensService } from '../auth/tokens.service';
-import { AuthService } from '../auth/auth.service';
 import { Role } from '../common/types/role.enum';
 import { TokenType } from '../common/types/token-type.type';
 import {
@@ -21,7 +19,8 @@ import {
 
 @Injectable()
 export class AdminTransferService {
-  private readonly emailChangeExpiresIn: number;
+  private readonly transferExpiresInMinutes: number;
+
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(User) private readonly usersRepository: Repository<User>,
@@ -29,34 +28,37 @@ export class AdminTransferService {
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly tokensService: TokensService,
-    private readonly authService: AuthService,
   ) {
-    this.emailChangeExpiresIn =
-      this.envService.get('EMAIL_CHANGE_TOKEN_EXPIRES_IN', 'number') / 60;
+    this.transferExpiresInMinutes =
+      this.envService.get('ADMIN_TRANSFER_TOKEN_EXPIRES_IN', 'number') / 60;
   }
 
   async initiateTransfer(adminId: number, userId: number) {
     if (adminId === userId) {
       this.errorsService.forbidden(ErrMsg.ADMIN_CANNOT_TRANSFER_THEMSELVES);
     }
-    let from;
-    let to;
+
+    let from: User;
+    let to: User;
+
     try {
       from = await this.usersRepository.findOneOrFail({
         where: { id: adminId },
         select: [ID, EMAIL, NICKNAME, ROLE, IS_BLOCKED],
       });
-    } catch (err) {
+    } catch (err: unknown) {
       return this.errorsService.userNotFound(err);
     }
+
     try {
       to = await this.usersRepository.findOneOrFail({
         where: { id: userId },
         select: [ID, EMAIL, NICKNAME, ROLE, IS_BLOCKED],
       });
-    } catch (err) {
+    } catch (err: unknown) {
       return this.errorsService.userNotFound(err, ErrMsg.USER_NOT_FOUND);
     }
+
     if (to.is_blocked) {
       this.errorsService.badRequest(ErrMsg.TARGET_USER_BLOCKED);
     }
@@ -66,19 +68,28 @@ export class AdminTransferService {
     if (to.role === Role.ADMIN) {
       this.errorsService.badRequest(ErrMsg.TARGET_USER_ALREADY_ADMINISTRATOR);
     }
-    const code = this.tokensService.generateVerificationCode();
-    await this.tokensService.saveTransferToken(code, from.id, to.id);
+
+    const code = await this.tokensService.getTransferCode(from.id, to.id);
     const frontendUrl = this.envService.get('FRONTEND_URL');
-    const link = `${frontendUrl}/confirm-admin`;
+    const link = `${frontendUrl}/admin/transfer/confirm`;
     const subject = 'Administrator rights invitation';
     const greet = to.nickname ? `Hello, ${to.nickname}!` : 'Hello!';
-    const text = `${greet}\n\nYou have been invited to receive administrator rights.\n To confirm, please follow the link and enter the code below (within ${this.emailChangeExpiresIn} min): ${link}\n\n ${code}\n\n If you did not request this, ignore the message.`;
+    const text = `${greet}\n\nYou have been invited to receive administrator rights.\nTo confirm, follow the link and enter the code below within ${this.transferExpiresInMinutes} min: ${link}\n\n${code}\n\nIf you did not request this, ignore the message.`;
     const html = `
-      <p>${greet}</p><p>You have been invited to receive administrator rights.</p>
-      <p>To confirm, please follow the link and enter the code below (within ${this.emailChangeExpiresIn} min): <a href="${link}">${link}</a></p>
+      <p>${greet}</p>
+      <p>You have been invited to receive administrator rights.</p>
+      <p>To confirm, follow the link and enter the code below within ${this.transferExpiresInMinutes} min: <a href="${link}">${link}</a></p>
       <p style="font-weight: bold; font-size: 30px;">${code}</p>
       <p>If you did not request this, ignore the message.</p>`;
-    await this.mailService.send(to.email, subject, text, html);
+
+    try {
+      await this.mailService.send(to.email, subject, text, html);
+    } catch (err: unknown) {
+      await this.tokensService.deleteTransferToken(code).catch(() => undefined);
+      this.errorsService.default(err);
+    }
+
+    return { message: 'Administrator rights invitation sent.' };
   }
 
   async confirmTransfer(code: string, currentUserId: number) {
@@ -90,6 +101,7 @@ export class AdminTransferService {
     ) {
       return this.errorsService.invalidToken(null, TokenType.ADMIN_TRANSFER);
     }
+
     const { fromId, toId } = data;
     if (fromId === toId) {
       this.errorsService.badRequest(ErrMsg.ADMIN_CANNOT_TRANSFER_THEMSELVES);
@@ -97,46 +109,63 @@ export class AdminTransferService {
     if (currentUserId !== toId) {
       this.errorsService.forbidden(ErrMsg.TOKEN_NOT_ISSUED_FOR_CURRENT_USER);
     }
+
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
+
+    let from: User;
+    let to: User;
+
     try {
-      const from = await qr.manager.findOneOrFail(User, {
+      from = await qr.manager.findOneOrFail(User, {
         where: { id: fromId },
         select: [ID, EMAIL, ROLE, IS_BLOCKED],
+        lock: { mode: 'pessimistic_write' },
       });
-      const to = await qr.manager.findOneOrFail(User, {
+      to = await qr.manager.findOneOrFail(User, {
         where: { id: toId },
         select: [ID, EMAIL, ROLE, IS_BLOCKED],
+        lock: { mode: 'pessimistic_write' },
       });
-      if (to.is_blocked)
+
+      if (to.is_blocked) {
         this.errorsService.badRequest(ErrMsg.TARGET_USER_BLOCKED);
-      if (from.role !== Role.ADMIN)
+      }
+      if (from.role !== Role.ADMIN) {
         this.errorsService.badRequest(ErrMsg.INITIATOR_IS_NO_ADMINISTRATOR);
-      if (to.role === Role.ADMIN)
+      }
+      if (to.role === Role.ADMIN) {
         this.errorsService.badRequest(ErrMsg.TARGET_USER_ALREADY_ADMINISTRATOR);
+      }
+
       await qr.manager.update(User, { id: fromId }, { role: Role.USER });
       await qr.manager.update(User, { id: toId }, { role: Role.ADMIN });
       await qr.commitTransaction();
-      await this.tokensService.deleteTransferToken(code);
-      const subj = 'Administrator rights have been transferred';
-      this.mailService
-        .send(
-          from.email,
-          subj,
-          'Your administrator rights have been transferred to another user.',
-        )
-        .catch(() => undefined);
-      this.mailService
-        .send(to.email, subj, 'You have received administrator rights.')
-        .catch(() => undefined);
-      return this.authService.login(currentUserId);
-    } catch (err) {
-      await qr.rollbackTransaction();
+    } catch (err: unknown) {
+      if (qr.isTransactionActive) {
+        await qr.rollbackTransaction();
+      }
       if (err instanceof HttpException) throw err;
       this.errorsService.badRequest(ErrMsg.TRANSFER_FAILED);
     } finally {
       await qr.release();
     }
+
+    await this.tokensService.deleteTransferToken(code).catch(() => undefined);
+
+    const subject = 'Administrator rights have been transferred';
+    this.mailService
+      .send(
+        from.email,
+        subject,
+        'Your administrator rights have been transferred to another user.',
+      )
+      .catch(() => undefined);
+    this.mailService
+      .send(to.email, subject, 'You have received administrator rights.')
+      .catch(() => undefined);
+
+    return { message: 'Administrator rights transferred successfully.' };
   }
 }
