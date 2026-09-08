@@ -25,7 +25,6 @@ export const ENV_VARIABLES = [
   'SMTP_USER',
   'SMTP_PASS',
   'SMTP_FROM',
-  'ADMIN_EMAIL',
   'ADMIN_PASSWORD',
   'ADMIN_NICKNAME',
 ] as const;
