@@ -132,7 +132,7 @@ export class AdminTransferService {
     };
   }
 
-  async initiateTransfer(adminId: number, userId: number) {
+  async initiateTransfer(adminId: number, userId: number, password: string) {
     if (adminId === userId) {
       this.errorsService.forbidden(ErrMsg.ADMIN_CANNOT_TRANSFER_THEMSELVES);
     }
@@ -143,10 +143,19 @@ export class AdminTransferService {
     try {
       from = await this.usersRepository.findOneOrFail({
         where: { id: adminId },
-        select: [ID, EMAIL, NICKNAME, ROLE, IS_BLOCKED],
+        select: [ID, EMAIL, NICKNAME, PASSWORD, ROLE, IS_BLOCKED],
       });
     } catch (err: unknown) {
       return this.errorsService.userNotFound(err);
+    }
+
+    if (from.role !== Role.ADMIN) {
+      this.errorsService.badRequest(ErrMsg.ONLY_ADMINISTRATOR_TRANSFER);
+    }
+
+    const isPasswordValid = await this.hashService.compare(password, from.password);
+    if (!isPasswordValid) {
+      this.errorsService.badRequest(ErrMsg.CURRENT_PASSWORD_IS_INCORRECT);
     }
 
     try {
@@ -160,9 +169,6 @@ export class AdminTransferService {
 
     if (to.is_blocked) {
       this.errorsService.badRequest(ErrMsg.TARGET_USER_BLOCKED);
-    }
-    if (from.role !== Role.ADMIN) {
-      this.errorsService.badRequest(ErrMsg.ONLY_ADMINISTRATOR_TRANSFER);
     }
     if (to.role === Role.ADMIN) {
       this.errorsService.badRequest(ErrMsg.TARGET_USER_ALREADY_ADMINISTRATOR);
