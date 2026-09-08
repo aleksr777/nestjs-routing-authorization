@@ -1,6 +1,6 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Brackets } from 'typeorm';
+import { Repository, DataSource, Brackets, Not } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { RedisService } from '../common/redis-service/redis.service';
@@ -43,14 +43,15 @@ export class AdminService {
       const qb = this.usersRepository
         .createQueryBuilder('user')
         .select(ADMIN_FIELDS.map((f) => `user.${f}`))
+        .where('user.role != :adminRole', { adminRole: Role.ADMIN })
         .take(limit)
         .skip(offset)
         .orderBy('user.id', 'DESC');
       if (search?.trim()) {
         const q = `%${search}%`;
-        if (field) qb.where(`user.${field} ILIKE :q`, { q });
+        if (field) qb.andWhere(`user.${field} ILIKE :q`, { q });
         else
-          qb.where(
+          qb.andWhere(
             new Brackets((b) => {
               b.where('user.nickname ILIKE :q', { q })
                 .orWhere('user.email ILIKE :q', { q })
@@ -58,10 +59,13 @@ export class AdminService {
             }),
           );
       }
-      const users = await qb.getMany();
-      return this.authService.removeSensitiveInfo(users, [
-        ...USER_SECRET_FIELDS,
-      ]);
+      const [users, total] = await qb.getManyAndCount();
+      return {
+        users: this.authService.removeSensitiveInfo(users, [
+          ...USER_SECRET_FIELDS,
+        ]),
+        total,
+      };
     } catch (err: unknown) {
       this.errorsService.default(err);
     }
@@ -70,7 +74,7 @@ export class AdminService {
   async getUserById(userId: number) {
     try {
       const user = await this.usersRepository.findOneOrFail({
-        where: { id: userId },
+        where: { id: userId, role: Not(Role.ADMIN) },
         select: [...ADMIN_FIELDS],
       });
       return this.authService.removeSensitiveInfo(user, [
