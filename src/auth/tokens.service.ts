@@ -333,13 +333,12 @@ export class TokensService {
   }
 
   /* ADMIN TRANSFER CODE */
-  async saveTransferToken(code: string, fromId: number, toId: number) {
-    await this.redisService.set(
-      `${ADMIN_TRANSFER_REDIS_PREFIX}${code}`,
-      JSON.stringify({ fromId: fromId, toId: toId }),
-      {
-        EX: this.transferExpiresIn,
-      },
+  async getTransferCode(fromId: number, toId: number) {
+    const value = JSON.stringify({ fromId, toId });
+    return this.saveVerificationToken(
+      ADMIN_TRANSFER_REDIS_PREFIX,
+      value,
+      this.transferExpiresIn,
     );
   }
 
