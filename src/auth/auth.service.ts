@@ -13,6 +13,7 @@ import { User } from '../users/entities/user.entity';
 import {
   ID,
   ROLE,
+  EMAIL,
   IS_BLOCKED,
   USER_PROFILE_FIELDS,
   PASSWORD,
@@ -20,6 +21,7 @@ import {
   BLOCKED_REASON,
 } from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
+import { Role } from '../common/types/role.enum';
 
 @Injectable()
 export class AuthService {
@@ -71,6 +73,19 @@ export class AuthService {
       return user;
     } catch (err: unknown) {
       this.errorsService.invalidEmailOrPassword(err);
+      this.errorsService.default(err);
+    }
+  }
+
+  async getAdministratorEmail() {
+    try {
+      const administrator = await this.usersRepository.findOneOrFail({
+        where: { role: Role.ADMIN },
+        select: [EMAIL],
+      });
+      return administrator.email;
+    } catch (err: unknown) {
+      this.errorsService.userNotFound(err, 'Administrator not found');
       this.errorsService.default(err);
     }
   }
