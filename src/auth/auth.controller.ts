@@ -12,7 +12,6 @@ import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { User } from '../users/entities/user.entity';
 import { JwtTokens, AuthResponse } from '../common/types/jwt-tokens.type';
-import { EnvService } from '../common/env-service/env.service';
 
 @Controller('auth')
 export class AuthController {
@@ -20,7 +19,6 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly registrationService: RegistrationService,
     private readonly passwordResetService: PasswordResetService,
-    private readonly envService: EnvService,
   ) {}
 
   private getRefreshCookieOptions(maxAge?: number): CookieOptions {
@@ -103,7 +101,7 @@ export class AuthController {
       return {
         blocked: true,
         blocked_reason: user.blocked_reason ?? null,
-        contact_email: this.envService.get('ADMIN_EMAIL'),
+        contact_email: await this.authService.getAdministratorEmail(),
       };
     }
 
