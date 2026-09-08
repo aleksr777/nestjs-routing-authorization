@@ -54,6 +54,7 @@ export enum ErrMsg {
   ADMIN_TRANSFER_CANNOT_CANCEL = 'Administrator rights transfer can no longer be cancelled.',
   ONLY_TRANSFER_INITIATOR_CAN_CANCEL = 'Only the administrator who initiated the transfer can cancel it.',
   CURRENT_USER_BLOCKED = 'Current user is blocked.',
+  CURRENT_PASSWORD_IS_INCORRECT = 'Current password is incorrect.',
   TARGET_USER_BLOCKED = 'Target user is blocked.',
   TARGET_USER_ALREADY_ADMINISTRATOR = 'Target user is already an administrator.',
   TRANSFER_FAILED = 'Transfer failed.',
