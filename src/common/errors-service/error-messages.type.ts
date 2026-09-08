@@ -50,6 +50,9 @@ export enum ErrMsg {
 
   ONLY_ADMINISTRATOR_TRANSFER = 'Only administrator can initiate a transfer.',
   ADMIN_TRANSFER_ALREADY_PENDING = 'Administrator rights transfer is already pending.',
+  ADMIN_TRANSFER_NOT_PENDING = 'No administrator rights transfer is pending.',
+  ADMIN_TRANSFER_CANNOT_CANCEL = 'Administrator rights transfer can no longer be cancelled.',
+  ONLY_TRANSFER_INITIATOR_CAN_CANCEL = 'Only the administrator who initiated the transfer can cancel it.',
   CURRENT_USER_BLOCKED = 'Current user is blocked.',
   TARGET_USER_BLOCKED = 'Target user is blocked.',
   TARGET_USER_ALREADY_ADMINISTRATOR = 'Target user is already an administrator.',
