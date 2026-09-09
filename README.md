@@ -2,6 +2,8 @@
 
 NestJS backend template for routing, authentication, authorization, account management, and administrator workflows.
 
+Companion frontend: [react-routing-authorization](https://github.com/aleksr777/react-routing-authorization)
+
 ## Environment
 
 Copy `.env.example` to `.env` and adjust the values for your environment.
