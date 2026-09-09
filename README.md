@@ -4,6 +4,37 @@ NestJS backend template for routing, authentication, authorization, account mana
 
 Companion frontend: [react-routing-authorization](https://github.com/aleksr777/react-routing-authorization)
 
+## Feature overview
+
+The backend provides:
+
+- registration with email verification codes;
+- login, logout, access-token refresh, and password recovery;
+- access tokens plus an HttpOnly refresh-token cookie;
+- current-user profile reading and partial editing;
+- email change and password change/reset confirmation flows;
+- self-account deletion with password verification;
+- blocked-account handling with an administrator-provided reason and current administrator contact email;
+- role-based administrator endpoints for user search, viewing, blocking, unblocking, and deletion;
+- transferable administrator rights with password verification on both sides;
+- one active administrator-rights transfer at a time;
+- cancellation and TTL expiration of pending administrator transfers;
+- Redis-backed one-time verification codes and pending-transfer state;
+- transaction and pessimistic-lock protection for administrator role transfer.
+
+## Tech stack
+
+- NestJS 11
+- TypeScript
+- TypeORM
+- PostgreSQL
+- Redis
+- Passport / JWT
+- bcrypt
+- Nodemailer
+- class-validator / class-transformer
+- Docker Compose for local PostgreSQL and Redis
+
 ## Environment
 
 Copy `.env.example` to `.env` and adjust the values for your environment.
@@ -98,6 +129,31 @@ The migration creates the first administrator or promotes/updates the matching e
 - A blocked-login response contains `blocked_reason` and the email of the current administrator. The administrator email is resolved dynamically from the database, not from an environment variable.
 - JWT and refresh strategies re-check the current user in the database, so blocked users and users whose role has changed do not keep stale authorization privileges.
 
+### Authentication flow
+
+```text
+Login / registration / password reset
+        ↓
+backend issues access + refresh tokens
+        ↓
+access token → JSON response → frontend memory
+refresh token → HttpOnly cookie
+        ↓
+protected request with Bearer access token
+        ↓
+JwtStrategy validates token and reloads current user from DB
+        ↓
+blocked status / current role are re-evaluated
+        ↓
+access token expires or approaches expiry
+        ↓
+POST /api/auth/refresh-tokens using HttpOnly refresh cookie
+        ↓
+new authentication state
+```
+
+The frontend route guards improve UX, but backend JWT and role guards are the authorization boundary.
+
 ## Administrator rights transfer
 
 Administrator rights are transferable and are not tied to the initial administrator email.
@@ -190,7 +246,7 @@ All routes below require a valid access token.
 
 ### Admin
 
-All routes below require a valid access token and the current `admin` role.
+All routes below require a valid access token and the current `admin` role, except transfer confirmation: the recipient must be authenticated but is still a regular user before accepting the administrator role.
 
 - `GET /api/admin/users/find` — paginated user search; administrator accounts are excluded
 - `GET /api/admin/users/:id` — get a managed user's details
@@ -200,13 +256,33 @@ All routes below require a valid access token and the current `admin` role.
 - `GET /api/admin/transfer/status` — get active administrator-transfer status
 - `POST /api/admin/transfer/initiate` — initiate transfer after administrator password verification
 - `DELETE /api/admin/transfer/cancel` — cancel the active transfer while still pending
-- `POST /api/admin/transfer/confirm` — recipient confirms transfer with code and current password
+- `POST /api/admin/transfer/confirm` — authenticated recipient confirms transfer with code and current password
 
-## Security notes
+## Security properties
 
 - Administrator authorization is enforced on the backend with JWT and role guards; frontend route guards are only a UX layer.
 - Blocked users are rejected by protected authentication strategies even if they still possess previously issued tokens.
+- Critical administrator transfer initiation requires the current administrator's password.
+- Transfer acceptance requires both the recipient's six-digit invitation code and current password.
 - Administrator transfer codes are unique six-digit Redis-backed verification codes.
-- A global pending-transfer lock prevents multiple simultaneous administrator-transfer invitations.
+- A global Redis pending-transfer lock with `NX` prevents multiple simultaneous administrator-transfer invitations.
+- Pending transfer state expires automatically with `ADMIN_TRANSFER_TOKEN_EXPIRES_IN`.
 - Transfer confirmation and cancellation are protected against races with database pessimistic locks.
+- Role changes are committed transactionally.
 - The initial administrator environment variables are migration-only and are not a source of runtime authorization state.
+
+## Deployment notes
+
+The checked-in authentication cookie configuration is currently intended for local development: the refresh cookie uses `secure: false` and `sameSite: 'lax'`.
+
+For production deployment, review the cookie and CORS configuration for the actual frontend/backend topology. In particular:
+
+- use HTTPS and enable `Secure` cookies;
+- choose an appropriate `SameSite` policy; cross-site frontend/backend deployments may require `SameSite=None` together with `Secure`;
+- allow credentials only for trusted frontend origins;
+- use strong, unique JWT secrets and SMTP/database credentials;
+- set `DB_TYPEORM_SYNC=false` in production and manage schema changes through migrations;
+- keep PostgreSQL and Redis inaccessible from untrusted public networks;
+- configure production values for `FRONTEND_URL`, database, Redis, and SMTP settings.
+
+These are deployment recommendations; they are not all enabled by the current local-development configuration.
