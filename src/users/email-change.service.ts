@@ -5,6 +5,7 @@ import { User } from './entities/user.entity';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
+import { RedisService } from '../common/redis-service/redis.service';
 import { TokensService } from '../auth/tokens.service';
 import { AuthService } from '../auth/auth.service';
 import { EmailChangeRequestDto } from './dto/email-change-request.dto';
@@ -17,23 +18,54 @@ import {
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokenType } from '../common/types/token-type.type';
 
+const EMAIL_CHANGE_LOCKOUT_PREFIX = 'email-change:lockout:';
+const EMAIL_CHANGE_LOCKOUT_MESSAGE =
+  'Email change is temporarily locked after too many incorrect confirmation codes.';
+
 @Injectable()
 export class EmailChangeService {
   private readonly emailChangeTokenExpiresIn: number;
+  private readonly emailChangeVerificationLockout: number;
+
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(User) private readonly usersRepository: Repository<User>,
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly errorsService: ErrorsService,
+    private readonly redisService: RedisService,
     private readonly tokensService: TokensService,
     private readonly authService: AuthService,
   ) {
     this.emailChangeTokenExpiresIn =
       this.envService.get('EMAIL_CHANGE_TOKEN_EXPIRES_IN', 'number') / 60;
+    this.emailChangeVerificationLockout = this.envService.get(
+      'EMAIL_CHANGE_VERIFICATION_LOCKOUT',
+      'number',
+    );
   }
 
-  private async rejectInvalidCode(attemptSubject: string): Promise<never> {
+  private getLockoutKey(userId: number) {
+    return `${EMAIL_CHANGE_LOCKOUT_PREFIX}${userId}`;
+  }
+
+  private async getLockoutSeconds(userId: number) {
+    const ttl = await this.redisService.ttl(this.getLockoutKey(userId));
+    return typeof ttl === 'number' && ttl > 0 ? ttl : 0;
+  }
+
+  private async assertNotLocked(userId: number) {
+    const retryAfter = await this.getLockoutSeconds(userId);
+    if (retryAfter > 0) {
+      this.errorsService.tooManyRequests(
+        EMAIL_CHANGE_LOCKOUT_MESSAGE,
+        retryAfter,
+      );
+    }
+  }
+
+  private async rejectInvalidCode(userId: number): Promise<never> {
+    const attemptSubject = userId.toString();
     await this.tokensService.registerVerificationFailure(
       TokenType.EMAIL_CHANGE,
       attemptSubject,
@@ -43,13 +75,49 @@ export class EmailChangeService {
         TokenType.EMAIL_CHANGE,
         attemptSubject,
       );
+
+    if (attemptsRemaining <= 0) {
+      await this.redisService.set(this.getLockoutKey(userId), '1', {
+        EX: this.emailChangeVerificationLockout,
+      });
+    }
+
     return this.errorsService.invalidTokenWithAttempts(
       TokenType.EMAIL_CHANGE,
       attemptsRemaining,
     );
   }
 
+  async getStatus(userId: number) {
+    const retryAfter = await this.getLockoutSeconds(userId);
+    const maxAttempts = this.tokensService.getVerificationAttemptLimit(
+      TokenType.EMAIL_CHANGE,
+    );
+    let attemptsRemaining =
+      await this.tokensService.getVerificationAttemptsRemaining(
+        TokenType.EMAIL_CHANGE,
+        userId.toString(),
+      );
+
+    if (retryAfter === 0 && attemptsRemaining === 0) {
+      await this.tokensService.clearVerificationFailures(
+        TokenType.EMAIL_CHANGE,
+        userId.toString(),
+      );
+      attemptsRemaining = maxAttempts;
+    }
+
+    return {
+      locked: retryAfter > 0,
+      retry_after: retryAfter,
+      max_attempts: maxAttempts,
+      attempts_remaining: retryAfter > 0 ? 0 : attemptsRemaining,
+    };
+  }
+
   async request(userId: number, dto: EmailChangeRequestDto) {
+    await this.assertNotLocked(userId);
+
     const user = await this.usersRepository
       .findOneOrFail({ where: { id: userId }, select: [ID, EMAIL, IS_BLOCKED] })
       .catch((err) => this.errorsService.userNotFound(err));
@@ -95,6 +163,8 @@ export class EmailChangeService {
     if (!accessToken) {
       this.errorsService.tokenNotDefined(TokenType.ACCESS);
     }
+    await this.assertNotLocked(currentUserId);
+
     const attemptSubject = currentUserId.toString();
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.EMAIL_CHANGE,
@@ -106,11 +176,10 @@ export class EmailChangeService {
       typeof data.user_id !== 'number' ||
       typeof data.new_email !== 'string'
     ) {
-      return this.rejectInvalidCode(attemptSubject);
+      return this.rejectInvalidCode(currentUserId);
     }
     if (data.user_id !== currentUserId) {
-      await this.rejectInvalidCode(attemptSubject);
-      throw new ForbiddenException(ErrMsg.TOKEN_NOT_ISSUED_FOR_CURRENT_USER);
+      return this.rejectInvalidCode(currentUserId);
     }
     const newEmail = data.new_email.trim().toLowerCase();
     this.mailService.validateNotServiceEmail(newEmail);
@@ -138,6 +207,9 @@ export class EmailChangeService {
         .catch(() => undefined);
       await this.tokensService
         .clearVerificationFailures(TokenType.EMAIL_CHANGE, attemptSubject)
+        .catch(() => undefined);
+      await this.redisService
+        .del(this.getLockoutKey(currentUserId))
         .catch(() => undefined);
       await this.tokensService.removeRefreshToken(user.id);
       await this.tokensService.addJwtTokenToBlacklist(
