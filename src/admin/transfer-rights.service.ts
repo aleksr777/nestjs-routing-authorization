@@ -259,7 +259,15 @@ export class AdminTransferService {
       if (limitReached && pending?.toId === currentUserId) {
         await this.releaseTransfer(pending.code).catch(() => undefined);
       }
-      return this.errorsService.invalidToken(null, TokenType.ADMIN_TRANSFER);
+      const attemptsRemaining =
+        await this.tokensService.getVerificationAttemptsRemaining(
+          TokenType.ADMIN_TRANSFER,
+          attemptSubject,
+        );
+      return this.errorsService.invalidTokenWithAttempts(
+        TokenType.ADMIN_TRANSFER,
+        attemptsRemaining,
+      );
     }
 
     const { fromId, toId } = pending;
