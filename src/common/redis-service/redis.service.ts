@@ -89,4 +89,20 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.errorsService.default(err, 'Redis error (del).');
     }
   }
+
+  async incr(key: string) {
+    try {
+      return await this.client.incr(key);
+    } catch (err) {
+      this.errorsService.default(err, 'Redis error (incr).');
+    }
+  }
+
+  async expire(key: string, seconds: number) {
+    try {
+      return await this.client.expire(key, seconds);
+    } catch (err) {
+      this.errorsService.default(err, 'Redis error (expire).');
+    }
+  }
 }
