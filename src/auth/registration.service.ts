@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TokensService } from './tokens.service';
@@ -17,6 +17,7 @@ export class RegistrationService {
   config: any;
   private readonly frontendUrl: string;
   private readonly registrationExpiresIn: number;
+
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -34,48 +35,126 @@ export class RegistrationService {
       this.envService.get('REGISTRATION_TOKEN_EXPIRES_IN', 'number') / 60;
   }
 
+  private getRequestResponse(retryAfter: number) {
+    return {
+      message: 'If the email exists, we’ve sent you a code.',
+      retry_after: retryAfter,
+      max_attempts: this.tokensService.getVerificationAttemptLimit(
+        TokenType.REGISTRATION,
+      ),
+    };
+  }
+
+  private async sendExistingAccountNotice(email: string) {
+    const resetUrl = `${this.frontendUrl}/auth/password-reset`;
+    const text = `Hi, this is an automated message, please do not reply! It looks like there is already an account associated with this email address. If you’ve forgotten your password, you can reset it by using the link below: ${resetUrl}`;
+    const html = `
+      <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
+      <p style="font-weight: bold; font-size: 17px;">It looks like there is already an account associated with this email address.</p>
+      <p style="font-weight: bold; font-size: 17px;">If you’ve forgotten your password, you can reset it by using the link below:</p>
+      <p style="font-weight: bold; font-size: 17px;">
+          <a href="${resetUrl}" style="font-weight: bold;">${resetUrl}</a>
+      </p>
+      <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
+    `;
+    await this.mailService.send(email, 'Password recovery', text, html);
+  }
+
+  private async sendRegistrationCode(email: string, code: string) {
+    const text = `Hi, this is an automated message, please do not reply! You can confirm your registration by using the code below (within ${this.registrationExpiresIn} min): ${code}`;
+    const html = `
+      <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
+      <p style="font-weight: bold; font-size: 17px;">You can confirm your registration by using the code below (within ${this.registrationExpiresIn} min):</p>
+      <p style="font-weight: bold; font-size: 30px;">${code}</p>
+      <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
+    `;
+    await this.mailService.send(email, 'Confirm registration', text, html);
+  }
+
   async request(email: string, password: string) {
     const normalizedEmail = email.trim().toLowerCase();
     this.mailService.validateNotServiceEmail(normalizedEmail);
+    const retryAfter = await this.tokensService.reserveVerificationCodeRequest(
+      TokenType.REGISTRATION,
+      normalizedEmail,
+    );
+    let issuedCode: string | undefined;
+
     try {
       const user = await this.usersRepository.findOne({
         where: { email: normalizedEmail },
         select: [ID],
       });
+
       if (user) {
-        const resetUrl = `${this.frontendUrl}/auth/password-reset`;
-        const text = `Hi, this is an automated message, please do not reply! It looks like there is already an account associated with this email address. If you’ve forgotten your password, you can reset it by using the link below: ${resetUrl}`;
-        const html = `
-          <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
-          <p style="font-weight: bold; font-size: 17px;">It looks like there is already an account associated with this email address.</p>
-          <p style="font-weight: bold; font-size: 17px;">If you’ve forgotten your password, you can reset it by using the link below:</p>
-          <p style="font-weight: bold; font-size: 17px;">
-              <a href="${resetUrl}" style="font-weight: bold;">${resetUrl}</a>
-          </p>
-          <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
-        `;
-        await this.mailService.send(normalizedEmail, `Password recovery`, text, html);
+        await this.sendExistingAccountNotice(normalizedEmail);
       } else {
         const hashedPassword = await this.hashService.hash(password);
-        const redisValue = { email: normalizedEmail, password: hashedPassword };
-        const code = await this.tokensService.getRegistrationCode(redisValue);
+        issuedCode = await this.tokensService.getRegistrationCode({
+          email: normalizedEmail,
+          password: hashedPassword,
+        });
+        await this.sendRegistrationCode(normalizedEmail, issuedCode);
         await this.tokensService.clearVerificationFailures(
           TokenType.REGISTRATION,
           normalizedEmail,
         );
-        const text = `Hi, this is an automated message, please do not reply! You can confirm your registration by using the code below (within ${this.registrationExpiresIn} min): ${code}`;
-        const html = `
-          <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
-          <p style="font-weight: bold; font-size: 17px;">You can confirm your registration by using the code below (within ${this.registrationExpiresIn} min):</p>
-          <p style="font-weight: bold; font-size: 30px;">${code}</p>
-          <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
-        `;
-        await this.mailService.send(normalizedEmail, `Confirm registration`, text, html);
       }
-      return {
-        message: 'If the email exists, we’ve sent you a code.',
-      };
+
+      return this.getRequestResponse(retryAfter);
     } catch (err: unknown) {
+      if (issuedCode) {
+        await this.tokensService
+          .deleteRegistrationCode(issuedCode, normalizedEmail)
+          .catch(() => undefined);
+      }
+      await this.tokensService
+        .releaseVerificationCodeRequest(TokenType.REGISTRATION, normalizedEmail)
+        .catch(() => undefined);
+      if (err instanceof HttpException) throw err;
+      this.errorsService.default(err);
+    }
+  }
+
+  async resend(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    this.mailService.validateNotServiceEmail(normalizedEmail);
+    const retryAfter = await this.tokensService.reserveVerificationCodeRequest(
+      TokenType.REGISTRATION,
+      normalizedEmail,
+    );
+    let issuedCode: string | undefined;
+
+    try {
+      const active = await this.tokensService.getActiveRegistrationData(normalizedEmail);
+      if (active) {
+        issuedCode = await this.tokensService.getRegistrationCode(active.data);
+        await this.sendRegistrationCode(normalizedEmail, issuedCode);
+        await this.tokensService.clearVerificationFailures(
+          TokenType.REGISTRATION,
+          normalizedEmail,
+        );
+      } else {
+        const user = await this.usersRepository.findOne({
+          where: { email: normalizedEmail },
+          select: [ID],
+        });
+        if (user) {
+          await this.sendExistingAccountNotice(normalizedEmail);
+        }
+      }
+
+      return this.getRequestResponse(retryAfter);
+    } catch (err: unknown) {
+      if (issuedCode) {
+        await this.tokensService
+          .deleteRegistrationCode(issuedCode, normalizedEmail)
+          .catch(() => undefined);
+      }
+      await this.tokensService
+        .releaseVerificationCodeRequest(TokenType.REGISTRATION, normalizedEmail)
+        .catch(() => undefined);
+      if (err instanceof HttpException) throw err;
       this.errorsService.default(err);
     }
   }
@@ -92,7 +171,11 @@ export class RegistrationService {
     await qr.startTransaction();
     try {
       const data = await this.tokensService.getDataByRegistrationCode(code);
-      if (!data || data.email.trim().toLowerCase() !== attemptSubject) {
+      const isActive = await this.tokensService.isActiveRegistrationCode(
+        attemptSubject,
+        code,
+      );
+      if (!data || !isActive || data.email.trim().toLowerCase() !== attemptSubject) {
         await this.tokensService.registerVerificationFailure(
           TokenType.REGISTRATION,
           attemptSubject,
@@ -120,7 +203,7 @@ export class RegistrationService {
       });
       await qr.manager.save(User, newUser);
       await qr.commitTransaction();
-      await this.tokensService.deleteRegistrationCode(code);
+      await this.tokensService.deleteRegistrationCode(code, attemptSubject);
       await this.tokensService.clearVerificationFailures(
         TokenType.REGISTRATION,
         attemptSubject,
