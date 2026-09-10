@@ -76,7 +76,7 @@ export class UsersService {
         user.password,
       );
       if (!isPasswordValid) {
-        this.errorsService.badRequest(ErrMsg.OLD_PASSWORD_IS_INCORRECT);
+        this.errorsService.badRequest(ErrMsg.CURRENT_PASSWORD_IS_INCORRECT);
       }
       await qr.manager.delete(User, { id: userId });
       await this.tokensService.addJwtTokenToBlacklist(
