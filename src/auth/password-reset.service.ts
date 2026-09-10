@@ -8,7 +8,7 @@ import { ErrorsService } from '../common/errors-service/errors.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
 import { User } from '../users/entities/user.entity';
-import { ID } from '../common/constants/user-select-fields.constants';
+import { EMAIL, ID } from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
 
 @Injectable()
@@ -30,10 +30,11 @@ export class PasswordResetService {
   }
 
   async request(email: string) {
-    this.mailService.validateNotServiceEmail(email);
+    const normalizedEmail = email.trim().toLowerCase();
+    this.mailService.validateNotServiceEmail(normalizedEmail);
     try {
       const user = await this.usersRepository.findOne({
-        where: { email },
+        where: { email: normalizedEmail },
         select: [ID],
       });
       if (user) {
@@ -44,7 +45,7 @@ export class PasswordResetService {
           <p style="font-weight: bold; font-size: 17px;">You can reset your password by using the code below (within ${this.resetExpiresIn} min):</p>
           <p style="font-weight: bold; font-size: 30px;">${code}</p>
           <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
-        await this.mailService.send(email, `Password recovery`, text, html);
+        await this.mailService.send(normalizedEmail, `Password recovery`, text, html);
       }
       return {
         message: 'If the email exists, we’ve sent you a password reset code.',
@@ -54,7 +55,8 @@ export class PasswordResetService {
     }
   }
 
-  async confirm(code: string, newPassword: string, attemptSubject: string) {
+  async confirm(code: string, newPassword: string, email: string) {
+    const attemptSubject = email.trim().toLowerCase();
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.PASSWORD_RESET,
       attemptSubject,
@@ -68,8 +70,20 @@ export class PasswordResetService {
           attemptSubject,
         );
         this.errorsService.invalidToken(null, TokenType.PASSWORD_RESET);
-        return;
       }
+
+      const user = await this.usersRepository.findOne({
+        where: { id: userId },
+        select: [ID, EMAIL],
+      });
+      if (!user || user.email.trim().toLowerCase() !== attemptSubject) {
+        await this.tokensService.registerVerificationFailure(
+          TokenType.PASSWORD_RESET,
+          attemptSubject,
+        );
+        this.errorsService.invalidToken(null, TokenType.PASSWORD_RESET);
+      }
+
       const hashedPassword = await this.hashService.hash(newPassword);
       const result = await this.usersRepository.update(
         { id: userId },
