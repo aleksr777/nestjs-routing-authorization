@@ -55,6 +55,10 @@ export class AuthController {
     };
   }
 
+  private getVerificationAttemptSubject(req: Request): string {
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  }
+
   private isJwtTokens(value: unknown): value is JwtTokens {
     if (typeof value !== 'object' || value === null) {
       return false;
@@ -145,9 +149,13 @@ export class AuthController {
   @Post('registration/confirm')
   async confirmRegistration(
     @Body() dto: RegistrationConfirmDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.registrationService.confirm(dto.code);
+    const result = await this.registrationService.confirm(
+      dto.code,
+      this.getVerificationAttemptSubject(req),
+    );
 
     return this.handleAuthResult(res, result);
   }
@@ -160,11 +168,13 @@ export class AuthController {
   @Post('password-reset/confirm')
   async resetPassword(
     @Body() dto: PasswordResetConfirmDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.passwordResetService.confirm(
       dto.code,
       dto.new_password,
+      this.getVerificationAttemptSubject(req),
     );
 
     return this.handleAuthResult(res, result);
