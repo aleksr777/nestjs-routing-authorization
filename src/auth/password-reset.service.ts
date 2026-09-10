@@ -99,7 +99,15 @@ export class PasswordResetService {
           TokenType.PASSWORD_RESET,
           attemptSubject,
         );
-        this.errorsService.invalidToken(null, TokenType.PASSWORD_RESET);
+        const attemptsRemaining =
+          await this.tokensService.getVerificationAttemptsRemaining(
+            TokenType.PASSWORD_RESET,
+            attemptSubject,
+          );
+        this.errorsService.invalidTokenWithAttempts(
+          TokenType.PASSWORD_RESET,
+          attemptsRemaining,
+        );
       }
 
       const isActive = await this.tokensService.isActiveResetCode(userId, code);
@@ -112,7 +120,15 @@ export class PasswordResetService {
           TokenType.PASSWORD_RESET,
           attemptSubject,
         );
-        this.errorsService.invalidToken(null, TokenType.PASSWORD_RESET);
+        const attemptsRemaining =
+          await this.tokensService.getVerificationAttemptsRemaining(
+            TokenType.PASSWORD_RESET,
+            attemptSubject,
+          );
+        this.errorsService.invalidTokenWithAttempts(
+          TokenType.PASSWORD_RESET,
+          attemptsRemaining,
+        );
       }
 
       const hashedPassword = await this.hashService.hash(newPassword);
