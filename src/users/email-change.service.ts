@@ -33,6 +33,22 @@ export class EmailChangeService {
       this.envService.get('EMAIL_CHANGE_TOKEN_EXPIRES_IN', 'number') / 60;
   }
 
+  private async rejectInvalidCode(attemptSubject: string): Promise<never> {
+    await this.tokensService.registerVerificationFailure(
+      TokenType.EMAIL_CHANGE,
+      attemptSubject,
+    );
+    const attemptsRemaining =
+      await this.tokensService.getVerificationAttemptsRemaining(
+        TokenType.EMAIL_CHANGE,
+        attemptSubject,
+      );
+    return this.errorsService.invalidTokenWithAttempts(
+      TokenType.EMAIL_CHANGE,
+      attemptsRemaining,
+    );
+  }
+
   async request(userId: number, dto: EmailChangeRequestDto) {
     const user = await this.usersRepository
       .findOneOrFail({ where: { id: userId }, select: [ID, EMAIL, IS_BLOCKED] })
@@ -90,17 +106,10 @@ export class EmailChangeService {
       typeof data.user_id !== 'number' ||
       typeof data.new_email !== 'string'
     ) {
-      await this.tokensService.registerVerificationFailure(
-        TokenType.EMAIL_CHANGE,
-        attemptSubject,
-      );
-      this.errorsService.invalidToken(null, TokenType.EMAIL_CHANGE);
+      return this.rejectInvalidCode(attemptSubject);
     }
     if (data.user_id !== currentUserId) {
-      await this.tokensService.registerVerificationFailure(
-        TokenType.EMAIL_CHANGE,
-        attemptSubject,
-      );
+      await this.rejectInvalidCode(attemptSubject);
       throw new ForbiddenException(ErrMsg.TOKEN_NOT_ISSUED_FOR_CURRENT_USER);
     }
     const newEmail = data.new_email.trim().toLowerCase();
