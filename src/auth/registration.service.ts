@@ -35,10 +35,11 @@ export class RegistrationService {
   }
 
   async request(email: string, password: string) {
-    this.mailService.validateNotServiceEmail(email);
+    const normalizedEmail = email.trim().toLowerCase();
+    this.mailService.validateNotServiceEmail(normalizedEmail);
     try {
       const user = await this.usersRepository.findOne({
-        where: { email },
+        where: { email: normalizedEmail },
         select: [ID],
       });
       if (user) {
@@ -53,10 +54,10 @@ export class RegistrationService {
           </p>
           <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
         `;
-        await this.mailService.send(email, `Password recovery`, text, html);
+        await this.mailService.send(normalizedEmail, `Password recovery`, text, html);
       } else {
         const hashedPassword = await this.hashService.hash(password);
-        const redisValue = { email: email, password: hashedPassword };
+        const redisValue = { email: normalizedEmail, password: hashedPassword };
         const code = await this.tokensService.getRegistrationCode(redisValue);
         const text = `Hi, this is an automated message, please do not reply! You can confirm your registration by using the code below (within ${this.registrationExpiresIn} min): ${code}`;
         const html = `
@@ -65,7 +66,7 @@ export class RegistrationService {
           <p style="font-weight: bold; font-size: 30px;">${code}</p>
           <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
         `;
-        await this.mailService.send(email, `Confirm registration`, text, html);
+        await this.mailService.send(normalizedEmail, `Confirm registration`, text, html);
       }
       return {
         message: 'If the email exists, we’ve sent you a code.',
@@ -75,7 +76,8 @@ export class RegistrationService {
     }
   }
 
-  async confirm(code: string, attemptSubject: string) {
+  async confirm(code: string, email: string) {
+    const attemptSubject = email.trim().toLowerCase();
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.REGISTRATION,
       attemptSubject,
@@ -86,13 +88,12 @@ export class RegistrationService {
     await qr.startTransaction();
     try {
       const data = await this.tokensService.getDataByRegistrationCode(code);
-      if (!data) {
+      if (!data || data.email.trim().toLowerCase() !== attemptSubject) {
         await this.tokensService.registerVerificationFailure(
           TokenType.REGISTRATION,
           attemptSubject,
         );
         this.errorsService.invalidToken(null, TokenType.REGISTRATION);
-        return;
       }
       this.mailService.validateNotServiceEmail(data.email);
       let nickname: string;
