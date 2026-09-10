@@ -56,6 +56,10 @@ export class EmailChangeService {
     }
     const redisValue = { user_id: userId, new_email: newEmail };
     const code = await this.tokensService.getEmailChangeCode(redisValue);
+    await this.tokensService.clearVerificationFailures(
+      TokenType.EMAIL_CHANGE,
+      userId.toString(),
+    );
     const text =
       `You requested to change your account email to ${newEmail}.\n` +
       `To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): ${code}\n\nIf it wasn't you, ignore this message.`;
