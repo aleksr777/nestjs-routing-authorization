@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
@@ -15,6 +15,7 @@ import { TokenType } from '../common/types/token-type.type';
 export class PasswordResetService {
   config: any;
   private readonly resetExpiresIn: number;
+
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -29,32 +30,57 @@ export class PasswordResetService {
       this.envService.get('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
   }
 
+  private getRequestResponse(retryAfter: number) {
+    return {
+      message: 'If the email exists, we’ve sent you a password reset code.',
+      retry_after: retryAfter,
+      max_attempts: this.tokensService.getVerificationAttemptLimit(
+        TokenType.PASSWORD_RESET,
+      ),
+    };
+  }
+
   async request(email: string) {
     const normalizedEmail = email.trim().toLowerCase();
     this.mailService.validateNotServiceEmail(normalizedEmail);
+    const retryAfter = await this.tokensService.reserveVerificationCodeRequest(
+      TokenType.PASSWORD_RESET,
+      normalizedEmail,
+    );
+    let issuedCode: string | undefined;
+    let userId: number | undefined;
+
     try {
       const user = await this.usersRepository.findOne({
         where: { email: normalizedEmail },
         select: [ID],
       });
       if (user) {
-        const code = await this.tokensService.getResetCode(user.id);
+        userId = user.id;
+        issuedCode = await this.tokensService.getResetCode(user.id);
+        const text = `Hi, this is an automated message, please do not reply! You can reset your password by using the code below (within ${this.resetExpiresIn} min): ${issuedCode}`;
+        const html = `
+          <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
+          <p style="font-weight: bold; font-size: 17px;">You can reset your password by using the code below (within ${this.resetExpiresIn} min):</p>
+          <p style="font-weight: bold; font-size: 30px;">${issuedCode}</p>
+          <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
+        await this.mailService.send(normalizedEmail, 'Password recovery', text, html);
         await this.tokensService.clearVerificationFailures(
           TokenType.PASSWORD_RESET,
           normalizedEmail,
         );
-        const text = `Hi, this is an automated message, please do not reply! You can reset your password by using the code below (within ${this.resetExpiresIn} min): ${code}`;
-        const html = `
-          <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
-          <p style="font-weight: bold; font-size: 17px;">You can reset your password by using the code below (within ${this.resetExpiresIn} min):</p>
-          <p style="font-weight: bold; font-size: 30px;">${code}</p>
-          <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
-        await this.mailService.send(normalizedEmail, `Password recovery`, text, html);
       }
-      return {
-        message: 'If the email exists, we’ve sent you a password reset code.',
-      };
+      return this.getRequestResponse(retryAfter);
     } catch (err: unknown) {
+      if (issuedCode) {
+        await this.tokensService
+          .deletePassResetCode(issuedCode, userId)
+          .catch(() => undefined);
+      }
+      await this.tokensService
+        .releaseVerificationCodeRequest(TokenType.PASSWORD_RESET, normalizedEmail)
+        .catch(() => undefined);
+      if (err instanceof HttpException) throw err;
       this.errorsService.default(err);
     }
   }
@@ -76,11 +102,12 @@ export class PasswordResetService {
         this.errorsService.invalidToken(null, TokenType.PASSWORD_RESET);
       }
 
+      const isActive = await this.tokensService.isActiveResetCode(userId, code);
       const user = await this.usersRepository.findOne({
         where: { id: userId },
         select: [ID, EMAIL],
       });
-      if (!user || user.email.trim().toLowerCase() !== attemptSubject) {
+      if (!isActive || !user || user.email.trim().toLowerCase() !== attemptSubject) {
         await this.tokensService.registerVerificationFailure(
           TokenType.PASSWORD_RESET,
           attemptSubject,
@@ -96,7 +123,7 @@ export class PasswordResetService {
       if (result.affected === 0) {
         this.errorsService.userNotFound();
       }
-      await this.tokensService.deletePassResetCode(code);
+      await this.tokensService.deletePassResetCode(code, userId);
       await this.tokensService.clearVerificationFailures(
         TokenType.PASSWORD_RESET,
         attemptSubject,
