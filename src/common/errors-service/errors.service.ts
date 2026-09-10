@@ -131,6 +131,13 @@ export class ErrorsService {
     throw new UnauthorizedException(errMessage);
   }
 
+  invalidTokenWithAttempts(tokenType: TokenType, attemptsRemaining: number): never {
+    throw new UnauthorizedException({
+      message: this.getInvalidTokenMessage(tokenType),
+      attempts_remaining: Math.max(0, attemptsRemaining),
+    });
+  }
+
   invalidToken(err: unknown, tokenType?: TokenType): never {
     const errMessage = this.getInvalidTokenMessage(tokenType);
     if (!err) {
