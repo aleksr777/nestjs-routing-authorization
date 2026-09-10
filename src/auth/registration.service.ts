@@ -126,7 +126,9 @@ export class RegistrationService {
     let issuedCode: string | undefined;
 
     try {
-      const active = await this.tokensService.getActiveRegistrationData(normalizedEmail);
+      const active = await this.tokensService.getActiveRegistrationData(
+        normalizedEmail,
+      );
       if (active) {
         issuedCode = await this.tokensService.getRegistrationCode(active.data);
         await this.sendRegistrationCode(normalizedEmail, issuedCode);
@@ -175,12 +177,24 @@ export class RegistrationService {
         attemptSubject,
         code,
       );
-      if (!data || !isActive || data.email.trim().toLowerCase() !== attemptSubject) {
+      if (
+        !data ||
+        !isActive ||
+        data.email.trim().toLowerCase() !== attemptSubject
+      ) {
         await this.tokensService.registerVerificationFailure(
           TokenType.REGISTRATION,
           attemptSubject,
         );
-        this.errorsService.invalidToken(null, TokenType.REGISTRATION);
+        const attemptsRemaining =
+          await this.tokensService.getVerificationAttemptsRemaining(
+            TokenType.REGISTRATION,
+            attemptSubject,
+          );
+        this.errorsService.invalidTokenWithAttempts(
+          TokenType.REGISTRATION,
+          attemptsRemaining,
+        );
       }
       this.mailService.validateNotServiceEmail(data.email);
       let nickname: string;
