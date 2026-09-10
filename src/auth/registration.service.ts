@@ -7,16 +7,22 @@ import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
+import { RedisService } from '../common/redis-service/redis.service';
 import { NicknameGeneratorService } from '../common/nickname-generator-service/nickname-generator.service';
 import { User } from '../users/entities/user.entity';
 import { ID } from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
+
+const REGISTRATION_LOCKOUT_PREFIX = 'registration:lockout:';
+const REGISTRATION_LOCKOUT_MESSAGE =
+  'Registration is temporarily locked after too many incorrect confirmation codes.';
 
 @Injectable()
 export class RegistrationService {
   config: any;
   private readonly frontendUrl: string;
   private readonly registrationExpiresIn: number;
+  private readonly registrationVerificationLockout: number;
 
   constructor(
     @InjectRepository(User)
@@ -28,20 +34,59 @@ export class RegistrationService {
     private readonly errorsService: ErrorsService,
     private readonly mailService: MailService,
     private readonly envService: EnvService,
+    private readonly redisService: RedisService,
     private readonly nicknameGeneratorService: NicknameGeneratorService,
   ) {
     this.frontendUrl = this.envService.get('FRONTEND_URL');
     this.registrationExpiresIn =
       this.envService.get('REGISTRATION_TOKEN_EXPIRES_IN', 'number') / 60;
+    this.registrationVerificationLockout = this.envService.get(
+      'REGISTRATION_VERIFICATION_LOCKOUT',
+      'number',
+    );
+  }
+
+  private getLockoutKey(email: string) {
+    return `${REGISTRATION_LOCKOUT_PREFIX}${email.trim().toLowerCase()}`;
+  }
+
+  private async getLockoutSeconds(email: string) {
+    const ttl = await this.redisService.ttl(this.getLockoutKey(email));
+    return typeof ttl === 'number' && ttl > 0 ? ttl : 0;
+  }
+
+  private async assertNotLocked(email: string) {
+    const retryAfter = await this.getLockoutSeconds(email);
+    if (retryAfter > 0) {
+      this.errorsService.tooManyRequests(REGISTRATION_LOCKOUT_MESSAGE, retryAfter);
+    }
+  }
+
+  private async rejectInvalidCode(email: string): Promise<never> {
+    await this.tokensService.registerVerificationFailure(TokenType.REGISTRATION, email);
+    const attemptsRemaining =
+      await this.tokensService.getVerificationAttemptsRemaining(TokenType.REGISTRATION, email);
+
+    let retryAfter: number | undefined;
+    if (attemptsRemaining <= 0) {
+      retryAfter = this.registrationVerificationLockout;
+      await this.redisService.set(this.getLockoutKey(email), '1', {
+        EX: retryAfter,
+      });
+    }
+
+    return this.errorsService.invalidTokenWithAttempts(
+      TokenType.REGISTRATION,
+      attemptsRemaining,
+      retryAfter,
+    );
   }
 
   private getRequestResponse(retryAfter: number) {
     return {
       message: 'If the email exists, we’ve sent you a code.',
       retry_after: retryAfter,
-      max_attempts: this.tokensService.getVerificationAttemptLimit(
-        TokenType.REGISTRATION,
-      ),
+      max_attempts: this.tokensService.getVerificationAttemptLimit(TokenType.REGISTRATION),
     };
   }
 
@@ -52,11 +97,8 @@ export class RegistrationService {
       <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
       <p style="font-weight: bold; font-size: 17px;">It looks like there is already an account associated with this email address.</p>
       <p style="font-weight: bold; font-size: 17px;">If you’ve forgotten your password, you can reset it by using the link below:</p>
-      <p style="font-weight: bold; font-size: 17px;">
-          <a href="${resetUrl}" style="font-weight: bold;">${resetUrl}</a>
-      </p>
-      <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
-    `;
+      <p style="font-weight: bold; font-size: 17px;"><a href="${resetUrl}" style="font-weight: bold;">${resetUrl}</a></p>
+      <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
     await this.mailService.send(email, 'Password recovery', text, html);
   }
 
@@ -66,14 +108,14 @@ export class RegistrationService {
       <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
       <p style="font-weight: bold; font-size: 17px;">You can confirm your registration by using the code below (within ${this.registrationExpiresIn} min):</p>
       <p style="font-weight: bold; font-size: 30px;">${code}</p>
-      <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>
-    `;
+      <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
     await this.mailService.send(email, 'Confirm registration', text, html);
   }
 
   async request(email: string, password: string) {
     const normalizedEmail = email.trim().toLowerCase();
     this.mailService.validateNotServiceEmail(normalizedEmail);
+    await this.assertNotLocked(normalizedEmail);
     const retryAfter = await this.tokensService.reserveVerificationCodeRequest(
       TokenType.REGISTRATION,
       normalizedEmail,
@@ -119,6 +161,7 @@ export class RegistrationService {
   async resend(email: string) {
     const normalizedEmail = email.trim().toLowerCase();
     this.mailService.validateNotServiceEmail(normalizedEmail);
+    await this.assertNotLocked(normalizedEmail);
     const retryAfter = await this.tokensService.reserveVerificationCodeRequest(
       TokenType.REGISTRATION,
       normalizedEmail,
@@ -126,9 +169,7 @@ export class RegistrationService {
     let issuedCode: string | undefined;
 
     try {
-      const active = await this.tokensService.getActiveRegistrationData(
-        normalizedEmail,
-      );
+      const active = await this.tokensService.getActiveRegistrationData(normalizedEmail);
       if (active) {
         issuedCode = await this.tokensService.getRegistrationCode(active.data);
         await this.sendRegistrationCode(normalizedEmail, issuedCode);
@@ -141,9 +182,7 @@ export class RegistrationService {
           where: { email: normalizedEmail },
           select: [ID],
         });
-        if (user) {
-          await this.sendExistingAccountNotice(normalizedEmail);
-        }
+        if (user) await this.sendExistingAccountNotice(normalizedEmail);
       }
 
       return this.getRequestResponse(retryAfter);
@@ -163,6 +202,7 @@ export class RegistrationService {
 
   async confirm(code: string, email: string) {
     const attemptSubject = email.trim().toLowerCase();
+    await this.assertNotLocked(attemptSubject);
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.REGISTRATION,
       attemptSubject,
@@ -173,28 +213,9 @@ export class RegistrationService {
     await qr.startTransaction();
     try {
       const data = await this.tokensService.getDataByRegistrationCode(code);
-      const isActive = await this.tokensService.isActiveRegistrationCode(
-        attemptSubject,
-        code,
-      );
-      if (
-        !data ||
-        !isActive ||
-        data.email.trim().toLowerCase() !== attemptSubject
-      ) {
-        await this.tokensService.registerVerificationFailure(
-          TokenType.REGISTRATION,
-          attemptSubject,
-        );
-        const attemptsRemaining =
-          await this.tokensService.getVerificationAttemptsRemaining(
-            TokenType.REGISTRATION,
-            attemptSubject,
-          );
-        this.errorsService.invalidTokenWithAttempts(
-          TokenType.REGISTRATION,
-          attemptsRemaining,
-        );
+      const isActive = await this.tokensService.isActiveRegistrationCode(attemptSubject, code);
+      if (!data || !isActive || data.email.trim().toLowerCase() !== attemptSubject) {
+        await this.rejectInvalidCode(attemptSubject);
       }
       this.mailService.validateNotServiceEmail(data.email);
       let nickname: string;
@@ -222,11 +243,10 @@ export class RegistrationService {
         TokenType.REGISTRATION,
         attemptSubject,
       );
+      await this.redisService.del(this.getLockoutKey(attemptSubject)).catch(() => undefined);
       return this.authService.login(newUser.id);
     } catch (err: unknown) {
-      if (qr.isTransactionActive) {
-        await qr.rollbackTransaction();
-      }
+      if (qr.isTransactionActive) await qr.rollbackTransaction();
       this.errorsService.confirmRegistration(err);
     } finally {
       await qr.release();
