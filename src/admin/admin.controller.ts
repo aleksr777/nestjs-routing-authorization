@@ -17,6 +17,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/types/role.enum';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { BlockUserDto } from './dto/block-user.dto';
+import { AdminPasswordDto } from './dto/admin-password.dto';
 import { TransferInitiateDto } from './dto/transfer-rights-initiate.dto';
 import { AdminService } from './admin.service';
 import { AdminTransferService } from './transfer-rights.service';
@@ -70,8 +71,13 @@ export class AdminController {
   }
 
   @Delete('users/delete/:id')
-  async deleteUser(@Param('id', ParseIntPipe) id: number) {
-    await this.adminService.deleteUserById(id);
+  async deleteUser(
+    @Body() dto: AdminPasswordDto,
+    @Req() req: Request,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const admin = req.user as User;
+    await this.adminService.deleteUserById(+admin.id, +id, dto.password);
   }
 
   @Patch('users/block/:id')
@@ -84,7 +90,12 @@ export class AdminController {
     const adminId = +admin.id;
     const userId = +id;
     const blocked_reason = dto.blocked_reason ? dto.blocked_reason : '';
-    await this.adminService.blockUserById(adminId, userId, blocked_reason);
+    await this.adminService.blockUserById(
+      adminId,
+      userId,
+      blocked_reason,
+      dto.password,
+    );
   }
 
   @Patch('users/unblock/:id')
