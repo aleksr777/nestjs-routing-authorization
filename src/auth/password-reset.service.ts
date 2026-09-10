@@ -7,14 +7,20 @@ import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
+import { RedisService } from '../common/redis-service/redis.service';
 import { User } from '../users/entities/user.entity';
 import { EMAIL, ID } from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
+
+const PASSWORD_RESET_LOCKOUT_PREFIX = 'password-reset:lockout:';
+const PASSWORD_RESET_LOCKOUT_MESSAGE =
+  'Password reset is temporarily locked after too many incorrect confirmation codes.';
 
 @Injectable()
 export class PasswordResetService {
   config: any;
   private readonly resetExpiresIn: number;
+  private readonly passwordResetVerificationLockout: number;
 
   constructor(
     @InjectRepository(User)
@@ -25,24 +31,64 @@ export class PasswordResetService {
     private readonly errorsService: ErrorsService,
     private readonly mailService: MailService,
     private readonly envService: EnvService,
+    private readonly redisService: RedisService,
   ) {
     this.resetExpiresIn =
       this.envService.get('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
+    this.passwordResetVerificationLockout = this.envService.get(
+      'PASSWORD_RESET_VERIFICATION_LOCKOUT',
+      'number',
+    );
+  }
+
+  private getLockoutKey(email: string) {
+    return `${PASSWORD_RESET_LOCKOUT_PREFIX}${email.trim().toLowerCase()}`;
+  }
+
+  private async getLockoutSeconds(email: string) {
+    const ttl = await this.redisService.ttl(this.getLockoutKey(email));
+    return typeof ttl === 'number' && ttl > 0 ? ttl : 0;
+  }
+
+  private async assertNotLocked(email: string) {
+    const retryAfter = await this.getLockoutSeconds(email);
+    if (retryAfter > 0) {
+      this.errorsService.tooManyRequests(PASSWORD_RESET_LOCKOUT_MESSAGE, retryAfter);
+    }
+  }
+
+  private async rejectInvalidCode(email: string): Promise<never> {
+    await this.tokensService.registerVerificationFailure(TokenType.PASSWORD_RESET, email);
+    const attemptsRemaining =
+      await this.tokensService.getVerificationAttemptsRemaining(TokenType.PASSWORD_RESET, email);
+
+    let retryAfter: number | undefined;
+    if (attemptsRemaining <= 0) {
+      retryAfter = this.passwordResetVerificationLockout;
+      await this.redisService.set(this.getLockoutKey(email), '1', {
+        EX: retryAfter,
+      });
+    }
+
+    return this.errorsService.invalidTokenWithAttempts(
+      TokenType.PASSWORD_RESET,
+      attemptsRemaining,
+      retryAfter,
+    );
   }
 
   private getRequestResponse(retryAfter: number) {
     return {
       message: 'If the email exists, we’ve sent you a password reset code.',
       retry_after: retryAfter,
-      max_attempts: this.tokensService.getVerificationAttemptLimit(
-        TokenType.PASSWORD_RESET,
-      ),
+      max_attempts: this.tokensService.getVerificationAttemptLimit(TokenType.PASSWORD_RESET),
     };
   }
 
   async request(email: string) {
     const normalizedEmail = email.trim().toLowerCase();
     this.mailService.validateNotServiceEmail(normalizedEmail);
+    await this.assertNotLocked(normalizedEmail);
     const retryAfter = await this.tokensService.reserveVerificationCodeRequest(
       TokenType.PASSWORD_RESET,
       normalizedEmail,
@@ -87,6 +133,7 @@ export class PasswordResetService {
 
   async confirm(code: string, newPassword: string, email: string) {
     const attemptSubject = email.trim().toLowerCase();
+    await this.assertNotLocked(attemptSubject);
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.PASSWORD_RESET,
       attemptSubject,
@@ -95,19 +142,7 @@ export class PasswordResetService {
     try {
       const userId = await this.tokensService.getIdByResetCode(code);
       if (!userId) {
-        await this.tokensService.registerVerificationFailure(
-          TokenType.PASSWORD_RESET,
-          attemptSubject,
-        );
-        const attemptsRemaining =
-          await this.tokensService.getVerificationAttemptsRemaining(
-            TokenType.PASSWORD_RESET,
-            attemptSubject,
-          );
-        this.errorsService.invalidTokenWithAttempts(
-          TokenType.PASSWORD_RESET,
-          attemptsRemaining,
-        );
+        await this.rejectInvalidCode(attemptSubject);
       }
 
       const isActive = await this.tokensService.isActiveResetCode(userId, code);
@@ -116,19 +151,7 @@ export class PasswordResetService {
         select: [ID, EMAIL],
       });
       if (!isActive || !user || user.email.trim().toLowerCase() !== attemptSubject) {
-        await this.tokensService.registerVerificationFailure(
-          TokenType.PASSWORD_RESET,
-          attemptSubject,
-        );
-        const attemptsRemaining =
-          await this.tokensService.getVerificationAttemptsRemaining(
-            TokenType.PASSWORD_RESET,
-            attemptSubject,
-          );
-        this.errorsService.invalidTokenWithAttempts(
-          TokenType.PASSWORD_RESET,
-          attemptsRemaining,
-        );
+        await this.rejectInvalidCode(attemptSubject);
       }
 
       const hashedPassword = await this.hashService.hash(newPassword);
@@ -144,6 +167,7 @@ export class PasswordResetService {
         TokenType.PASSWORD_RESET,
         attemptSubject,
       );
+      await this.redisService.del(this.getLockoutKey(attemptSubject)).catch(() => undefined);
       return this.authService.login(userId);
     } catch (err: unknown) {
       this.errorsService.resetPassword(err);
