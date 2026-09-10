@@ -244,8 +244,21 @@ export class AdminTransferService {
   }
 
   async confirmTransfer(code: string, currentUserId: number, password: string) {
+    const attemptSubject = currentUserId.toString();
+    await this.tokensService.assertVerificationAttemptsAvailable(
+      TokenType.ADMIN_TRANSFER,
+      attemptSubject,
+    );
+
     const pending = await this.getActivePendingTransfer();
     if (!pending || pending.code !== code) {
+      const limitReached = await this.tokensService.registerVerificationFailure(
+        TokenType.ADMIN_TRANSFER,
+        attemptSubject,
+      );
+      if (limitReached && pending?.toId === currentUserId) {
+        await this.releaseTransfer(pending.code).catch(() => undefined);
+      }
       return this.errorsService.invalidToken(null, TokenType.ADMIN_TRANSFER);
     }
 
@@ -254,6 +267,10 @@ export class AdminTransferService {
       this.errorsService.badRequest(ErrMsg.ADMIN_CANNOT_TRANSFER_THEMSELVES);
     }
     if (currentUserId !== toId) {
+      await this.tokensService.registerVerificationFailure(
+        TokenType.ADMIN_TRANSFER,
+        attemptSubject,
+      );
       this.errorsService.forbidden(ErrMsg.TOKEN_NOT_ISSUED_FOR_CURRENT_USER);
     }
 
@@ -318,6 +335,9 @@ export class AdminTransferService {
     }
 
     await this.releaseTransfer(code).catch(() => undefined);
+    await this.tokensService
+      .clearVerificationFailures(TokenType.ADMIN_TRANSFER, attemptSubject)
+      .catch(() => undefined);
 
     const subject = 'Administrator rights have been transferred';
     this.mailService
