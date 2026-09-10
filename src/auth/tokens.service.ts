@@ -17,6 +17,9 @@ const REGISTER_REDIS_PREFIX = `register:`;
 const ADMIN_TRANSFER_REDIS_PREFIX = `admin:transfer:`;
 const EMAIL_CHANGE_REDIS_PREFIX = 'email-change:';
 const PASSWORD_CHANGE_PREFIX = 'password-change:';
+const VERIFICATION_ATTEMPTS_PREFIX = 'verification:attempts:';
+const DEFAULT_VERIFICATION_ATTEMPTS = 5;
+const ADMIN_TRANSFER_VERIFICATION_ATTEMPTS = 3;
 
 @Injectable()
 export class TokensService {
@@ -89,6 +92,70 @@ export class TokensService {
       'password' in obj &&
       typeof (obj as { password?: unknown }).password === 'string'
     );
+  }
+
+  private getVerificationAttemptConfig(tokenType: TokenType) {
+    switch (tokenType) {
+      case TokenType.ADMIN_TRANSFER:
+        return {
+          maxAttempts: ADMIN_TRANSFER_VERIFICATION_ATTEMPTS,
+          expiresIn: this.transferExpiresIn,
+        };
+      case TokenType.REGISTRATION:
+        return {
+          maxAttempts: DEFAULT_VERIFICATION_ATTEMPTS,
+          expiresIn: this.registrationExpiresIn,
+        };
+      case TokenType.PASSWORD_RESET:
+      case TokenType.CURRENT_USER_PASSWORD_RESET:
+        return {
+          maxAttempts: DEFAULT_VERIFICATION_ATTEMPTS,
+          expiresIn: this.resetExpiresIn,
+        };
+      case TokenType.EMAIL_CHANGE:
+        return {
+          maxAttempts: DEFAULT_VERIFICATION_ATTEMPTS,
+          expiresIn: this.emailChangeTokenExpiresIn,
+        };
+      case TokenType.PASSWORD_CHANGE:
+        return {
+          maxAttempts: DEFAULT_VERIFICATION_ATTEMPTS,
+          expiresIn: this.passwordChangeTokenExpiresIn,
+        };
+      default:
+        return {
+          maxAttempts: DEFAULT_VERIFICATION_ATTEMPTS,
+          expiresIn: this.resetExpiresIn,
+        };
+    }
+  }
+
+  private getVerificationAttemptsKey(tokenType: TokenType, subject: string) {
+    return `${VERIFICATION_ATTEMPTS_PREFIX}${tokenType.toLowerCase()}:${subject}`;
+  }
+
+  async assertVerificationAttemptsAvailable(tokenType: TokenType, subject: string) {
+    const { maxAttempts } = this.getVerificationAttemptConfig(tokenType);
+    const key = this.getVerificationAttemptsKey(tokenType, subject);
+    const raw = await this.redisService.get(key);
+    const attempts = raw ? Number.parseInt(raw, 10) : 0;
+    if (Number.isFinite(attempts) && attempts >= maxAttempts) {
+      this.errorsService.invalidToken(null, tokenType);
+    }
+  }
+
+  async registerVerificationFailure(tokenType: TokenType, subject: string) {
+    const { maxAttempts, expiresIn } = this.getVerificationAttemptConfig(tokenType);
+    const key = this.getVerificationAttemptsKey(tokenType, subject);
+    const attempts = await this.redisService.incr(key);
+    if (attempts === 1) {
+      await this.redisService.expire(key, expiresIn);
+    }
+    return typeof attempts === 'number' && attempts >= maxAttempts;
+  }
+
+  async clearVerificationFailures(tokenType: TokenType, subject: string) {
+    await this.redisService.del(this.getVerificationAttemptsKey(tokenType, subject));
   }
 
   async addJwtTokenToBlacklist(token: string, tokenType?: TokenType) {
