@@ -93,11 +93,12 @@ export class ErrorsService {
     throw new ConflictException(msg);
   }
 
-  tooManyRequests(message: string, retryAfter: number): never {
+  tooManyRequests(message: string, retryAfter: number, locked = false): never {
     throw new HttpException(
       {
         message,
         retry_after: Math.max(1, Math.ceil(retryAfter)),
+        ...(locked ? { locked: true } : {}),
       },
       HttpStatus.TOO_MANY_REQUESTS,
     );
@@ -140,7 +141,10 @@ export class ErrorsService {
       message: this.getInvalidTokenMessage(tokenType),
       attempts_remaining: Math.max(0, attemptsRemaining),
       ...(retryAfter !== undefined
-        ? { retry_after: Math.max(1, Math.ceil(retryAfter)) }
+        ? {
+            retry_after: Math.max(1, Math.ceil(retryAfter)),
+            locked: true,
+          }
         : {}),
     });
   }
