@@ -183,16 +183,27 @@ export class TokensService {
   }
 
   async releaseVerificationCodeRequest(tokenType: TokenType, subject: string) {
-    await this.redisService.del(this.getVerificationResendKey(tokenType, subject));
+    await this.redisService.del(
+      this.getVerificationResendKey(tokenType, subject),
+    );
   }
 
-  async assertVerificationAttemptsAvailable(tokenType: TokenType, subject: string) {
+  async getVerificationAttemptsRemaining(tokenType: TokenType, subject: string) {
     const { maxAttempts } = this.getVerificationAttemptConfig(tokenType);
     const key = this.getVerificationAttemptsKey(tokenType, subject);
     const raw = await this.redisService.get(key);
     const attempts = raw ? Number.parseInt(raw, 10) : 0;
-    if (Number.isFinite(attempts) && attempts >= maxAttempts) {
-      this.errorsService.invalidToken(null, tokenType);
+    const safeAttempts = Number.isFinite(attempts) ? attempts : 0;
+    return Math.max(0, maxAttempts - safeAttempts);
+  }
+
+  async assertVerificationAttemptsAvailable(tokenType: TokenType, subject: string) {
+    const attemptsRemaining = await this.getVerificationAttemptsRemaining(
+      tokenType,
+      subject,
+    );
+    if (attemptsRemaining <= 0) {
+      this.errorsService.invalidTokenWithAttempts(tokenType, 0);
     }
   }
 
@@ -207,7 +218,9 @@ export class TokensService {
   }
 
   async clearVerificationFailures(tokenType: TokenType, subject: string) {
-    await this.redisService.del(this.getVerificationAttemptsKey(tokenType, subject));
+    await this.redisService.del(
+      this.getVerificationAttemptsKey(tokenType, subject),
+    );
   }
 
   async addJwtTokenToBlacklist(token: string, tokenType?: TokenType) {
@@ -339,14 +352,18 @@ export class TokensService {
   }
 
   async getActiveRegistrationData(email: string) {
-    const activeCode = await this.redisService.get(this.getRegistrationActiveKey(email));
+    const activeCode = await this.redisService.get(
+      this.getRegistrationActiveKey(email),
+    );
     if (!activeCode) return null;
     const data = await this.getDataByRegistrationCode(activeCode);
     return data ? { code: activeCode, data } : null;
   }
 
   async isActiveRegistrationCode(email: string, code: string) {
-    const activeCode = await this.redisService.get(this.getRegistrationActiveKey(email));
+    const activeCode = await this.redisService.get(
+      this.getRegistrationActiveKey(email),
+    );
     return activeCode === code;
   }
 
@@ -403,7 +420,9 @@ export class TokensService {
   }
 
   async isActiveResetCode(userId: number, code: string) {
-    const activeCode = await this.redisService.get(this.getResetActiveKey(userId));
+    const activeCode = await this.redisService.get(
+      this.getResetActiveKey(userId),
+    );
     return activeCode === code;
   }
 
