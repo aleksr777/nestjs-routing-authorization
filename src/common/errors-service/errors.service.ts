@@ -6,6 +6,8 @@ import {
   UnauthorizedException,
   BadRequestException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { QueryFailedError, EntityNotFoundError } from 'typeorm';
 import { ErrMsg } from './error-messages.type';
@@ -89,6 +91,16 @@ export class ErrorsService {
   conflict(message?: string): never {
     const msg = message ?? 'Conflict Exception';
     throw new ConflictException(msg);
+  }
+
+  tooManyRequests(message: string, retryAfter: number): never {
+    throw new HttpException(
+      {
+        message,
+        retry_after: Math.max(1, Math.ceil(retryAfter)),
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 
   userConflict(err: unknown, fields?: string[]) {
