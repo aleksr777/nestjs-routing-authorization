@@ -24,6 +24,7 @@ export enum ErrMsg {
   INVALID_EMAIL_CHANGE_CODE = 'Email change code is expired or invalid. Please request a new one.',
   INVALID_PASSWORD_CHANGE_CODE = 'Password change code is expired or invalid. Please request a new one.',
   INVALID_ADMIN_TRANSFER_CODE = 'Admin transfer code is expired or invalid. Please request a new one.',
+  VERIFICATION_CODE_RESEND_TOO_SOON = 'Please wait before requesting another verification code.',
 
   UNABLE_GENERATE_UNIQUE_CODE = 'Unable to generate unique code.',
 
