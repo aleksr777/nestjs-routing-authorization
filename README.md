@@ -20,7 +20,7 @@ The backend provides:
 - transferable administrator rights with password verification on both sides;
 - one active administrator-rights transfer at a time;
 - cancellation and TTL expiration of pending administrator transfers;
-- Redis-backed one-time verification codes, confirmation-attempt limits, and pending-transfer state;
+- Redis-backed one-time verification codes, confirmation-attempt limits, resend cooldowns, and pending-transfer state;
 - transaction and pessimistic-lock protection for administrator role transfer and password-protected destructive admin actions.
 
 ## Tech stack
@@ -51,6 +51,7 @@ REGISTRATION_TOKEN_EXPIRES_IN=600
 RESET_TOKEN_EXPIRES_IN=600
 EMAIL_CHANGE_TOKEN_EXPIRES_IN=600
 PASSWORD_CHANGE_TOKEN_EXPIRES_IN=600
+VERIFICATION_CODE_RESEND_COOLDOWN=60
 
 REDIS_HOST='localhost'
 REDIS_PORT=6379
@@ -79,6 +80,8 @@ INITIAL_ADMIN_NICKNAME='INITIAL_ADMIN_NICKNAME'
 ```
 
 `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`, and `INITIAL_ADMIN_NICKNAME` are used only by the initial administrator migration. They are not used to identify the current administrator during normal runtime because administrator rights can be transferred to another user.
+
+`VERIFICATION_CODE_RESEND_COOLDOWN` is the server-enforced minimum interval, in seconds, between registration-code or public password-reset-code requests for the same normalized email address.
 
 ## Run locally
 
@@ -155,7 +158,7 @@ new authentication state
 
 The frontend route guards improve UX, but backend JWT and role guards are the authorization boundary.
 
-## Verification-code attempt limits
+## Verification-code protection
 
 Six-digit verification codes are protected against repeated guessing with Redis-backed failure counters.
 
@@ -163,14 +166,43 @@ Six-digit verification codes are protected against repeated guessing with Redis-
 - administrator-rights transfer confirmation allows up to `3` incorrect code attempts;
 - counters use atomic Redis `INCR` operations and expire automatically using the TTL of the corresponding verification flow;
 - successful confirmation clears the corresponding failure counter;
-- once the limit has been reached, further confirmation attempts are rejected with the same invalid/expired-token response rather than revealing that a lockout threshold was reached;
-- issuing another code does not clear an already active failure counter, so repeatedly requesting new codes cannot be used to reset the attempt limit.
+- once the limit has been reached, further confirmation attempts are rejected with the same invalid/expired-token response;
+- authenticated flows are scoped to the authenticated user ID;
+- public registration and public password reset are scoped to the normalized email address supplied during the request and confirmation flow.
 
-For authenticated flows (`email change`, `password change`, authenticated password reset, and administrator transfer), the counter is scoped to the authenticated user ID. Public registration and public password-reset confirmation cannot identify the target account before a correct code is supplied, so failed attempts are scoped to the request IP address.
+### Registration and public password-reset resend cooldown
+
+A new registration code or public password-reset code cannot be requested for the same email until `VERIFICATION_CODE_RESEND_COOLDOWN` seconds have elapsed. The default example configuration is `60` seconds.
+
+The cooldown is enforced in Redis with atomic `SET ... NX EX`. A request made too early receives HTTP `429 Too Many Requests` with a response such as:
+
+```json
+{
+  "message": "Please wait before requesting another verification code.",
+  "retry_after": 42
+}
+```
+
+Successful code-request responses include the values needed by the frontend to display the restriction:
+
+```json
+{
+  "message": "If the email exists, we’ve sent you a code.",
+  "retry_after": 60,
+  "max_attempts": 5
+}
+```
+
+When a new registration or public password-reset code is successfully issued:
+
+- the failed-attempt counter for that email starts a new confirmation cycle;
+- the newly issued code becomes the active challenge;
+- the previous code for that registration/password-reset challenge is invalidated;
+- only the latest active code can be confirmed.
+
+Registration uses `POST /api/auth/registration/resend` to resend an existing registration challenge without keeping the user's plaintext registration password in frontend state. Public password reset reuses `POST /api/auth/password-reset/request` for resends.
 
 For administrator transfer, if the intended recipient reaches the third incorrect-code attempt while the transfer is still pending, the pending transfer and its confirmation code are invalidated immediately.
-
-When the application is deployed behind a reverse proxy, configure Express/proxy trust correctly so `req.ip` represents the real client address before relying on the public-flow IP scope.
 
 ## Password-protected administrator actions
 
@@ -268,10 +300,11 @@ If no action is taken before the TTL expires, Redis removes the transfer state a
 - `POST /api/auth/login` — authenticate; blocked accounts receive block information instead of tokens
 - `POST /api/auth/logout` — logout and clear refresh state
 - `POST /api/auth/refresh-tokens` — refresh authentication tokens
-- `POST /api/auth/registration/request` — request registration code
-- `POST /api/auth/registration/confirm` — confirm registration; failed-code attempts are IP-limited
-- `POST /api/auth/password-reset/request` — request public password reset
-- `POST /api/auth/password-reset/confirm` — confirm public password reset; failed-code attempts are IP-limited
+- `POST /api/auth/registration/request` — request the initial registration code; resend cooldown applies
+- `POST /api/auth/registration/resend` — resend the active registration challenge after the cooldown
+- `POST /api/auth/registration/confirm` — confirm the latest active registration code
+- `POST /api/auth/password-reset/request` — request/resend a public password-reset code; resend cooldown applies
+- `POST /api/auth/password-reset/confirm` — confirm the latest active public password-reset code
 
 ### Current user
 
@@ -306,6 +339,8 @@ All routes below require a valid access token and the current `admin` role, exce
 - Administrator authorization is enforced on the backend with JWT and role guards; frontend route guards are only a UX layer.
 - Blocked users are rejected by protected authentication strategies even if they still possess previously issued tokens.
 - Verification-code confirmation failures are limited with Redis-backed counters: 5 attempts for normal flows and 3 for administrator transfer.
+- Registration and public password-reset resend requests are rate-limited per normalized email with a Redis cooldown.
+- Reissuing registration/public reset codes invalidates the previous challenge code.
 - Blocking and deleting users require current-administrator password re-verification on the backend.
 - Password-protected block/delete operations re-check the administrator role under a database pessimistic lock.
 - Critical administrator transfer initiation requires the current administrator's password.
@@ -329,7 +364,6 @@ For production deployment, review the cookie and CORS configuration for the actu
 - use strong, unique JWT secrets and SMTP/database credentials;
 - set `DB_TYPEORM_SYNC=false` in production and manage schema changes through migrations;
 - keep PostgreSQL and Redis inaccessible from untrusted public networks;
-- configure proxy trust correctly when public verification attempt limits depend on client IP;
 - configure production values for `FRONTEND_URL`, database, Redis, and SMTP settings.
 
 These are deployment recommendations; they are not all enabled by the current local-development configuration.
