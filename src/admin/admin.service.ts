@@ -1,7 +1,8 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Brackets, Not } from 'typeorm';
+import { Brackets, DataSource, EntityManager, Not, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
+import { HashService } from '../common/hash-service/hash.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { RedisService } from '../common/redis-service/redis.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
@@ -11,6 +12,7 @@ import {
   ID,
   ROLE,
   EMAIL,
+  PASSWORD,
   IS_BLOCKED,
   NICKNAME,
   ADMIN_FIELDS,
@@ -26,10 +28,32 @@ export class AdminService {
     private readonly dataSource: DataSource,
     @InjectRepository(User) private readonly usersRepository: Repository<User>,
     private readonly authService: AuthService,
+    private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
     private readonly mailService: MailService,
     private readonly redisService: RedisService,
   ) {}
+
+  private async verifyAdministratorPassword(
+    manager: EntityManager,
+    adminId: number,
+    password: string,
+  ): Promise<void> {
+    const admin = await manager.findOneOrFail(User, {
+      where: { id: adminId },
+      select: [ID, ROLE, PASSWORD],
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (admin.role !== Role.ADMIN) {
+      this.errorsService.forbidden(ErrMsg.INSUFFICIENT_ACCESS_RIGHTS);
+    }
+
+    const isPasswordValid = await this.hashService.compare(password, admin.password);
+    if (!isPasswordValid) {
+      this.errorsService.badRequest(ErrMsg.CURRENT_PASSWORD_IS_INCORRECT);
+    }
+  }
 
   async getUsersByQuery(
     limit: number,
@@ -86,14 +110,25 @@ export class AdminService {
     }
   }
 
-  async deleteUserById(userId: number): Promise<void> {
+  async deleteUserById(
+    adminId: number,
+    userId: number,
+    password: string,
+  ): Promise<void> {
+    if (userId === adminId) {
+      this.errorsService.badRequest(ErrMsg.ADMINISTRATOR_CANNOT_BE_DELETED);
+    }
+
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
     try {
+      await this.verifyAdministratorPassword(qr.manager, adminId, password);
+
       const user = await qr.manager.findOneOrFail(User, {
         where: { id: userId },
         select: [ID, EMAIL, NICKNAME, ROLE],
+        lock: { mode: 'pessimistic_write' },
       });
       if (user.role === Role.ADMIN) {
         this.errorsService.badRequest(ErrMsg.ADMINISTRATOR_CANNOT_BE_DELETED);
@@ -111,7 +146,9 @@ export class AdminService {
         `<p>Your account has been permanently deleted by an administrator.</p>`;
       await this.mailService.send(user.email, subject, text, html);
     } catch (err: unknown) {
-      await qr.rollbackTransaction();
+      if (qr.isTransactionActive) {
+        await qr.rollbackTransaction();
+      }
       if (err instanceof HttpException) {
         throw err;
       }
@@ -126,6 +163,7 @@ export class AdminService {
     adminId: number,
     userId: number,
     blocked_reason: string,
+    password: string,
   ): Promise<void> {
     if (userId === adminId) {
       this.errorsService.badRequest(ErrMsg.ADMINISTRATOR_CANNOT_BE_BLOCKED);
@@ -137,6 +175,8 @@ export class AdminService {
     await qr.connect();
     await qr.startTransaction();
     try {
+      await this.verifyAdministratorPassword(qr.manager, adminId, password);
+
       const user = await qr.manager.findOneOrFail(User, {
         where: { id: userId },
         select: [ID, EMAIL, NICKNAME, ROLE, IS_BLOCKED],
