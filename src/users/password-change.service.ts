@@ -92,9 +92,18 @@ export class PasswordChangeService {
     if (!accessToken) {
       return this.errorsService.invalidToken(null, TokenType.ACCESS);
     }
+    const attemptSubject = userId.toString();
+    await this.tokensService.assertVerificationAttemptsAvailable(
+      TokenType.CURRENT_USER_PASSWORD_RESET,
+      attemptSubject,
+    );
     const storedUserId =
       await this.tokensService.getIdByCurrentUserPasswordResetCode(code);
     if (!storedUserId || storedUserId !== userId) {
+      await this.tokensService.registerVerificationFailure(
+        TokenType.CURRENT_USER_PASSWORD_RESET,
+        attemptSubject,
+      );
       return this.errorsService.invalidToken(
         null,
         TokenType.CURRENT_USER_PASSWORD_RESET,
@@ -103,6 +112,12 @@ export class PasswordChangeService {
     const tokens = await this.updatePassword(userId, newPassword, accessToken);
     await this.tokensService
       .deleteCurrentUserPasswordResetCode(code)
+      .catch(() => undefined);
+    await this.tokensService
+      .clearVerificationFailures(
+        TokenType.CURRENT_USER_PASSWORD_RESET,
+        attemptSubject,
+      )
       .catch(() => undefined);
     return tokens;
   }
@@ -116,14 +131,26 @@ export class PasswordChangeService {
     if (!accessToken) {
       return this.errorsService.invalidToken(null, TokenType.ACCESS);
     }
+    const attemptSubject = userId.toString();
+    await this.tokensService.assertVerificationAttemptsAvailable(
+      TokenType.PASSWORD_CHANGE,
+      attemptSubject,
+    );
     const storedUserId =
       await this.tokensService.getIdByPasswordChangeCode(code);
     if (!storedUserId || storedUserId !== userId) {
+      await this.tokensService.registerVerificationFailure(
+        TokenType.PASSWORD_CHANGE,
+        attemptSubject,
+      );
       return this.errorsService.invalidToken(null, TokenType.PASSWORD_CHANGE);
     }
     const tokens = await this.updatePassword(userId, newPassword, accessToken);
     await this.tokensService
       .deletePasswordChangeCode(code)
+      .catch(() => undefined);
+    await this.tokensService
+      .clearVerificationFailures(TokenType.PASSWORD_CHANGE, attemptSubject)
       .catch(() => undefined);
     return tokens;
   }
