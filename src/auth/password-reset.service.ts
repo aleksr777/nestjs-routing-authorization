@@ -39,6 +39,10 @@ export class PasswordResetService {
       });
       if (user) {
         const code = await this.tokensService.getResetCode(user.id);
+        await this.tokensService.clearVerificationFailures(
+          TokenType.PASSWORD_RESET,
+          normalizedEmail,
+        );
         const text = `Hi, this is an automated message, please do not reply! You can reset your password by using the code below (within ${this.resetExpiresIn} min): ${code}`;
         const html = `
           <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
