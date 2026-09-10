@@ -59,6 +59,10 @@ export class RegistrationService {
         const hashedPassword = await this.hashService.hash(password);
         const redisValue = { email: normalizedEmail, password: hashedPassword };
         const code = await this.tokensService.getRegistrationCode(redisValue);
+        await this.tokensService.clearVerificationFailures(
+          TokenType.REGISTRATION,
+          normalizedEmail,
+        );
         const text = `Hi, this is an automated message, please do not reply! You can confirm your registration by using the code below (within ${this.registrationExpiresIn} min): ${code}`;
         const html = `
           <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
