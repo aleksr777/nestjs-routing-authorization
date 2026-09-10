@@ -131,10 +131,17 @@ export class ErrorsService {
     throw new UnauthorizedException(errMessage);
   }
 
-  invalidTokenWithAttempts(tokenType: TokenType, attemptsRemaining: number): never {
+  invalidTokenWithAttempts(
+    tokenType: TokenType,
+    attemptsRemaining: number,
+    retryAfter?: number,
+  ): never {
     throw new UnauthorizedException({
       message: this.getInvalidTokenMessage(tokenType),
       attempts_remaining: Math.max(0, attemptsRemaining),
+      ...(retryAfter !== undefined
+        ? { retry_after: Math.max(1, Math.ceil(retryAfter)) }
+        : {}),
     });
   }
 
