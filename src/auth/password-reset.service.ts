@@ -54,10 +54,19 @@ export class PasswordResetService {
     }
   }
 
-  async confirm(code: string, newPassword: string) {
+  async confirm(code: string, newPassword: string, attemptSubject: string) {
+    await this.tokensService.assertVerificationAttemptsAvailable(
+      TokenType.PASSWORD_RESET,
+      attemptSubject,
+    );
+
     try {
       const userId = await this.tokensService.getIdByResetCode(code);
       if (!userId) {
+        await this.tokensService.registerVerificationFailure(
+          TokenType.PASSWORD_RESET,
+          attemptSubject,
+        );
         this.errorsService.invalidToken(null, TokenType.PASSWORD_RESET);
         return;
       }
@@ -70,6 +79,10 @@ export class PasswordResetService {
         this.errorsService.userNotFound();
       }
       await this.tokensService.deletePassResetCode(code);
+      await this.tokensService.clearVerificationFailures(
+        TokenType.PASSWORD_RESET,
+        attemptSubject,
+      );
       return this.authService.login(userId);
     } catch (err: unknown) {
       this.errorsService.resetPassword(err);
