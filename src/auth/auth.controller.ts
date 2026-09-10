@@ -7,6 +7,7 @@ import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { RegistrationConfirmDto } from './dto/registration-confirm.dto';
 import { RegistrationRequestDto } from './dto/registration-request.dto';
+import { RegistrationResendDto } from './dto/registration-resend.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
@@ -140,6 +141,11 @@ export class AuthController {
   @Post('registration/request')
   async requestRegistration(@Body() dto: RegistrationRequestDto) {
     return this.registrationService.request(dto.email, dto.password);
+  }
+
+  @Post('registration/resend')
+  async resendRegistrationCode(@Body() dto: RegistrationResendDto) {
+    return this.registrationService.resend(dto.email);
   }
 
   @Post('registration/confirm')
