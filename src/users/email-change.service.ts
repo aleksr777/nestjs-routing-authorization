@@ -75,15 +75,28 @@ export class EmailChangeService {
     if (!accessToken) {
       this.errorsService.tokenNotDefined(TokenType.ACCESS);
     }
+    const attemptSubject = currentUserId.toString();
+    await this.tokensService.assertVerificationAttemptsAvailable(
+      TokenType.EMAIL_CHANGE,
+      attemptSubject,
+    );
     const data = await this.tokensService.getDataByEmailChangeCode(dto.code);
     if (
       !data ||
       typeof data.user_id !== 'number' ||
       typeof data.new_email !== 'string'
     ) {
+      await this.tokensService.registerVerificationFailure(
+        TokenType.EMAIL_CHANGE,
+        attemptSubject,
+      );
       this.errorsService.invalidToken(null, TokenType.EMAIL_CHANGE);
     }
     if (data.user_id !== currentUserId) {
+      await this.tokensService.registerVerificationFailure(
+        TokenType.EMAIL_CHANGE,
+        attemptSubject,
+      );
       throw new ForbiddenException(ErrMsg.TOKEN_NOT_ISSUED_FOR_CURRENT_USER);
     }
     const newEmail = data.new_email.trim().toLowerCase();
@@ -109,6 +122,9 @@ export class EmailChangeService {
       await this.usersRepository.save(user);
       await this.tokensService
         .deleteEmailChangeCode(dto.code)
+        .catch(() => undefined);
+      await this.tokensService
+        .clearVerificationFailures(TokenType.EMAIL_CHANGE, attemptSubject)
         .catch(() => undefined);
       await this.tokensService.removeRefreshToken(user.id);
       await this.tokensService.addJwtTokenToBlacklist(
