@@ -20,7 +20,7 @@ The backend provides:
 - transferable administrator rights with password verification on both sides;
 - one active administrator-rights transfer at a time;
 - cancellation and TTL expiration of pending administrator transfers;
-- Redis-backed one-time verification codes and pending-transfer state;
+- Redis-backed one-time verification codes, confirmation-attempt limits, and pending-transfer state;
 - transaction and pessimistic-lock protection for administrator role transfer and password-protected destructive admin actions.
 
 ## Tech stack
@@ -155,6 +155,23 @@ new authentication state
 
 The frontend route guards improve UX, but backend JWT and role guards are the authorization boundary.
 
+## Verification-code attempt limits
+
+Six-digit verification codes are protected against repeated guessing with Redis-backed failure counters.
+
+- ordinary confirmation flows allow up to `5` incorrect code attempts;
+- administrator-rights transfer confirmation allows up to `3` incorrect code attempts;
+- counters use atomic Redis `INCR` operations and expire automatically using the TTL of the corresponding verification flow;
+- successful confirmation clears the corresponding failure counter;
+- once the limit has been reached, further confirmation attempts are rejected with the same invalid/expired-token response rather than revealing that a lockout threshold was reached;
+- issuing another code does not clear an already active failure counter, so repeatedly requesting new codes cannot be used to reset the attempt limit.
+
+For authenticated flows (`email change`, `password change`, authenticated password reset, and administrator transfer), the counter is scoped to the authenticated user ID. Public registration and public password-reset confirmation cannot identify the target account before a correct code is supplied, so failed attempts are scoped to the request IP address.
+
+For administrator transfer, if the intended recipient reaches the third incorrect-code attempt while the transfer is still pending, the pending transfer and its confirmation code are invalidated immediately.
+
+When the application is deployed behind a reverse proxy, configure Express/proxy trust correctly so `req.ip` represents the real client address before relying on the public-flow IP scope.
+
 ## Password-protected administrator actions
 
 Blocking and deleting another user require the current administrator to re-enter their current password. The backend does not trust the frontend confirmation alone.
@@ -252,9 +269,9 @@ If no action is taken before the TTL expires, Redis removes the transfer state a
 - `POST /api/auth/logout` — logout and clear refresh state
 - `POST /api/auth/refresh-tokens` — refresh authentication tokens
 - `POST /api/auth/registration/request` — request registration code
-- `POST /api/auth/registration/confirm` — confirm registration
+- `POST /api/auth/registration/confirm` — confirm registration; failed-code attempts are IP-limited
 - `POST /api/auth/password-reset/request` — request public password reset
-- `POST /api/auth/password-reset/confirm` — confirm public password reset
+- `POST /api/auth/password-reset/confirm` — confirm public password reset; failed-code attempts are IP-limited
 
 ### Current user
 
@@ -263,11 +280,11 @@ All routes below require a valid access token.
 - `GET /api/users/me` — get current profile
 - `PATCH /api/users/me/partial-data/update` — update supported profile fields
 - `POST /api/users/me/email/update/request` — request email change
-- `POST /api/users/me/email/update/confirm` — confirm email change
+- `POST /api/users/me/email/update/confirm` — confirm email change with user-scoped attempt limiting
 - `POST /api/users/me/password/change/request` — verify current password and start password change
-- `POST /api/users/me/password/change/confirm` — confirm password change
+- `POST /api/users/me/password/change/confirm` — confirm password change with user-scoped attempt limiting
 - `POST /api/users/me/password/reset/request` — request password reset for the authenticated user
-- `POST /api/users/me/password/reset/confirm` — confirm authenticated-user password reset
+- `POST /api/users/me/password/reset/confirm` — confirm authenticated-user password reset with user-scoped attempt limiting
 - `DELETE /api/users/me/delete` — delete current account after password verification
 
 ### Admin
@@ -282,12 +299,13 @@ All routes below require a valid access token and the current `admin` role, exce
 - `GET /api/admin/transfer/status` — get active administrator-transfer status
 - `POST /api/admin/transfer/initiate` — initiate transfer after administrator password verification
 - `DELETE /api/admin/transfer/cancel` — cancel the active transfer while still pending
-- `POST /api/admin/transfer/confirm` — authenticated recipient confirms transfer with code and current password
+- `POST /api/admin/transfer/confirm` — authenticated recipient confirms transfer with code and current password; maximum 3 incorrect-code attempts
 
 ## Security properties
 
 - Administrator authorization is enforced on the backend with JWT and role guards; frontend route guards are only a UX layer.
 - Blocked users are rejected by protected authentication strategies even if they still possess previously issued tokens.
+- Verification-code confirmation failures are limited with Redis-backed counters: 5 attempts for normal flows and 3 for administrator transfer.
 - Blocking and deleting users require current-administrator password re-verification on the backend.
 - Password-protected block/delete operations re-check the administrator role under a database pessimistic lock.
 - Critical administrator transfer initiation requires the current administrator's password.
@@ -311,6 +329,7 @@ For production deployment, review the cookie and CORS configuration for the actu
 - use strong, unique JWT secrets and SMTP/database credentials;
 - set `DB_TYPEORM_SYNC=false` in production and manage schema changes through migrations;
 - keep PostgreSQL and Redis inaccessible from untrusted public networks;
+- configure proxy trust correctly when public verification attempt limits depend on client IP;
 - configure production values for `FRONTEND_URL`, database, Redis, and SMTP settings.
 
 These are deployment recommendations; they are not all enabled by the current local-development configuration.
