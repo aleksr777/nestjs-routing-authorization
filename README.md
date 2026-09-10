@@ -16,11 +16,12 @@ The backend provides:
 - self-account deletion with password verification;
 - blocked-account handling with an administrator-provided reason and current administrator contact email;
 - role-based administrator endpoints for user search, viewing, blocking, unblocking, and deletion;
+- current-administrator password verification before blocking or deleting another user;
 - transferable administrator rights with password verification on both sides;
 - one active administrator-rights transfer at a time;
 - cancellation and TTL expiration of pending administrator transfers;
 - Redis-backed one-time verification codes and pending-transfer state;
-- transaction and pessimistic-lock protection for administrator role transfer.
+- transaction and pessimistic-lock protection for administrator role transfer and password-protected destructive admin actions.
 
 ## Tech stack
 
@@ -154,6 +155,31 @@ new authentication state
 
 The frontend route guards improve UX, but backend JWT and role guards are the authorization boundary.
 
+## Password-protected administrator actions
+
+Blocking and deleting another user require the current administrator to re-enter their current password. The backend does not trust the frontend confirmation alone.
+
+For both operations, the backend starts a database transaction, obtains a `pessimistic_write` lock on the administrator row, re-checks that the requester still has the `admin` role, verifies the supplied password with bcrypt, and only then locks and modifies the target user. This prevents a request that passed the route guard before a concurrent administrator-rights transfer from completing with stale administrator privileges.
+
+`PATCH /api/admin/users/block/:id`
+
+```json
+{
+  "blocked_reason": "optional reason",
+  "password": "current-administrator-password"
+}
+```
+
+`DELETE /api/admin/users/delete/:id`
+
+```json
+{
+  "password": "current-administrator-password"
+}
+```
+
+Unblocking currently requires an explicit UI confirmation but does not require password re-entry.
+
 ## Administrator rights transfer
 
 Administrator rights are transferable and are not tied to the initial administrator email.
@@ -250,9 +276,9 @@ All routes below require a valid access token and the current `admin` role, exce
 
 - `GET /api/admin/users/find` — paginated user search; administrator accounts are excluded
 - `GET /api/admin/users/:id` — get a managed user's details
-- `PATCH /api/admin/users/block/:id` — block a user
+- `PATCH /api/admin/users/block/:id` — block a user after current-administrator password verification
 - `PATCH /api/admin/users/unblock/:id` — unblock a user
-- `DELETE /api/admin/users/delete/:id` — delete a user
+- `DELETE /api/admin/users/delete/:id` — delete a user after current-administrator password verification
 - `GET /api/admin/transfer/status` — get active administrator-transfer status
 - `POST /api/admin/transfer/initiate` — initiate transfer after administrator password verification
 - `DELETE /api/admin/transfer/cancel` — cancel the active transfer while still pending
@@ -262,6 +288,8 @@ All routes below require a valid access token and the current `admin` role, exce
 
 - Administrator authorization is enforced on the backend with JWT and role guards; frontend route guards are only a UX layer.
 - Blocked users are rejected by protected authentication strategies even if they still possess previously issued tokens.
+- Blocking and deleting users require current-administrator password re-verification on the backend.
+- Password-protected block/delete operations re-check the administrator role under a database pessimistic lock.
 - Critical administrator transfer initiation requires the current administrator's password.
 - Transfer acceptance requires both the recipient's six-digit invitation code and current password.
 - Administrator transfer codes are unique six-digit Redis-backed verification codes.
