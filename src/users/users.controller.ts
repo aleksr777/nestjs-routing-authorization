@@ -66,6 +66,12 @@ export class UsersController {
     return this.usersService.updatePartialUserData(+user.id, dto);
   }
 
+  @Get('me/email/update/status')
+  getUpdateEmailStatus(@Req() req: Request) {
+    const user = req.user as User;
+    return this.emailChangeService.getStatus(+user.id);
+  }
+
   @Post('me/email/update/request')
   requestUpdateEmail(@Body() dto: EmailChangeRequestDto, @Req() req: Request) {
     const user = req.user as User;
