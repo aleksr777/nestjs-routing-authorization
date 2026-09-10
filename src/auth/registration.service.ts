@@ -75,13 +75,22 @@ export class RegistrationService {
     }
   }
 
-  async confirm(code: string) {
+  async confirm(code: string, attemptSubject: string) {
+    await this.tokensService.assertVerificationAttemptsAvailable(
+      TokenType.REGISTRATION,
+      attemptSubject,
+    );
+
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
     try {
       const data = await this.tokensService.getDataByRegistrationCode(code);
       if (!data) {
+        await this.tokensService.registerVerificationFailure(
+          TokenType.REGISTRATION,
+          attemptSubject,
+        );
         this.errorsService.invalidToken(null, TokenType.REGISTRATION);
         return;
       }
@@ -107,9 +116,15 @@ export class RegistrationService {
       await qr.manager.save(User, newUser);
       await qr.commitTransaction();
       await this.tokensService.deleteRegistrationCode(code);
+      await this.tokensService.clearVerificationFailures(
+        TokenType.REGISTRATION,
+        attemptSubject,
+      );
       return this.authService.login(newUser.id);
     } catch (err: unknown) {
-      await qr.rollbackTransaction();
+      if (qr.isTransactionActive) {
+        await qr.rollbackTransaction();
+      }
       this.errorsService.confirmRegistration(err);
     } finally {
       await qr.release();
