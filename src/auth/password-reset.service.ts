@@ -141,8 +141,8 @@ export class PasswordResetService {
 
     try {
       const userId = await this.tokensService.getIdByResetCode(code);
-      if (!userId) {
-        await this.rejectInvalidCode(attemptSubject);
+      if (userId === null) {
+        return this.rejectInvalidCode(attemptSubject);
       }
 
       const isActive = await this.tokensService.isActiveResetCode(userId, code);
@@ -151,7 +151,7 @@ export class PasswordResetService {
         select: [ID, EMAIL],
       });
       if (!isActive || !user || user.email.trim().toLowerCase() !== attemptSubject) {
-        await this.rejectInvalidCode(attemptSubject);
+        return this.rejectInvalidCode(attemptSubject);
       }
 
       const hashedPassword = await this.hashService.hash(newPassword);
