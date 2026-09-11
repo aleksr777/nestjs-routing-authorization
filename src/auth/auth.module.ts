@@ -10,6 +10,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { AuthService } from './auth.service';
 import { RegistrationService } from './registration.service';
 import { PasswordResetService } from './password-reset.service';
+import { LoginRateLimitService } from './login-rate-limit.service';
 import { TokensService } from './tokens.service';
 import { EnvService } from '../common/env-service/env.service';
 import { AuthController } from './auth.controller';
@@ -35,6 +36,7 @@ import { User } from '../users/entities/user.entity';
     AuthService,
     RegistrationService,
     PasswordResetService,
+    LoginRateLimitService,
     LocalStrategy,
     JwtStrategy,
     JwtRefreshStrategy,
