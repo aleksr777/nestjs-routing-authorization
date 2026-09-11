@@ -7,6 +7,7 @@ import { EnvService } from './env-service/env.service';
 import { MailService } from './mail-service/mail.service';
 import { NicknameGeneratorService } from './nickname-generator-service/nickname-generator.service';
 import { ApiRateLimitGuard } from './rate-limit-service/api-rate-limit.guard';
+import { SecurityConfigService } from './security-service/security-config.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ActivityModule } from '../activity/activity.module';
@@ -22,6 +23,7 @@ import { ActivityInterceptor } from '../activity/activity.interceptor';
     EnvService,
     MailService,
     NicknameGeneratorService,
+    SecurityConfigService,
     ApiRateLimitGuard,
     { provide: APP_GUARD, useExisting: ApiRateLimitGuard },
     { provide: APP_INTERCEPTOR, useClass: ActivityInterceptor },
@@ -33,6 +35,7 @@ import { ActivityInterceptor } from '../activity/activity.interceptor';
     EnvService,
     MailService,
     NicknameGeneratorService,
+    SecurityConfigService,
   ],
 })
 export class CoreModule {}
