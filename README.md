@@ -47,10 +47,10 @@ JWT_ACCESS_EXPIRES_IN='15m'
 JWT_REFRESH_EXPIRES_IN='7d'
 
 ADMIN_TRANSFER_TOKEN_EXPIRES_IN=300
-REGISTRATION_TOKEN_EXPIRES_IN=600
-RESET_TOKEN_EXPIRES_IN=600
-EMAIL_CHANGE_TOKEN_EXPIRES_IN=600
-PASSWORD_CHANGE_TOKEN_EXPIRES_IN=600
+REGISTRATION_TOKEN_EXPIRES_IN=300
+RESET_TOKEN_EXPIRES_IN=300
+EMAIL_CHANGE_TOKEN_EXPIRES_IN=300
+PASSWORD_CHANGE_TOKEN_EXPIRES_IN=300
 VERIFICATION_CODE_RESEND_COOLDOWN=60
 REGISTRATION_VERIFICATION_LOCKOUT=180
 PASSWORD_RESET_VERIFICATION_LOCKOUT=180
@@ -87,10 +87,10 @@ INITIAL_ADMIN_NICKNAME='INITIAL_ADMIN_NICKNAME'
 Verification timing defaults in the example configuration are:
 
 - `ADMIN_TRANSFER_TOKEN_EXPIRES_IN=300` — administrator-transfer confirmation code is valid for 5 minutes;
-- `REGISTRATION_TOKEN_EXPIRES_IN=600` — registration code is valid for 10 minutes;
-- `RESET_TOKEN_EXPIRES_IN=600` — password-reset code is valid for 10 minutes;
-- `EMAIL_CHANGE_TOKEN_EXPIRES_IN=600` — email-change code is valid for 10 minutes;
-- `PASSWORD_CHANGE_TOKEN_EXPIRES_IN=600` — password-change code is valid for 10 minutes;
+- `REGISTRATION_TOKEN_EXPIRES_IN=300` — registration code is valid for 5 minutes;
+- `RESET_TOKEN_EXPIRES_IN=300` — password-reset code is valid for 5 minutes;
+- `EMAIL_CHANGE_TOKEN_EXPIRES_IN=300` — email-change code is valid for 5 minutes;
+- `PASSWORD_CHANGE_TOKEN_EXPIRES_IN=300` — password-change code is valid for 5 minutes;
 - `VERIFICATION_CODE_RESEND_COOLDOWN=60` — registration and public password-reset codes cannot be requested more often than once per minute for the same normalized email;
 - `REGISTRATION_VERIFICATION_LOCKOUT=180` — registration is locked for 3 minutes after 5 incorrect confirmation codes for the same normalized email;
 - `PASSWORD_RESET_VERIFICATION_LOCKOUT=180` — public password reset is locked for 3 minutes after 5 incorrect confirmation codes for the same normalized email;
@@ -177,8 +177,7 @@ Six-digit verification codes are protected against repeated guessing with Redis-
 
 - ordinary confirmation flows allow up to `5` incorrect code attempts;
 - administrator-rights transfer confirmation allows up to `3` incorrect code attempts;
-- registration, password-reset, email-change, and password-change verification-code TTLs are 10 minutes in the example configuration;
-- the administrator-transfer code TTL is 5 minutes;
+- verification-code TTLs are 5 minutes in the example configuration;
 - counters use atomic Redis `INCR` operations and expire automatically using the TTL of the corresponding verification flow;
 - successful confirmation clears the corresponding failure counter;
 - authenticated flows are scoped to the authenticated user ID;
@@ -358,7 +357,7 @@ All routes below require a valid access token and the current `admin` role, exce
 - Administrator authorization is enforced on the backend with JWT and role guards; frontend route guards are only a UX layer.
 - Blocked users are rejected by protected authentication strategies even if they still possess previously issued tokens.
 - Verification-code confirmation failures are limited with Redis-backed counters: 5 attempts for normal flows and 3 for administrator transfer.
-- Registration, password-reset, email-change, and password-change verification codes expire after 10 minutes with the example environment configuration; administrator-transfer codes expire after 5 minutes.
+- Verification codes expire after 5 minutes with the example environment configuration.
 - Registration and public password-reset resend requests are rate-limited per normalized email with a 60-second Redis cooldown.
 - Registration and public password reset are temporarily locked per normalized email for 3 minutes after 5 incorrect codes.
 - Email change is temporarily locked per authenticated user ID for 3 minutes after 5 incorrect codes.
