@@ -1,30 +1,36 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { EnvService } from './common/env-service/env.service';
+import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
+import { AppModule } from './app.module';
+import { EnvService } from './common/env-service/env.service';
+import { SecurityConfigService } from './common/security/security-config.service';
+import { configureHttpSecurity } from './common/security/security-http';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   const envService = app.get(EnvService);
+  const securityConfig = app.get(SecurityConfigService);
+
   envService.validateVariables();
+  securityConfig.validate();
+  configureHttpSecurity(app, securityConfig);
 
   app.use(cookieParser());
 
   app.enableCors({
-    origin: envService.get('FRONTEND_URL'),
+    origin: securityConfig.getFrontendOrigin(),
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Global DTO validation
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Automatically removes properties not defined in the DTO
-      forbidNonWhitelisted: true, // Throws an error if extra properties are present
-      transform: true, // Automatically transforms payloads to the expected types (e.g., string -> number)
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
       transformOptions: { enableImplicitConversion: true },
     }),
   );
@@ -33,7 +39,6 @@ async function bootstrap() {
 
   const serverPort = envService.get('SERVER_PORT', 'number');
 
-  // Start app
   await app.listen(serverPort);
   console.log(`Application is running on: http://localhost:${serverPort}/api`);
 }
