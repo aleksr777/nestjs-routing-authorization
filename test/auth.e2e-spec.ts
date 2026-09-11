@@ -1,8 +1,5 @@
-import {
-  HttpException,
-  INestApplication,
-  ValidationPipe,
-} from '@nestjs/common';
+import { HttpException, ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { Server } from 'node:http';
@@ -12,8 +9,12 @@ import { AuthService } from '../src/auth/auth.service';
 import { PasswordResetService } from '../src/auth/password-reset.service';
 import { PublicVerificationRateLimitService } from '../src/auth/public-verification-rate-limit.service';
 import { RegistrationService } from '../src/auth/registration.service';
+import { RefreshOriginGuard } from '../src/auth/guards/refresh-origin.guard';
 import { RefreshTokenGuard } from '../src/auth/guards/refresh-token.guard';
+import { EnvService } from '../src/common/env-service/env.service';
 import { ErrorsService } from '../src/common/errors-service/errors.service';
+import { SecurityConfigService } from '../src/common/security/security-config.service';
+import { configureHttpSecurity } from '../src/common/security/security-http';
 
 const refreshTokens = {
   access_token: 'new-access-token',
@@ -22,6 +23,8 @@ const refreshTokens = {
   refresh_token_expires: 1_900_000_100,
 };
 
+const FRONTEND_ORIGIN = 'http://localhost:5173';
+
 type AuthResponseBody = {
   access_token: string;
   access_token_expires: number;
@@ -29,7 +32,23 @@ type AuthResponseBody = {
 };
 
 describe('AuthController (e2e)', () => {
-  let app: INestApplication;
+  let app: NestExpressApplication;
+
+  const envValues = new Map<string, string>();
+  const envService = {
+    get: jest.fn(
+      (
+        key: string,
+        type: 'string' | 'number' | 'boolean' = 'string',
+      ): string | number | boolean => {
+        const value = envValues.get(key);
+        if (value === undefined) throw new Error(`Missing test env: ${key}`);
+        if (type === 'boolean') return value === 'true';
+        if (type === 'number') return Number(value);
+        return value;
+      },
+    ),
+  } as unknown as EnvService;
 
   const authService = {
     refreshJwtTokens: jest.fn(),
@@ -51,11 +70,19 @@ describe('AuthController (e2e)', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    envValues.clear();
+    envValues.set('FRONTEND_URL', FRONTEND_ORIGIN);
+    envValues.set('REFRESH_COOKIE_SECURE', 'false');
+    envValues.set('REFRESH_COOKIE_SAME_SITE', 'lax');
+    envValues.set('TRUST_PROXY', 'false');
 
     const moduleRef = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
         ErrorsService,
+        SecurityConfigService,
+        RefreshOriginGuard,
+        { provide: EnvService, useValue: envService },
         { provide: AuthService, useValue: authService },
         { provide: RegistrationService, useValue: registrationService },
         { provide: PasswordResetService, useValue: passwordResetService },
@@ -76,7 +103,11 @@ describe('AuthController (e2e)', () => {
       })
       .compile();
 
-    app = moduleRef.createNestApplication();
+    const securityConfig = moduleRef.get(SecurityConfigService);
+    securityConfig.validate();
+
+    app = moduleRef.createNestApplication<NestExpressApplication>();
+    configureHttpSecurity(app, securityConfig);
     app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({
@@ -93,7 +124,7 @@ describe('AuthController (e2e)', () => {
     await app.close();
   });
 
-  it('applies the public verification limiter before registration', async () => {
+  it('applies security headers and the public verification limiter', async () => {
     publicVerificationRateLimitService.consume.mockResolvedValue(undefined);
     registrationService.request.mockResolvedValue({
       message: 'If the email exists, we’ve sent you a code.',
@@ -115,6 +146,9 @@ describe('AuthController (e2e)', () => {
       retry_after: 60,
       max_attempts: 5,
     });
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-powered-by']).toBeUndefined();
+    expect(response.headers['strict-transport-security']).toBeUndefined();
   });
 
   it('returns 429 when the public verification IP limit is exceeded', async () => {
@@ -139,15 +173,17 @@ describe('AuthController (e2e)', () => {
     });
   });
 
-  it('rotates the refresh cookie without exposing the refresh token in JSON', async () => {
+  it('rotates the refresh cookie for the configured frontend origin', async () => {
     authService.refreshJwtTokens.mockResolvedValue(refreshTokens);
 
     const response = await request(getServer())
       .post('/api/auth/refresh-tokens')
+      .set('Origin', FRONTEND_ORIGIN)
       .set('Cookie', ['refresh_token=old-refresh-token'])
       .expect(201);
 
     const body = response.body as AuthResponseBody;
+    const setCookie = response.headers['set-cookie']?.[0];
 
     expect(authService.refreshJwtTokens).toHaveBeenCalledWith(
       7,
@@ -158,10 +194,30 @@ describe('AuthController (e2e)', () => {
       access_token_expires: 1_900_000_000,
     });
     expect(body.refresh_token).toBeUndefined();
-    expect(response.headers['set-cookie']?.[0]).toContain(
-      'refresh_token=new-refresh-token',
-    );
-    expect(response.headers['set-cookie']?.[0]).toContain('HttpOnly');
+    expect(setCookie).toContain('refresh_token=new-refresh-token');
+    expect(setCookie).toContain('HttpOnly');
+    expect(setCookie).toContain('SameSite=Lax');
+    expect(setCookie).toContain('Priority=High');
+    expect(setCookie).not.toContain('Secure');
+  });
+
+  it('rejects refresh requests from an untrusted origin', async () => {
+    await request(getServer())
+      .post('/api/auth/refresh-tokens')
+      .set('Origin', 'https://attacker.example')
+      .set('Cookie', ['refresh_token=old-refresh-token'])
+      .expect(403);
+
+    expect(authService.refreshJwtTokens).not.toHaveBeenCalled();
+  });
+
+  it('rejects refresh requests without an Origin header', async () => {
+    await request(getServer())
+      .post('/api/auth/refresh-tokens')
+      .set('Cookie', ['refresh_token=old-refresh-token'])
+      .expect(403);
+
+    expect(authService.refreshJwtTokens).not.toHaveBeenCalled();
   });
 
   it('rejects invalid registration payloads before calling the service', async () => {
