@@ -1,15 +1,24 @@
 import { CookieOptions, Response } from 'express';
+import { SecurityConfigService } from '../common/security/security-config.service';
 import { AuthResponse, JwtTokens } from '../common/types/jwt-tokens.type';
 
-const getRefreshCookieOptions = (maxAge?: number): CookieOptions => ({
+const getRefreshCookieOptions = (
+  securityConfig: SecurityConfigService,
+  maxAge?: number,
+): CookieOptions => ({
   httpOnly: true,
-  secure: false,
-  sameSite: 'lax',
+  secure: securityConfig.getRefreshCookieSecure(),
+  sameSite: securityConfig.getRefreshCookieSameSite(),
+  priority: 'high',
   path: '/api/auth',
   ...(maxAge !== undefined ? { maxAge } : {}),
 });
 
-export const setRefreshCookie = (res: Response, tokens: JwtTokens): void => {
+export const setRefreshCookie = (
+  res: Response,
+  tokens: JwtTokens,
+  securityConfig: SecurityConfigService,
+): void => {
   const maxAge =
     typeof tokens.refresh_token_expires === 'number'
       ? Math.max(tokens.refresh_token_expires * 1000 - Date.now(), 0)
@@ -18,12 +27,15 @@ export const setRefreshCookie = (res: Response, tokens: JwtTokens): void => {
   res.cookie(
     'refresh_token',
     tokens.refresh_token,
-    getRefreshCookieOptions(maxAge),
+    getRefreshCookieOptions(securityConfig, maxAge),
   );
 };
 
-export const clearRefreshCookie = (res: Response): void => {
-  res.clearCookie('refresh_token', getRefreshCookieOptions());
+export const clearRefreshCookie = (
+  res: Response,
+  securityConfig: SecurityConfigService,
+): void => {
+  res.clearCookie('refresh_token', getRefreshCookieOptions(securityConfig));
 };
 
 export const getAuthResponse = (tokens: JwtTokens): AuthResponse => ({

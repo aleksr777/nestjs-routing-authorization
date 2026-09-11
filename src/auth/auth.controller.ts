@@ -11,8 +11,10 @@ import { RegistrationRequestDto } from './dto/registration-request.dto';
 import { RegistrationResendDto } from './dto/registration-resend.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
+import { RefreshOriginGuard } from './guards/refresh-origin.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { User } from '../users/entities/user.entity';
+import { SecurityConfigService } from '../common/security/security-config.service';
 import { JwtTokens, AuthResponse } from '../common/types/jwt-tokens.type';
 
 type RequestWithSafeCookies = Omit<Request, 'cookies'> & {
@@ -26,13 +28,15 @@ export class AuthController {
     private readonly registrationService: RegistrationService,
     private readonly passwordResetService: PasswordResetService,
     private readonly publicVerificationRateLimitService: PublicVerificationRateLimitService,
+    private readonly securityConfig: SecurityConfigService,
   ) {}
 
   private getRefreshCookieOptions(maxAge?: number): CookieOptions {
     return {
       httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
+      secure: this.securityConfig.getRefreshCookieSecure(),
+      sameSite: this.securityConfig.getRefreshCookieSameSite(),
+      priority: 'high',
       path: '/api/auth',
       ...(maxAge !== undefined ? { maxAge } : {}),
     };
@@ -142,7 +146,7 @@ export class AuthController {
     };
   }
 
-  @UseGuards(RefreshTokenGuard)
+  @UseGuards(RefreshOriginGuard, RefreshTokenGuard)
   @Post('refresh-tokens')
   async refreshJwtTokens(
     @Req() req: Request,
