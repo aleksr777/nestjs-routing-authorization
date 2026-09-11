@@ -132,7 +132,14 @@ export class AuthService {
     }
   }
 
-  async refreshJwtTokens(userId: number, currentRefreshToken: string) {
+  async refreshJwtTokens(
+    userId: number,
+    currentRefreshToken: string | null,
+  ) {
+    if (!currentRefreshToken) {
+      this.errorsService.tokenNotDefined(TokenType.REFRESH);
+    }
+
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
