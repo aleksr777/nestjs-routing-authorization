@@ -1,8 +1,11 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { EnvService } from './common/env-service/env.service';
+import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
+import { Application } from 'express';
+import helmet from 'helmet';
+import { AppModule } from './app.module';
+import { EnvService } from './common/env-service/env.service';
+import { SecurityConfigService } from './common/security-service/security-config.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -10,21 +13,35 @@ async function bootstrap() {
   const envService = app.get(EnvService);
   envService.validateVariables();
 
+  const securityConfigService = app.get(SecurityConfigService);
+  const expressApp = app.getHttpAdapter().getInstance() as Application;
+  expressApp.set('trust proxy', securityConfigService.getTrustProxyHops());
+
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'same-site' },
+      hsts: securityConfigService.shouldEnableHsts()
+        ? {
+            maxAge: 31_536_000,
+            includeSubDomains: true,
+          }
+        : false,
+    }),
+  );
   app.use(cookieParser());
 
   app.enableCors({
-    origin: envService.get('FRONTEND_URL'),
+    origin: securityConfigService.getFrontendOrigin(),
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Global DTO validation
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Automatically removes properties not defined in the DTO
-      forbidNonWhitelisted: true, // Throws an error if extra properties are present
-      transform: true, // Automatically transforms payloads to the expected types (e.g., string -> number)
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
       transformOptions: { enableImplicitConversion: true },
     }),
   );
@@ -32,8 +49,6 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   const serverPort = envService.get('SERVER_PORT', 'number');
-
-  // Start app
   await app.listen(serverPort);
   console.log(`Application is running on: http://localhost:${serverPort}/api`);
 }
