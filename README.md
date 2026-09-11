@@ -20,7 +20,7 @@ The backend provides:
 - transferable administrator rights with password verification on both sides;
 - one active administrator-rights transfer at a time;
 - cancellation and TTL expiration of pending administrator transfers;
-- Redis-backed one-time verification codes, confirmation-attempt limits, resend cooldowns, temporary verification lockouts, and pending-transfer state;
+- Redis-backed login rate limiting, one-time verification codes, confirmation-attempt limits, resend cooldowns, temporary verification lockouts, and pending-transfer state;
 - transaction and pessimistic-lock protection for administrator role transfer and password-protected destructive admin actions.
 
 ## Tech stack
@@ -55,6 +55,9 @@ VERIFICATION_CODE_RESEND_COOLDOWN=60
 REGISTRATION_VERIFICATION_LOCKOUT=180
 PASSWORD_RESET_VERIFICATION_LOCKOUT=180
 EMAIL_CHANGE_VERIFICATION_LOCKOUT=180
+LOGIN_EMAIL_MAX_ATTEMPTS=5
+LOGIN_IP_MAX_ATTEMPTS=20
+LOGIN_RATE_LIMIT_WINDOW=300
 
 REDIS_HOST='localhost'
 REDIS_PORT=6379
@@ -95,6 +98,12 @@ Verification timing defaults in the example configuration are:
 - `REGISTRATION_VERIFICATION_LOCKOUT=180` — registration is locked for 3 minutes after 5 incorrect confirmation codes for the same normalized email;
 - `PASSWORD_RESET_VERIFICATION_LOCKOUT=180` — public password reset is locked for 3 minutes after 5 incorrect confirmation codes for the same normalized email;
 - `EMAIL_CHANGE_VERIFICATION_LOCKOUT=180` — email change is locked for 3 minutes after 5 incorrect confirmation codes for the authenticated user.
+
+Login-rate defaults are:
+
+- `LOGIN_EMAIL_MAX_ATTEMPTS=5` — maximum failed login attempts for one normalized email during the rate-limit window;
+- `LOGIN_IP_MAX_ATTEMPTS=20` — maximum failed login attempts from one IP during the rate-limit window;
+- `LOGIN_RATE_LIMIT_WINDOW=300` — 5-minute fixed window for login-failure counters.
 
 ## Run locally
 
@@ -170,6 +179,16 @@ new authentication state
 ```
 
 The frontend route guards improve UX, but backend JWT and role guards are the authorization boundary.
+
+## Login rate limiting
+
+Failed login attempts are tracked in Redis by both normalized email and client IP. The example configuration allows up to 5 failed attempts for one email and 20 failed attempts from one IP within a 5-minute fixed window.
+
+Before password validation, the backend checks both counters. If either limit has already been reached, login is rejected with HTTP `429 Too Many Requests` and a `retry_after` value based on the Redis TTL.
+
+On an invalid email/password attempt, both counters are incremented with the atomic Redis increment-with-expiry operation. On a successful login, the email-specific failure counter is cleared. The IP counter is intentionally not cleared by a successful login, so one valid login cannot reset abuse accumulated for the same source IP.
+
+The IP key uses Express `req.ip`. In production behind a reverse proxy, configure Express proxy trust only for the actual trusted proxy chain so client IPs are resolved correctly without trusting arbitrary forwarded headers.
 
 ## Verification-code protection
 
@@ -314,7 +333,7 @@ If no action is taken before the TTL expires, Redis removes the transfer state a
 
 ### Auth
 
-- `POST /api/auth/login` — authenticate; blocked accounts receive block information instead of tokens
+- `POST /api/auth/login` — authenticate; Redis rate limits failed attempts by normalized email and IP; blocked accounts receive block information instead of tokens
 - `POST /api/auth/logout` — logout and clear refresh state
 - `POST /api/auth/refresh-tokens` — refresh authentication tokens
 - `POST /api/auth/registration/request` — request the initial registration code; resend cooldown and verification lockout apply
@@ -356,6 +375,7 @@ All routes below require a valid access token and the current `admin` role, exce
 
 - Administrator authorization is enforced on the backend with JWT and role guards; frontend route guards are only a UX layer.
 - Blocked users are rejected by protected authentication strategies even if they still possess previously issued tokens.
+- Failed login attempts are rate-limited in Redis by both normalized email and client IP.
 - Verification-code confirmation failures are limited with Redis-backed counters: 5 attempts for normal flows and 3 for administrator transfer.
 - Verification codes expire after 5 minutes with the example environment configuration.
 - Registration and public password-reset resend requests are rate-limited per normalized email with a 60-second Redis cooldown.
@@ -382,6 +402,7 @@ For production deployment, review the cookie and CORS configuration for the actu
 - use HTTPS and enable `Secure` cookies;
 - choose an appropriate `SameSite` policy; cross-site frontend/backend deployments may require `SameSite=None` together with `Secure`;
 - allow credentials only for trusted frontend origins;
+- configure trusted proxy handling correctly before relying on `req.ip` for login rate limiting;
 - use strong, unique JWT secrets and SMTP/database credentials;
 - set `DB_TYPEORM_SYNC=false` in production and manage schema changes through migrations;
 - keep PostgreSQL and Redis inaccessible from untrusted public networks;
