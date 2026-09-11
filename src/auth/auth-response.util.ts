@@ -35,10 +35,7 @@ export const clearRefreshCookie = (
   res: Response,
   securityConfig: SecurityConfigService,
 ): void => {
-  res.clearCookie(
-    'refresh_token',
-    getRefreshCookieOptions(securityConfig),
-  );
+  res.clearCookie('refresh_token', getRefreshCookieOptions(securityConfig));
 };
 
 export const getAuthResponse = (tokens: JwtTokens): AuthResponse => ({
