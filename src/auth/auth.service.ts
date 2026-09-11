@@ -2,9 +2,8 @@ import {
   Injectable,
   UnauthorizedException,
   HttpException,
-  NotFoundException,
 } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TokensService } from './tokens.service';
 import { HashService } from '../common/hash-service/hash.service';
@@ -29,6 +28,7 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    private readonly dataSource: DataSource,
     private readonly tokensService: TokensService,
     private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
@@ -103,34 +103,11 @@ export class AuthService {
     }
   }
 
-  async validateUserByRefreshToken(
-    id: number,
-    refresh_token: string,
-  ): Promise<User> {
-    try {
-      const user = await this.usersRepository.findOneOrFail({
-        where: { id },
-        select: [
-          ...USER_PROFILE_FIELDS,
-          REFRESH_TOKEN,
-          IS_BLOCKED,
-          BLOCKED_REASON,
-        ],
-      });
-      const isTokensMatch = refresh_token === user.refresh_token;
-      if (!isTokensMatch) {
-        this.errorsService.invalidToken(null, TokenType.REFRESH);
-      }
-      return user;
-    } catch (err: unknown) {
-      this.errorsService.invalidToken(err, TokenType.REFRESH);
-    }
-  }
-
   async login(userId: number) {
     try {
       const tokens = this.tokensService.generateJwtTokens(userId);
-      await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
+      const refreshTokenHash = this.hashService.hashToken(tokens.refresh_token);
+      await this.tokensService.saveRefreshToken(userId, refreshTokenHash);
       return tokens;
     } catch (err: unknown) {
       this.errorsService.default(err);
@@ -155,22 +132,58 @@ export class AuthService {
     }
   }
 
-  async refreshJwtTokens(userId: number) {
+  async refreshJwtTokens(userId: number, currentRefreshToken: string) {
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+
     try {
+      const user = await qr.manager.findOne(User, {
+        where: { id: userId },
+        select: [ID, REFRESH_TOKEN, IS_BLOCKED, BLOCKED_REASON],
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!user) {
+        this.errorsService.invalidToken(null, TokenType.REFRESH);
+      }
+
+      this.isUserBlocked(user);
+
+      const isCurrentRefreshToken =
+        typeof user.refresh_token === 'string' &&
+        this.hashService.compareToken(currentRefreshToken, user.refresh_token);
+
+      if (!isCurrentRefreshToken) {
+        await qr.manager.update(
+          User,
+          { id: userId },
+          { refresh_token: null },
+        );
+        await qr.commitTransaction();
+        this.errorsService.invalidToken(null, TokenType.REFRESH);
+      }
+
       const tokens = this.tokensService.generateJwtTokens(userId);
-      await this.tokensService.saveRefreshToken(userId, tokens.refresh_token);
+      const refreshTokenHash = this.hashService.hashToken(tokens.refresh_token);
+      await qr.manager.update(
+        User,
+        { id: userId },
+        { refresh_token: refreshTokenHash },
+      );
+      await qr.commitTransaction();
+
       return tokens;
     } catch (err: unknown) {
-      if (
-        err instanceof UnauthorizedException ||
-        err instanceof NotFoundException
-      ) {
-        this.errorsService.invalidToken(err, TokenType.REFRESH);
+      if (qr.isTransactionActive) {
+        await qr.rollbackTransaction();
       }
       if (err instanceof HttpException) {
         throw err;
       }
-      this.errorsService.default(err);
+      this.errorsService.invalidToken(err, TokenType.REFRESH);
+    } finally {
+      await qr.release();
     }
   }
 }
