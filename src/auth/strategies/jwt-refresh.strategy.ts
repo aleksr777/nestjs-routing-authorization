@@ -46,14 +46,8 @@ export class JwtRefreshStrategy extends PassportStrategy(
       this.errorsService.tokenNotDefined(TokenType.REFRESH);
     }
 
-    const user = await this.authService.validateUserByRefreshToken(
-      userId,
-      refreshToken,
-    );
-
-    if (user) {
-      this.authService.isUserBlocked(user);
-    }
+    const user = await this.authService.validateUserById(userId);
+    this.authService.isUserBlocked(user);
 
     return user;
   }
