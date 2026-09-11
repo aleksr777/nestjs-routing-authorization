@@ -3,6 +3,7 @@ import { CookieOptions, Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { PasswordResetService } from './password-reset.service';
 import { RegistrationService } from './registration.service';
+import { PublicVerificationRateLimitService } from './public-verification-rate-limit.service';
 import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { RegistrationConfirmDto } from './dto/registration-confirm.dto';
@@ -14,12 +15,17 @@ import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { User } from '../users/entities/user.entity';
 import { JwtTokens, AuthResponse } from '../common/types/jwt-tokens.type';
 
+type RequestWithSafeCookies = Omit<Request, 'cookies'> & {
+  cookies?: Record<string, unknown>;
+};
+
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly registrationService: RegistrationService,
     private readonly passwordResetService: PasswordResetService,
+    private readonly publicVerificationRateLimitService: PublicVerificationRateLimitService,
   ) {}
 
   private getRefreshCookieOptions(maxAge?: number): CookieOptions {
@@ -54,6 +60,16 @@ export class AuthController {
       access_token: tokens.access_token,
       access_token_expires: tokens.access_token_expires,
     };
+  }
+
+  private getRequestIp(req: Request) {
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  }
+
+  private getRefreshToken(req: Request): string | null {
+    const request = req as RequestWithSafeCookies;
+    const token = request.cookies?.['refresh_token'];
+    return typeof token === 'string' ? token : null;
   }
 
   private isJwtTokens(value: unknown): value is JwtTokens {
@@ -133,18 +149,33 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    const tokens = await this.authService.refreshJwtTokens(+user.id);
+    const tokens = await this.authService.refreshJwtTokens(
+      +user.id,
+      this.getRefreshToken(req),
+    );
 
     return this.handleAuthResult(res, tokens);
   }
 
   @Post('registration/request')
-  async requestRegistration(@Body() dto: RegistrationRequestDto) {
+  async requestRegistration(
+    @Req() req: Request,
+    @Body() dto: RegistrationRequestDto,
+  ) {
+    await this.publicVerificationRateLimitService.consume(
+      this.getRequestIp(req),
+    );
     return this.registrationService.request(dto.email, dto.password);
   }
 
   @Post('registration/resend')
-  async resendRegistrationCode(@Body() dto: RegistrationResendDto) {
+  async resendRegistrationCode(
+    @Req() req: Request,
+    @Body() dto: RegistrationResendDto,
+  ) {
+    await this.publicVerificationRateLimitService.consume(
+      this.getRequestIp(req),
+    );
     return this.registrationService.resend(dto.email);
   }
 
@@ -159,7 +190,13 @@ export class AuthController {
   }
 
   @Post('password-reset/request')
-  async requestPasswordReset(@Body() dto: PasswordResetRequestDto) {
+  async requestPasswordReset(
+    @Req() req: Request,
+    @Body() dto: PasswordResetRequestDto,
+  ) {
+    await this.publicVerificationRateLimitService.consume(
+      this.getRequestIp(req),
+    );
     return this.passwordResetService.request(dto.email);
   }
 
