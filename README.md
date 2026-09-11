@@ -11,6 +11,7 @@ The backend provides:
 - registration with email verification codes;
 - login, logout, access-token refresh, and password recovery;
 - access tokens plus an HttpOnly refresh-token cookie;
+- SHA-256 refresh-token hashing, atomic rotation, and refresh-token reuse detection;
 - current-user profile reading and partial editing;
 - email change and password change/reset confirmation flows;
 - self-account deletion with password verification;
@@ -20,8 +21,9 @@ The backend provides:
 - transferable administrator rights with password verification on both sides;
 - one active administrator-rights transfer at a time;
 - cancellation and TTL expiration of pending administrator transfers;
-- Redis-backed login rate limiting, one-time verification codes, confirmation-attempt limits, resend cooldowns, temporary verification lockouts, and pending-transfer state;
-- transaction and pessimistic-lock protection for administrator role transfer and password-protected destructive admin actions.
+- Redis-backed login, public-verification, auth-route, and global API rate limiting;
+- Redis-backed one-time verification codes, confirmation-attempt limits, resend cooldowns, temporary verification lockouts, and pending-transfer state;
+- transaction and pessimistic-lock protection for administrator role transfer, refresh-token rotation, and password-protected destructive admin actions.
 
 ## Tech stack
 
@@ -55,9 +57,18 @@ VERIFICATION_CODE_RESEND_COOLDOWN=60
 REGISTRATION_VERIFICATION_LOCKOUT=180
 PASSWORD_RESET_VERIFICATION_LOCKOUT=180
 EMAIL_CHANGE_VERIFICATION_LOCKOUT=180
+
 LOGIN_EMAIL_MAX_ATTEMPTS=5
 LOGIN_IP_MAX_ATTEMPTS=20
 LOGIN_RATE_LIMIT_WINDOW=300
+
+PUBLIC_VERIFICATION_IP_MAX_REQUESTS=20
+PUBLIC_VERIFICATION_IP_RATE_LIMIT_WINDOW=600
+
+AUTH_IP_MAX_REQUESTS=120
+AUTH_RATE_LIMIT_WINDOW=60
+API_IP_MAX_REQUESTS=600
+API_RATE_LIMIT_WINDOW=60
 
 REDIS_HOST='localhost'
 REDIS_PORT=6379
@@ -105,6 +116,15 @@ Login-rate defaults are:
 - `LOGIN_IP_MAX_ATTEMPTS=20` — maximum failed login attempts from one IP during the rate-limit window;
 - `LOGIN_RATE_LIMIT_WINDOW=300` — 5-minute fixed window for login-failure counters.
 
+Additional IP-rate defaults are:
+
+- `PUBLIC_VERIFICATION_IP_MAX_REQUESTS=20` — maximum combined registration/resend/public-password-reset code requests from one IP during the public-verification window;
+- `PUBLIC_VERIFICATION_IP_RATE_LIMIT_WINDOW=600` — 10-minute fixed window for the public-verification IP counter;
+- `AUTH_IP_MAX_REQUESTS=120` — maximum requests to `/api/auth/*` from one IP during the auth-rate window;
+- `AUTH_RATE_LIMIT_WINDOW=60` — 1-minute fixed window for the `/api/auth/*` IP counter;
+- `API_IP_MAX_REQUESTS=600` — maximum API requests from one IP during the global API window;
+- `API_RATE_LIMIT_WINDOW=60` — 1-minute fixed window for the global API IP counter.
+
 ## Run locally
 
 ### Prerequisites
@@ -149,11 +169,17 @@ The migration creates the first administrator or promotes/updates the matching e
 
 - The access token is returned in the JSON response and is intended for the client application.
 - The refresh token is stored in an HttpOnly cookie and is not returned to frontend JavaScript.
-- Refresh requests rotate the active authentication state through `/api/auth/refresh-tokens`.
-- Logout clears the refresh cookie and invalidates the current access session.
+- Only a SHA-256 hash of the current refresh token is stored in the `refresh_token` database column; the raw refresh token is never persisted there.
+- Every generated refresh JWT contains a unique `jti`, so refresh-token rotation always produces a distinct token even when tokens are issued within the same second.
+- Refresh requests rotate the refresh token through `/api/auth/refresh-tokens`.
+- Refresh-token comparison and rotation run inside a database transaction with a `pessimistic_write` lock on the user row.
+- If an already-rotated or otherwise non-current refresh token is presented, the backend treats it as possible token reuse, clears the currently stored refresh-token hash, and requires a fresh login.
+- Logout clears the refresh-token hash and invalidates the current access session.
 - Blocked users do not receive access or refresh tokens when they try to log in.
 - A blocked-login response contains `blocked_reason` and the email of the current administrator. The administrator email is resolved dynamically from the database, not from an environment variable.
 - JWT and refresh strategies re-check the current user in the database, so blocked users and users whose role has changed do not keep stale authorization privileges.
+
+Existing database rows created before refresh-token hashing may contain plaintext refresh tokens. After deployment of the hashing change, those old refresh sessions are intentionally treated as non-current and are invalidated on the next refresh attempt. Affected users need to log in once again; new sessions store only the hash.
 
 ### Authentication flow
 
@@ -164,6 +190,7 @@ backend issues access + refresh tokens
         ↓
 access token → JSON response → frontend memory
 refresh token → HttpOnly cookie
+SHA-256(refresh token) → database
         ↓
 protected request with Bearer access token
         ↓
@@ -175,7 +202,9 @@ access token expires or approaches expiry
         ↓
 POST /api/auth/refresh-tokens using HttpOnly refresh cookie
         ↓
-new authentication state
+lock user row → compare current hash → rotate refresh token atomically
+        ↓
+new access token + new refresh cookie + new stored refresh-token hash
 ```
 
 The frontend route guards improve UX, but backend JWT and role guards are the authorization boundary.
@@ -188,7 +217,17 @@ Before password validation, the backend checks both counters. If either limit ha
 
 On an invalid email/password attempt, both counters are incremented with the atomic Redis increment-with-expiry operation. On a successful login, the email-specific failure counter is cleared. The IP counter is intentionally not cleared by a successful login, so one valid login cannot reset abuse accumulated for the same source IP.
 
-The IP key uses Express `req.ip`. In production behind a reverse proxy, configure Express proxy trust only for the actual trusted proxy chain so client IPs are resolved correctly without trusting arbitrary forwarded headers.
+## API and public-verification rate limiting
+
+In addition to login-failure counters, the backend applies three IP-based anti-flood layers:
+
+- registration request/resend and public password-reset request share a stricter Redis counter per client IP;
+- every `/api/auth/*` request is covered by an auth-route IP counter;
+- every API request is covered by a more permissive global IP counter.
+
+These counters use the same atomic Redis increment-with-expiry primitive. A request that exceeds a limit receives HTTP `429 Too Many Requests` with `retry_after` based on the remaining Redis TTL. Specialized limits remain stricter than the general API limit.
+
+The IP keys use Express `req.ip`. In production behind nginx, Cloudflare, or another reverse proxy, configure Express proxy trust only for the actual trusted proxy chain. Without correct proxy configuration the backend may see the proxy address instead of the client; overly broad proxy trust can allow forged forwarded IP headers.
 
 ## Verification-code protection
 
@@ -197,7 +236,7 @@ Six-digit verification codes are protected against repeated guessing with Redis-
 - ordinary confirmation flows allow up to `5` incorrect code attempts;
 - administrator-rights transfer confirmation allows up to `3` incorrect code attempts;
 - verification-code TTLs are 5 minutes in the example configuration;
-- counters use atomic Redis `INCR` operations and expire automatically using the TTL of the corresponding verification flow;
+- counters increment and receive their TTL atomically in Redis;
 - successful confirmation clears the corresponding failure counter;
 - authenticated flows are scoped to the authenticated user ID;
 - public registration and public password reset are scoped to the normalized email address supplied during the request and confirmation flow.
@@ -210,16 +249,9 @@ For registration and public password reset, the lockout is scoped to the normali
 
 A new registration code or public password-reset code cannot be requested for the same email until `VERIFICATION_CODE_RESEND_COOLDOWN` seconds have elapsed. The default example configuration is `60` seconds.
 
-The cooldown is enforced in Redis with atomic `SET ... NX EX`. A request made too early receives HTTP `429 Too Many Requests` with a response such as:
+The cooldown is enforced in Redis with atomic `SET ... NX EX`. The same public endpoints are also subject to the shared IP request limit described above. A request made too early or after an IP limit is exceeded receives HTTP `429 Too Many Requests` with `retry_after`.
 
-```json
-{
-  "message": "Please wait before requesting another verification code.",
-  "retry_after": 42
-}
-```
-
-Successful code-request responses include the values needed by the frontend to display the restriction:
+Successful code-request responses include the values needed by the frontend to display the per-email resend restriction:
 
 ```json
 {
@@ -333,13 +365,13 @@ If no action is taken before the TTL expires, Redis removes the transfer state a
 
 ### Auth
 
-- `POST /api/auth/login` — authenticate; Redis rate limits failed attempts by normalized email and IP; blocked accounts receive block information instead of tokens
+- `POST /api/auth/login` — authenticate; Redis rate limits failed attempts by normalized email and IP; auth/global IP limits also apply
 - `POST /api/auth/logout` — logout and clear refresh state
-- `POST /api/auth/refresh-tokens` — refresh authentication tokens
-- `POST /api/auth/registration/request` — request the initial registration code; resend cooldown and verification lockout apply
-- `POST /api/auth/registration/resend` — resend the active registration challenge after the cooldown; verification lockout applies
+- `POST /api/auth/refresh-tokens` — atomically rotate the current refresh token; reuse of a non-current refresh token revokes the current refresh session
+- `POST /api/auth/registration/request` — request the initial registration code; email cooldown, verification lockout, public-verification IP limit, auth IP limit, and global API limit apply
+- `POST /api/auth/registration/resend` — resend the active registration challenge; the same request limits apply
 - `POST /api/auth/registration/confirm` — confirm the latest active registration code; maximum 5 incorrect attempts before temporary lockout
-- `POST /api/auth/password-reset/request` — request/resend a public password-reset code; resend cooldown and verification lockout apply
+- `POST /api/auth/password-reset/request` — request/resend a public password-reset code; the public-verification, auth, and global IP limits apply
 - `POST /api/auth/password-reset/confirm` — confirm the latest active public password-reset code; maximum 5 incorrect attempts before temporary lockout
 
 ### Current user
@@ -375,7 +407,11 @@ All routes below require a valid access token and the current `admin` role, exce
 
 - Administrator authorization is enforced on the backend with JWT and role guards; frontend route guards are only a UX layer.
 - Blocked users are rejected by protected authentication strategies even if they still possess previously issued tokens.
+- Raw refresh tokens are not persisted in the database; only SHA-256 hashes are stored.
+- Refresh tokens are uniquely identified with `jti`, rotated under a database pessimistic lock, and reuse of a non-current token invalidates the current refresh session.
 - Failed login attempts are rate-limited in Redis by both normalized email and client IP.
+- Public registration/password-reset code requests are additionally rate-limited by client IP across email addresses.
+- `/api/auth/*` traffic has an IP anti-flood limit, and all API traffic has a more permissive global IP anti-flood limit.
 - Verification-code confirmation failures are limited with Redis-backed counters: 5 attempts for normal flows and 3 for administrator transfer.
 - Verification codes expire after 5 minutes with the example environment configuration.
 - Registration and public password-reset resend requests are rate-limited per normalized email with a 60-second Redis cooldown.
@@ -402,7 +438,7 @@ For production deployment, review the cookie and CORS configuration for the actu
 - use HTTPS and enable `Secure` cookies;
 - choose an appropriate `SameSite` policy; cross-site frontend/backend deployments may require `SameSite=None` together with `Secure`;
 - allow credentials only for trusted frontend origins;
-- configure trusted proxy handling correctly before relying on `req.ip` for login rate limiting;
+- configure trusted proxy handling correctly before relying on `req.ip` for login, verification, auth-route, or global API rate limiting;
 - use strong, unique JWT secrets and SMTP/database credentials;
 - set `DB_TYPEORM_SYNC=false` in production and manage schema changes through migrations;
 - keep PostgreSQL and Redis inaccessible from untrusted public networks;
