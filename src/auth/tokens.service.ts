@@ -210,11 +210,8 @@ export class TokensService {
   async registerVerificationFailure(tokenType: TokenType, subject: string) {
     const { maxAttempts, expiresIn } = this.getVerificationAttemptConfig(tokenType);
     const key = this.getVerificationAttemptsKey(tokenType, subject);
-    const attempts = await this.redisService.incr(key);
-    if (attempts === 1) {
-      await this.redisService.expire(key, expiresIn);
-    }
-    return typeof attempts === 'number' && attempts >= maxAttempts;
+    const attempts = await this.redisService.incrWithExpire(key, expiresIn);
+    return attempts >= maxAttempts;
   }
 
   async clearVerificationFailures(tokenType: TokenType, subject: string) {
