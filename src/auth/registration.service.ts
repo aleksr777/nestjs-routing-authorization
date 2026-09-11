@@ -215,8 +215,9 @@ export class RegistrationService {
       const data = await this.tokensService.getDataByRegistrationCode(code);
       const isActive = await this.tokensService.isActiveRegistrationCode(attemptSubject, code);
       if (!data || !isActive || data.email.trim().toLowerCase() !== attemptSubject) {
-        await this.rejectInvalidCode(attemptSubject);
+        return this.rejectInvalidCode(attemptSubject);
       }
+
       this.mailService.validateNotServiceEmail(data.email);
       let nickname: string;
       let attempts = 0;
