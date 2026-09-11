@@ -20,7 +20,7 @@ The backend provides:
 - transferable administrator rights with password verification on both sides;
 - one active administrator-rights transfer at a time;
 - cancellation and TTL expiration of pending administrator transfers;
-- Redis-backed one-time verification codes, confirmation-attempt limits, resend cooldowns, and pending-transfer state;
+- Redis-backed one-time verification codes, confirmation-attempt limits, resend cooldowns, temporary verification lockouts, and pending-transfer state;
 - transaction and pessimistic-lock protection for administrator role transfer and password-protected destructive admin actions.
 
 ## Tech stack
@@ -47,11 +47,14 @@ JWT_ACCESS_EXPIRES_IN='15m'
 JWT_REFRESH_EXPIRES_IN='7d'
 
 ADMIN_TRANSFER_TOKEN_EXPIRES_IN=300
-REGISTRATION_TOKEN_EXPIRES_IN=600
-RESET_TOKEN_EXPIRES_IN=600
-EMAIL_CHANGE_TOKEN_EXPIRES_IN=600
-PASSWORD_CHANGE_TOKEN_EXPIRES_IN=600
+REGISTRATION_TOKEN_EXPIRES_IN=300
+RESET_TOKEN_EXPIRES_IN=300
+EMAIL_CHANGE_TOKEN_EXPIRES_IN=300
+PASSWORD_CHANGE_TOKEN_EXPIRES_IN=300
 VERIFICATION_CODE_RESEND_COOLDOWN=60
+REGISTRATION_VERIFICATION_LOCKOUT=180
+PASSWORD_RESET_VERIFICATION_LOCKOUT=180
+EMAIL_CHANGE_VERIFICATION_LOCKOUT=180
 
 REDIS_HOST='localhost'
 REDIS_PORT=6379
@@ -81,7 +84,17 @@ INITIAL_ADMIN_NICKNAME='INITIAL_ADMIN_NICKNAME'
 
 `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`, and `INITIAL_ADMIN_NICKNAME` are used only by the initial administrator migration. They are not used to identify the current administrator during normal runtime because administrator rights can be transferred to another user.
 
-`VERIFICATION_CODE_RESEND_COOLDOWN` is the server-enforced minimum interval, in seconds, between registration-code or public password-reset-code requests for the same normalized email address.
+Verification timing defaults in the example configuration are:
+
+- `ADMIN_TRANSFER_TOKEN_EXPIRES_IN=300` — administrator-transfer confirmation code is valid for 5 minutes;
+- `REGISTRATION_TOKEN_EXPIRES_IN=300` — registration code is valid for 5 minutes;
+- `RESET_TOKEN_EXPIRES_IN=300` — password-reset code is valid for 5 minutes;
+- `EMAIL_CHANGE_TOKEN_EXPIRES_IN=300` — email-change code is valid for 5 minutes;
+- `PASSWORD_CHANGE_TOKEN_EXPIRES_IN=300` — password-change code is valid for 5 minutes;
+- `VERIFICATION_CODE_RESEND_COOLDOWN=60` — registration and public password-reset codes cannot be requested more often than once per minute for the same normalized email;
+- `REGISTRATION_VERIFICATION_LOCKOUT=180` — registration is locked for 3 minutes after 5 incorrect confirmation codes for the same normalized email;
+- `PASSWORD_RESET_VERIFICATION_LOCKOUT=180` — public password reset is locked for 3 minutes after 5 incorrect confirmation codes for the same normalized email;
+- `EMAIL_CHANGE_VERIFICATION_LOCKOUT=180` — email change is locked for 3 minutes after 5 incorrect confirmation codes for the authenticated user.
 
 ## Run locally
 
@@ -164,11 +177,15 @@ Six-digit verification codes are protected against repeated guessing with Redis-
 
 - ordinary confirmation flows allow up to `5` incorrect code attempts;
 - administrator-rights transfer confirmation allows up to `3` incorrect code attempts;
+- verification-code TTLs are 5 minutes in the example configuration;
 - counters use atomic Redis `INCR` operations and expire automatically using the TTL of the corresponding verification flow;
 - successful confirmation clears the corresponding failure counter;
-- once the limit has been reached, further confirmation attempts are rejected with the same invalid/expired-token response;
 - authenticated flows are scoped to the authenticated user ID;
 - public registration and public password reset are scoped to the normalized email address supplied during the request and confirmation flow.
+
+Registration, public password reset, and authenticated email change add a temporary lockout after the fifth incorrect code. The example configuration uses a 3-minute lockout. While a lockout is active, the corresponding request/resend/confirm operation is rejected by the backend. The Redis lockout key expires automatically, and responses expose `retry_after` so the frontend can display the remaining time.
+
+For registration and public password reset, the lockout is scoped to the normalized email. For email change, the lockout is scoped to the authenticated user ID. These lockouts are independent from the administrator-controlled `is_blocked` account flag.
 
 ### Registration and public password-reset resend cooldown
 
@@ -300,11 +317,11 @@ If no action is taken before the TTL expires, Redis removes the transfer state a
 - `POST /api/auth/login` — authenticate; blocked accounts receive block information instead of tokens
 - `POST /api/auth/logout` — logout and clear refresh state
 - `POST /api/auth/refresh-tokens` — refresh authentication tokens
-- `POST /api/auth/registration/request` — request the initial registration code; resend cooldown applies
-- `POST /api/auth/registration/resend` — resend the active registration challenge after the cooldown
-- `POST /api/auth/registration/confirm` — confirm the latest active registration code
-- `POST /api/auth/password-reset/request` — request/resend a public password-reset code; resend cooldown applies
-- `POST /api/auth/password-reset/confirm` — confirm the latest active public password-reset code
+- `POST /api/auth/registration/request` — request the initial registration code; resend cooldown and verification lockout apply
+- `POST /api/auth/registration/resend` — resend the active registration challenge after the cooldown; verification lockout applies
+- `POST /api/auth/registration/confirm` — confirm the latest active registration code; maximum 5 incorrect attempts before temporary lockout
+- `POST /api/auth/password-reset/request` — request/resend a public password-reset code; resend cooldown and verification lockout apply
+- `POST /api/auth/password-reset/confirm` — confirm the latest active public password-reset code; maximum 5 incorrect attempts before temporary lockout
 
 ### Current user
 
@@ -312,8 +329,9 @@ All routes below require a valid access token.
 
 - `GET /api/users/me` — get current profile
 - `PATCH /api/users/me/partial-data/update` — update supported profile fields
-- `POST /api/users/me/email/update/request` — request email change
-- `POST /api/users/me/email/update/confirm` — confirm email change with user-scoped attempt limiting
+- `POST /api/users/me/email/update/request` — request email change; verification lockout applies
+- `GET /api/users/me/email/update/status` — get current email-change verification lockout status and remaining time
+- `POST /api/users/me/email/update/confirm` — confirm email change; maximum 5 incorrect attempts before temporary lockout
 - `POST /api/users/me/password/change/request` — verify current password and start password change
 - `POST /api/users/me/password/change/confirm` — confirm password change with user-scoped attempt limiting
 - `POST /api/users/me/password/reset/request` — request password reset for the authenticated user
@@ -339,7 +357,10 @@ All routes below require a valid access token and the current `admin` role, exce
 - Administrator authorization is enforced on the backend with JWT and role guards; frontend route guards are only a UX layer.
 - Blocked users are rejected by protected authentication strategies even if they still possess previously issued tokens.
 - Verification-code confirmation failures are limited with Redis-backed counters: 5 attempts for normal flows and 3 for administrator transfer.
-- Registration and public password-reset resend requests are rate-limited per normalized email with a Redis cooldown.
+- Verification codes expire after 5 minutes with the example environment configuration.
+- Registration and public password-reset resend requests are rate-limited per normalized email with a 60-second Redis cooldown.
+- Registration and public password reset are temporarily locked per normalized email for 3 minutes after 5 incorrect codes.
+- Email change is temporarily locked per authenticated user ID for 3 minutes after 5 incorrect codes.
 - Reissuing registration/public reset codes invalidates the previous challenge code.
 - Blocking and deleting users require current-administrator password re-verification on the backend.
 - Password-protected block/delete operations re-check the administrator role under a database pessimistic lock.
