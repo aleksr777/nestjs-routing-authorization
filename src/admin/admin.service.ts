@@ -49,7 +49,10 @@ export class AdminService {
       this.errorsService.forbidden(ErrMsg.INSUFFICIENT_ACCESS_RIGHTS);
     }
 
-    const isPasswordValid = await this.hashService.compare(password, admin.password);
+    const isPasswordValid = await this.hashService.compare(
+      password,
+      admin.password,
+    );
     if (!isPasswordValid) {
       this.errorsService.badRequest(ErrMsg.CURRENT_PASSWORD_IS_INCORRECT);
     }

@@ -23,10 +23,7 @@ export class ApiRateLimitGuard implements CanActivate {
     private readonly envService: EnvService,
     private readonly errorsService: ErrorsService,
   ) {
-    this.apiMaxRequests = this.envService.get(
-      'API_IP_MAX_REQUESTS',
-      'number',
-    );
+    this.apiMaxRequests = this.envService.get('API_IP_MAX_REQUESTS', 'number');
     this.apiWindowSeconds = this.envService.get(
       'API_RATE_LIMIT_WINDOW',
       'number',

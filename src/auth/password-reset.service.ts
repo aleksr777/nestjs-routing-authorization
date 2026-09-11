@@ -70,14 +70,23 @@ export class PasswordResetService {
   private async assertNotLocked(email: string) {
     const retryAfter = await this.getLockoutSeconds(email);
     if (retryAfter > 0) {
-      this.errorsService.tooManyRequests(PASSWORD_RESET_LOCKOUT_MESSAGE, retryAfter);
+      this.errorsService.tooManyRequests(
+        PASSWORD_RESET_LOCKOUT_MESSAGE,
+        retryAfter,
+      );
     }
   }
 
   private async rejectInvalidCode(email: string): Promise<never> {
-    await this.tokensService.registerVerificationFailure(TokenType.PASSWORD_RESET, email);
+    await this.tokensService.registerVerificationFailure(
+      TokenType.PASSWORD_RESET,
+      email,
+    );
     const attemptsRemaining =
-      await this.tokensService.getVerificationAttemptsRemaining(TokenType.PASSWORD_RESET, email);
+      await this.tokensService.getVerificationAttemptsRemaining(
+        TokenType.PASSWORD_RESET,
+        email,
+      );
 
     let retryAfter: number | undefined;
     if (attemptsRemaining <= 0) {
@@ -99,7 +108,9 @@ export class PasswordResetService {
     return {
       message: 'If the email exists, we’ve sent you a password reset code.',
       retry_after: retryAfter,
-      max_attempts: this.tokensService.getVerificationAttemptLimit(TokenType.PASSWORD_RESET),
+      max_attempts: this.tokensService.getVerificationAttemptLimit(
+        TokenType.PASSWORD_RESET,
+      ),
     };
   }
 
@@ -128,7 +139,12 @@ export class PasswordResetService {
           <p style="font-weight: bold; font-size: 17px;">You can reset your password by using the code below (within ${this.resetExpiresIn} min):</p>
           <p style="font-weight: bold; font-size: 30px;">${issuedCode}</p>
           <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
-        await this.mailService.send(normalizedEmail, 'Password recovery', text, html);
+        await this.mailService.send(
+          normalizedEmail,
+          'Password recovery',
+          text,
+          html,
+        );
         await this.tokensService.clearVerificationFailures(
           TokenType.PASSWORD_RESET,
           normalizedEmail,
@@ -142,7 +158,10 @@ export class PasswordResetService {
           .catch(() => undefined);
       }
       await this.tokensService
-        .releaseVerificationCodeRequest(TokenType.PASSWORD_RESET, normalizedEmail)
+        .releaseVerificationCodeRequest(
+          TokenType.PASSWORD_RESET,
+          normalizedEmail,
+        )
         .catch(() => undefined);
       if (err instanceof HttpException) throw err;
       this.errorsService.default(err);
@@ -168,7 +187,11 @@ export class PasswordResetService {
         where: { id: userId },
         select: [ID, EMAIL],
       });
-      if (!isActive || !user || user.email.trim().toLowerCase() !== attemptSubject) {
+      if (
+        !isActive ||
+        !user ||
+        user.email.trim().toLowerCase() !== attemptSubject
+      ) {
         return this.rejectInvalidCode(attemptSubject);
       }
 
@@ -185,7 +208,9 @@ export class PasswordResetService {
         TokenType.PASSWORD_RESET,
         attemptSubject,
       );
-      await this.redisService.del(this.getLockoutKey(attemptSubject)).catch(() => undefined);
+      await this.redisService
+        .del(this.getLockoutKey(attemptSubject))
+        .catch(() => undefined);
       return this.authService.login(userId);
     } catch (err: unknown) {
       this.errorsService.resetPassword(err);

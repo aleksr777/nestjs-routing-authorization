@@ -94,9 +94,7 @@ describe('authentication security primitives', () => {
 
     it('returns 429 when the email failure limit is reached', async () => {
       const redis = createRedisMock();
-      redis.incrWithExpire
-        .mockResolvedValueOnce(5)
-        .mockResolvedValueOnce(1);
+      redis.incrWithExpire.mockResolvedValueOnce(5).mockResolvedValueOnce(1);
       redis.ttl.mockResolvedValue(180);
       const service = new LoginRateLimitService(
         redis as unknown as RedisService,

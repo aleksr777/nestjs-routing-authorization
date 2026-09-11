@@ -22,6 +22,8 @@ export class HashService {
     const actual = Buffer.from(this.hashToken(token), 'hex');
     const expected = Buffer.from(hashedToken, 'hex');
 
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
+    return (
+      actual.length === expected.length && timingSafeEqual(actual, expected)
+    );
   }
 }

@@ -134,10 +134,7 @@ export class AuthService {
     }
   }
 
-  async refreshJwtTokens(
-    userId: number,
-    currentRefreshToken: string | null,
-  ) {
+  async refreshJwtTokens(userId: number, currentRefreshToken: string | null) {
     if (!currentRefreshToken) {
       this.errorsService.tokenNotDefined(TokenType.REFRESH);
     }
@@ -164,11 +161,7 @@ export class AuthService {
         this.hashService.compareToken(currentRefreshToken, user.refresh_token);
 
       if (!isCurrentRefreshToken) {
-        await qr.manager.update(
-          User,
-          { id: userId },
-          { refresh_token: null },
-        );
+        await qr.manager.update(User, { id: userId }, { refresh_token: null });
         await qr.commitTransaction();
         this.errorsService.invalidToken(null, TokenType.REFRESH);
       }

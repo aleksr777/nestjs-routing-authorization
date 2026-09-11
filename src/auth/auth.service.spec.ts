@@ -23,15 +23,21 @@ describe('AuthService refresh-token rotation', () => {
     const queryRunner = {
       isTransactionActive: false,
       connect: jest.fn().mockResolvedValue(undefined),
-      startTransaction: jest.fn(function (this: { isTransactionActive: boolean }) {
+      startTransaction: jest.fn(function (this: {
+        isTransactionActive: boolean;
+      }) {
         this.isTransactionActive = true;
         return Promise.resolve();
       }),
-      commitTransaction: jest.fn(function (this: { isTransactionActive: boolean }) {
+      commitTransaction: jest.fn(function (this: {
+        isTransactionActive: boolean;
+      }) {
         this.isTransactionActive = false;
         return Promise.resolve();
       }),
-      rollbackTransaction: jest.fn(function (this: { isTransactionActive: boolean }) {
+      rollbackTransaction: jest.fn(function (this: {
+        isTransactionActive: boolean;
+      }) {
         this.isTransactionActive = false;
         return Promise.resolve();
       }),

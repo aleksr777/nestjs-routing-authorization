@@ -153,7 +153,10 @@ export class AdminTransferService {
       this.errorsService.badRequest(ErrMsg.ONLY_ADMINISTRATOR_TRANSFER);
     }
 
-    const isPasswordValid = await this.hashService.compare(password, from.password);
+    const isPasswordValid = await this.hashService.compare(
+      password,
+      from.password,
+    );
     if (!isPasswordValid) {
       this.errorsService.badRequest(ErrMsg.CURRENT_PASSWORD_IS_INCORRECT);
     }

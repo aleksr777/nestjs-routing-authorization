@@ -188,7 +188,10 @@ export class TokensService {
     );
   }
 
-  async getVerificationAttemptsRemaining(tokenType: TokenType, subject: string) {
+  async getVerificationAttemptsRemaining(
+    tokenType: TokenType,
+    subject: string,
+  ) {
     const { maxAttempts } = this.getVerificationAttemptConfig(tokenType);
     const key = this.getVerificationAttemptsKey(tokenType, subject);
     const raw = await this.redisService.get(key);
@@ -197,7 +200,10 @@ export class TokensService {
     return Math.max(0, maxAttempts - safeAttempts);
   }
 
-  async assertVerificationAttemptsAvailable(tokenType: TokenType, subject: string) {
+  async assertVerificationAttemptsAvailable(
+    tokenType: TokenType,
+    subject: string,
+  ) {
     const attemptsRemaining = await this.getVerificationAttemptsRemaining(
       tokenType,
       subject,
@@ -208,7 +214,8 @@ export class TokensService {
   }
 
   async registerVerificationFailure(tokenType: TokenType, subject: string) {
-    const { maxAttempts, expiresIn } = this.getVerificationAttemptConfig(tokenType);
+    const { maxAttempts, expiresIn } =
+      this.getVerificationAttemptConfig(tokenType);
     const key = this.getVerificationAttemptsKey(tokenType, subject);
     const attempts = await this.redisService.incrWithExpire(key, expiresIn);
     return attempts >= maxAttempts;

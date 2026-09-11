@@ -49,7 +49,9 @@ export class LoginRateLimitService {
   }
 
   private async getRetryAfter(keys: string[]) {
-    const ttls = await Promise.all(keys.map((key) => this.redisService.ttl(key)));
+    const ttls = await Promise.all(
+      keys.map((key) => this.redisService.ttl(key)),
+    );
     const activeTtls = ttls.filter(
       (ttl): ttl is number => typeof ttl === 'number' && ttl > 0,
     );

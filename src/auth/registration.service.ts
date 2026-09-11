@@ -73,14 +73,23 @@ export class RegistrationService {
   private async assertNotLocked(email: string) {
     const retryAfter = await this.getLockoutSeconds(email);
     if (retryAfter > 0) {
-      this.errorsService.tooManyRequests(REGISTRATION_LOCKOUT_MESSAGE, retryAfter);
+      this.errorsService.tooManyRequests(
+        REGISTRATION_LOCKOUT_MESSAGE,
+        retryAfter,
+      );
     }
   }
 
   private async rejectInvalidCode(email: string): Promise<never> {
-    await this.tokensService.registerVerificationFailure(TokenType.REGISTRATION, email);
+    await this.tokensService.registerVerificationFailure(
+      TokenType.REGISTRATION,
+      email,
+    );
     const attemptsRemaining =
-      await this.tokensService.getVerificationAttemptsRemaining(TokenType.REGISTRATION, email);
+      await this.tokensService.getVerificationAttemptsRemaining(
+        TokenType.REGISTRATION,
+        email,
+      );
 
     let retryAfter: number | undefined;
     if (attemptsRemaining <= 0) {
@@ -102,7 +111,9 @@ export class RegistrationService {
     return {
       message: 'If the email exists, we’ve sent you a code.',
       retry_after: retryAfter,
-      max_attempts: this.tokensService.getVerificationAttemptLimit(TokenType.REGISTRATION),
+      max_attempts: this.tokensService.getVerificationAttemptLimit(
+        TokenType.REGISTRATION,
+      ),
     };
   }
 
@@ -185,7 +196,8 @@ export class RegistrationService {
     let issuedCode: string | undefined;
 
     try {
-      const active = await this.tokensService.getActiveRegistrationData(normalizedEmail);
+      const active =
+        await this.tokensService.getActiveRegistrationData(normalizedEmail);
       if (active) {
         issuedCode = await this.tokensService.getRegistrationCode(active.data);
         await this.sendRegistrationCode(normalizedEmail, issuedCode);
@@ -229,8 +241,15 @@ export class RegistrationService {
     await qr.startTransaction();
     try {
       const data = await this.tokensService.getDataByRegistrationCode(code);
-      const isActive = await this.tokensService.isActiveRegistrationCode(attemptSubject, code);
-      if (!data || !isActive || data.email.trim().toLowerCase() !== attemptSubject) {
+      const isActive = await this.tokensService.isActiveRegistrationCode(
+        attemptSubject,
+        code,
+      );
+      if (
+        !data ||
+        !isActive ||
+        data.email.trim().toLowerCase() !== attemptSubject
+      ) {
         return this.rejectInvalidCode(attemptSubject);
       }
 
@@ -260,7 +279,9 @@ export class RegistrationService {
         TokenType.REGISTRATION,
         attemptSubject,
       );
-      await this.redisService.del(this.getLockoutKey(attemptSubject)).catch(() => undefined);
+      await this.redisService
+        .del(this.getLockoutKey(attemptSubject))
+        .catch(() => undefined);
       return this.authService.login(newUser.id);
     } catch (err: unknown) {
       if (qr.isTransactionActive) await qr.rollbackTransaction();
