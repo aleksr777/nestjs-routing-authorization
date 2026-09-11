@@ -1,5 +1,6 @@
 export type JwtPayload = {
   sub: number; // User ID
+  jti?: string; // Unique token ID for refresh-token rotation
   iat?: number; // Token issued at time
   exp?: number; // Token expiration time
 };
