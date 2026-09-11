@@ -19,12 +19,15 @@ import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokenType } from '../common/types/token-type.type';
 
 const EMAIL_CHANGE_LOCKOUT_PREFIX = 'email-change:lockout:';
+const EMAIL_CHANGE_ACTIVE_PREFIX = 'email-change:active:';
+const EMAIL_CHANGE_CODE_PREFIX = 'email-change:';
 const EMAIL_CHANGE_LOCKOUT_MESSAGE =
   'Email change is temporarily locked after too many incorrect confirmation codes.';
 
 @Injectable()
 export class EmailChangeService {
   private readonly emailChangeTokenExpiresIn: number;
+  private readonly emailChangeTokenTtl: number;
   private readonly emailChangeVerificationLockout: number;
 
   constructor(
@@ -37,8 +40,11 @@ export class EmailChangeService {
     private readonly tokensService: TokensService,
     private readonly authService: AuthService,
   ) {
-    this.emailChangeTokenExpiresIn =
-      this.envService.get('EMAIL_CHANGE_TOKEN_EXPIRES_IN', 'number') / 60;
+    this.emailChangeTokenTtl = this.envService.get(
+      'EMAIL_CHANGE_TOKEN_EXPIRES_IN',
+      'number',
+    );
+    this.emailChangeTokenExpiresIn = this.emailChangeTokenTtl / 60;
     this.emailChangeVerificationLockout = this.envService.get(
       'EMAIL_CHANGE_VERIFICATION_LOCKOUT',
       'number',
@@ -47,6 +53,19 @@ export class EmailChangeService {
 
   private getLockoutKey(userId: number) {
     return `${EMAIL_CHANGE_LOCKOUT_PREFIX}${userId}`;
+  }
+
+  private getActiveCodeKey(userId: number) {
+    return `${EMAIL_CHANGE_ACTIVE_PREFIX}${userId}`;
+  }
+
+  private async invalidateActiveCode(userId: number) {
+    const activeKey = this.getActiveCodeKey(userId);
+    const activeCode = await this.redisService.get(activeKey);
+    if (activeCode) {
+      await this.redisService.del(`${EMAIL_CHANGE_CODE_PREFIX}${activeCode}`);
+    }
+    await this.redisService.del(activeKey);
   }
 
   private async getLockoutSeconds(userId: number) {
@@ -76,15 +95,19 @@ export class EmailChangeService {
         attemptSubject,
       );
 
+    let retryAfter: number | undefined;
     if (attemptsRemaining <= 0) {
+      retryAfter = this.emailChangeVerificationLockout;
+      await this.invalidateActiveCode(userId);
       await this.redisService.set(this.getLockoutKey(userId), '1', {
-        EX: this.emailChangeVerificationLockout,
+        EX: retryAfter,
       });
     }
 
     return this.errorsService.invalidTokenWithAttempts(
       TokenType.EMAIL_CHANGE,
       attemptsRemaining,
+      retryAfter,
     );
   }
 
@@ -138,8 +161,18 @@ export class EmailChangeService {
     if (existingUser) {
       this.errorsService.conflict(ErrMsg.CONFLICT_USER_EXISTS);
     }
+
+    const activeKey = this.getActiveCodeKey(userId);
+    const previousCode = await this.redisService.get(activeKey);
     const redisValue = { user_id: userId, new_email: newEmail };
     const code = await this.tokensService.getEmailChangeCode(redisValue);
+    await this.redisService.set(activeKey, code, {
+      EX: this.emailChangeTokenTtl,
+    });
+    if (previousCode && previousCode !== code) {
+      await this.redisService.del(`${EMAIL_CHANGE_CODE_PREFIX}${previousCode}`);
+    }
+
     await this.tokensService.clearVerificationFailures(
       TokenType.EMAIL_CHANGE,
       userId.toString(),
@@ -170,6 +203,14 @@ export class EmailChangeService {
       TokenType.EMAIL_CHANGE,
       attemptSubject,
     );
+
+    const activeCode = await this.redisService.get(
+      this.getActiveCodeKey(currentUserId),
+    );
+    if (activeCode !== dto.code) {
+      return this.rejectInvalidCode(currentUserId);
+    }
+
     const data = await this.tokensService.getDataByEmailChangeCode(dto.code);
     if (
       !data ||
@@ -204,6 +245,9 @@ export class EmailChangeService {
       await this.usersRepository.save(user);
       await this.tokensService
         .deleteEmailChangeCode(dto.code)
+        .catch(() => undefined);
+      await this.redisService
+        .del(this.getActiveCodeKey(currentUserId))
         .catch(() => undefined);
       await this.tokensService
         .clearVerificationFailures(TokenType.EMAIL_CHANGE, attemptSubject)
