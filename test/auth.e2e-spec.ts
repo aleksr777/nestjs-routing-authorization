@@ -66,7 +66,7 @@ describe('AuthController (e2e)', () => {
     consume: jest.fn(),
   };
 
-  const getServer = (): Server => app.getHttpServer() as Server;
+  const getServer = (): Server => app.getHttpServer();
 
   beforeEach(async () => {
     jest.clearAllMocks();
