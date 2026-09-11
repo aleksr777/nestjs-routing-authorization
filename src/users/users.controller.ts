@@ -16,6 +16,7 @@ import {
   getAuthResponse,
   setRefreshCookie,
 } from '../auth/auth-response.util';
+import { SecurityConfigService } from '../common/security/security-config.service';
 import { UsersService } from './users.service';
 import { EmailChangeService } from './email-change.service';
 import { PasswordChangeService } from './password-change.service';
@@ -34,6 +35,7 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly emailChangeService: EmailChangeService,
     private readonly passwordChangeService: PasswordChangeService,
+    private readonly securityConfig: SecurityConfigService,
   ) {}
 
   @Get('me')
@@ -54,7 +56,7 @@ export class UsersController {
       dto.password,
       req.headers.authorization,
     );
-    clearRefreshCookie(res);
+    clearRefreshCookie(res, this.securityConfig);
   }
 
   @Patch('me/partial-data/update')
@@ -91,7 +93,7 @@ export class UsersController {
       req.headers.authorization,
     );
     if (!tokens) return tokens;
-    setRefreshCookie(res, tokens);
+    setRefreshCookie(res, tokens, this.securityConfig);
     return getAuthResponse(tokens);
   }
 
@@ -115,7 +117,7 @@ export class UsersController {
       req.headers.authorization,
     );
     if (!tokens) return tokens;
-    setRefreshCookie(res, tokens);
+    setRefreshCookie(res, tokens, this.securityConfig);
     return getAuthResponse(tokens);
   }
 
@@ -139,7 +141,7 @@ export class UsersController {
       req.headers.authorization,
     );
     if (!tokens) return tokens;
-    setRefreshCookie(res, tokens);
+    setRefreshCookie(res, tokens, this.securityConfig);
     return getAuthResponse(tokens);
   }
 }
