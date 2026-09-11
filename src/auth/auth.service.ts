@@ -6,6 +6,7 @@ import {
 import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TokensService } from './tokens.service';
+import { SessionTokenService } from './session-token.service';
 import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { User } from '../users/entities/user.entity';
@@ -30,6 +31,7 @@ export class AuthService {
     private usersRepository: Repository<User>,
     private readonly dataSource: DataSource,
     private readonly tokensService: TokensService,
+    private readonly sessionTokenService: SessionTokenService,
     private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
   ) {}
@@ -105,7 +107,7 @@ export class AuthService {
 
   async login(userId: number) {
     try {
-      const tokens = this.tokensService.generateJwtTokens(userId);
+      const tokens = this.sessionTokenService.generate(userId);
       const refreshTokenHash = this.hashService.hashToken(tokens.refresh_token);
       await this.tokensService.saveRefreshToken(userId, refreshTokenHash);
       return tokens;
@@ -171,7 +173,7 @@ export class AuthService {
         this.errorsService.invalidToken(null, TokenType.REFRESH);
       }
 
-      const tokens = this.tokensService.generateJwtTokens(userId);
+      const tokens = this.sessionTokenService.generate(userId);
       const refreshTokenHash = this.hashService.hashToken(tokens.refresh_token);
       await qr.manager.update(
         User,
