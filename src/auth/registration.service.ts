@@ -14,6 +14,8 @@ import { ID } from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
 
 const REGISTRATION_LOCKOUT_PREFIX = 'registration:lockout:';
+const REGISTRATION_ACTIVE_PREFIX = 'register:active:';
+const REGISTRATION_CODE_PREFIX = 'register:';
 const REGISTRATION_LOCKOUT_MESSAGE =
   'Registration is temporarily locked after too many incorrect confirmation codes.';
 
@@ -50,6 +52,19 @@ export class RegistrationService {
     return `${REGISTRATION_LOCKOUT_PREFIX}${email.trim().toLowerCase()}`;
   }
 
+  private getActiveCodeKey(email: string) {
+    return `${REGISTRATION_ACTIVE_PREFIX}${email.trim().toLowerCase()}`;
+  }
+
+  private async invalidateActiveCode(email: string) {
+    const activeKey = this.getActiveCodeKey(email);
+    const activeCode = await this.redisService.get(activeKey);
+    if (activeCode) {
+      await this.redisService.del(`${REGISTRATION_CODE_PREFIX}${activeCode}`);
+    }
+    await this.redisService.del(activeKey);
+  }
+
   private async getLockoutSeconds(email: string) {
     const ttl = await this.redisService.ttl(this.getLockoutKey(email));
     return typeof ttl === 'number' && ttl > 0 ? ttl : 0;
@@ -70,6 +85,7 @@ export class RegistrationService {
     let retryAfter: number | undefined;
     if (attemptsRemaining <= 0) {
       retryAfter = this.registrationVerificationLockout;
+      await this.invalidateActiveCode(email);
       await this.redisService.set(this.getLockoutKey(email), '1', {
         EX: retryAfter,
       });
