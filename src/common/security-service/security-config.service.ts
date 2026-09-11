@@ -75,6 +75,10 @@ export class SecurityConfigService {
     return value;
   }
 
+  getFrontendOrigin(): string {
+    return this.frontendOrigin;
+  }
+
   getTrustProxyHops(): number {
     return this.trustProxyHops;
   }
