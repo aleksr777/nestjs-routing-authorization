@@ -1,4 +1,15 @@
-import { Body, Controller, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { CookieOptions, Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { PasswordResetService } from './password-reset.service';
@@ -70,6 +81,13 @@ export class AuthController {
     return req.ip || req.socket.remoteAddress || 'unknown';
   }
 
+  private getSessionContext(req: Request) {
+    return {
+      ipAddress: this.getRequestIp(req),
+      userAgent: req.get('user-agent') ?? null,
+    };
+  }
+
   private getRefreshToken(req: Request): string | null {
     const request = req as RequestWithSafeCookies;
     const token = request.cookies?.['refresh_token'];
@@ -126,7 +144,10 @@ export class AuthController {
       };
     }
 
-    const tokens = await this.authService.login(user.id);
+    const tokens = await this.authService.loginNewSession(
+      user.id,
+      this.getSessionContext(req),
+    );
 
     return this.handleAuthResult(res, tokens);
   }
@@ -144,6 +165,48 @@ export class AuthController {
     return {
       message: 'Logged out successfully.',
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout-all')
+  async logoutAll(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const user = req.user as User;
+    await this.authService.logoutAll(+user.id, req.headers.authorization);
+    this.clearRefreshCookie(res);
+    return { message: 'Logged out from all sessions successfully.' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('sessions')
+  async getSessions(@Req() req: Request) {
+    const user = req.user as User;
+    const currentSessionId = this.authService.getSessionIdFromToken(
+      req.headers.authorization,
+    );
+    return {
+      sessions: await this.authService.getSessions(+user.id, currentSessionId),
+    };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('sessions/:sessionId')
+  async revokeSession(
+    @Req() req: Request,
+    @Param('sessionId', new ParseUUIDPipe()) sessionId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const user = req.user as User;
+    const currentSessionId = this.authService.getSessionIdFromToken(
+      req.headers.authorization,
+    );
+    await this.authService.revokeSession(+user.id, sessionId, 'user_revoked');
+    if (currentSessionId === sessionId) {
+      this.clearRefreshCookie(res);
+    }
+    return { message: 'Session revoked successfully.' };
   }
 
   @UseGuards(RefreshOriginGuard, RefreshTokenGuard)
