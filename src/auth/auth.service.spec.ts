@@ -62,8 +62,8 @@ describe('AuthService persistent sessions', () => {
     } as unknown as DataSource;
     const usersRepository = {} as Repository<User>;
     const sessionsRepository = {
-      create: jest.fn((value) => value),
-      save: jest.fn(async (value) => value),
+      create: jest.fn((value: Partial<AuthSession>) => value as AuthSession),
+      save: jest.fn((value: AuthSession) => Promise.resolve(value)),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn(),
