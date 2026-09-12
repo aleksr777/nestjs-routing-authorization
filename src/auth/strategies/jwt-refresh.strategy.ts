@@ -48,6 +48,11 @@ export class JwtRefreshStrategy extends PassportStrategy(
 
     const user = await this.authService.validateUserById(userId);
     this.authService.isUserBlocked(user);
+    await this.authService.validateSession(
+      userId,
+      payload.sid,
+      TokenType.REFRESH,
+    );
 
     return user;
   }

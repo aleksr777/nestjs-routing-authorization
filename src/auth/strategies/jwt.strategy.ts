@@ -34,6 +34,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       const user = await this.authService.validateUserById(+payload.sub);
       if (user) {
         this.authService.isUserBlocked(user);
+        await this.authService.validateSession(
+          +payload.sub,
+          payload.sid,
+          TokenType.ACCESS,
+        );
       }
       return user;
     }

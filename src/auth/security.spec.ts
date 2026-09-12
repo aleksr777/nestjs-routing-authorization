@@ -53,18 +53,30 @@ describe('authentication security primitives', () => {
     const jwtService = new JwtService();
     const service = new SessionTokenService(jwtService, envService);
 
-    it('generates a unique refresh token and jti on each rotation', () => {
-      const first = service.generate(7);
-      const second = service.generate(7);
-      const firstPayload = jwtService.decode<JwtPayload>(first.refresh_token);
-      const secondPayload = jwtService.decode<JwtPayload>(second.refresh_token);
+    it('binds tokens to one session and generates a unique refresh jti on each rotation', () => {
+      const sessionId = '11111111-1111-4111-8111-111111111111';
+      const first = service.generate(7, sessionId);
+      const second = service.generate(7, sessionId);
+      const firstAccessPayload = jwtService.decode<JwtPayload>(
+        first.access_token,
+      );
+      const firstRefreshPayload = jwtService.decode<JwtPayload>(
+        first.refresh_token,
+      );
+      const secondRefreshPayload = jwtService.decode<JwtPayload>(
+        second.refresh_token,
+      );
 
       expect(first.refresh_token).not.toBe(second.refresh_token);
-      expect(firstPayload?.sub).toBe(7);
-      expect(secondPayload?.sub).toBe(7);
-      expect(typeof firstPayload?.jti).toBe('string');
-      expect(typeof secondPayload?.jti).toBe('string');
-      expect(firstPayload?.jti).not.toBe(secondPayload?.jti);
+      expect(firstAccessPayload?.sub).toBe(7);
+      expect(firstAccessPayload?.sid).toBe(sessionId);
+      expect(firstRefreshPayload?.sub).toBe(7);
+      expect(secondRefreshPayload?.sub).toBe(7);
+      expect(firstRefreshPayload?.sid).toBe(sessionId);
+      expect(secondRefreshPayload?.sid).toBe(sessionId);
+      expect(typeof firstRefreshPayload?.jti).toBe('string');
+      expect(typeof secondRefreshPayload?.jti).toBe('string');
+      expect(firstRefreshPayload?.jti).not.toBe(secondRefreshPayload?.jti);
     });
   });
 

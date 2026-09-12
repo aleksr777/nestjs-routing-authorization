@@ -7,6 +7,7 @@ import { CoreModule } from './common/core.module';
 import { AdminModule } from './admin/admin.module';
 import { EnvService } from './common/env-service/env.service';
 import { User } from './users/entities/user.entity';
+import { AuthSession } from './auth/entities/auth-session.entity';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { User } from './users/entities/user.entity';
         database: envService.get('DB_NAME'),
         username: envService.get('DB_USERNAME'),
         password: envService.get('DB_PASSWORD'),
-        entities: [User],
+        entities: [User, AuthSession],
         synchronize: envService.get('DB_TYPEORM_SYNC', 'boolean'),
       }),
     }),

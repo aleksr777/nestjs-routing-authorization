@@ -18,10 +18,11 @@ import { RefreshOriginGuard } from './guards/refresh-origin.guard';
 import { EnvService } from '../common/env-service/env.service';
 import { AuthController } from './auth.controller';
 import { User } from '../users/entities/user.entity';
+import { AuthSession } from './entities/auth-session.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, AuthSession]),
     PassportModule,
     ConfigModule,
     JwtModule.registerAsync({

@@ -31,6 +31,25 @@ REFRESH_COOKIE_SAME_SITE='none'
 
 The refresh cookie is HttpOnly, scoped to `/api/auth`, and uses high cookie priority. The raw refresh token is not exposed to frontend JavaScript.
 
+## Persistent authentication sessions
+
+Every login creates a persistent server-side authentication session. Access and refresh JWTs contain a `sid` claim that identifies that session; a valid JWT is not sufficient by itself if the corresponding server-side session is revoked or expired.
+
+Only a SHA-256 hash of the current refresh token is stored in the session row. Refresh rotation is performed while holding a pessimistic database lock on that session. If an older refresh token is replayed, only the affected session/token family is revoked with the `refresh_reuse` reason, so unrelated devices remain signed in.
+
+Normal login can create multiple device sessions. Security-sensitive credential changes use the stricter reauthentication path, which revokes existing sessions before issuing replacement credentials.
+
+Authenticated session-management endpoints are:
+
+- `GET /api/auth/sessions` — list the current user's active sessions;
+- `DELETE /api/auth/sessions/:sessionId` — revoke one of the current user's sessions;
+- `POST /api/auth/logout` — revoke the current session;
+- `POST /api/auth/logout-all` — revoke all sessions for the current user.
+
+Session responses expose only session metadata such as IP address, user agent and timestamps. Refresh-token hashes are never selected for these responses.
+
+The migration that introduces the session table invalidates legacy refresh-token hashes. Access and refresh JWTs issued before this migration do not contain `sid` and are therefore rejected after deployment. Existing users must sign in again once after the migration. In production, run the database migration before serving traffic with the new application version.
+
 ## Refresh Origin protection
 
 `POST /api/auth/refresh-tokens` authenticates with an HttpOnly cookie, so it additionally requires an `Origin` header matching the origin derived from `FRONTEND_URL`.
