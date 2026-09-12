@@ -21,16 +21,16 @@ export class SessionTokenService {
     this.refreshExpiresIn = this.envService.get('JWT_REFRESH_EXPIRES_IN');
   }
 
-  generate(userId: number): JwtTokens {
+  generate(userId: number, sessionId: string): JwtTokens {
     const accessToken = this.jwtService.sign(
-      { sub: userId },
+      { sub: userId, sid: sessionId },
       {
         secret: this.accessSecret,
         expiresIn: this.accessExpiresIn,
       },
     );
     const refreshToken = this.jwtService.sign(
-      { sub: userId, jti: randomUUID() },
+      { sub: userId, sid: sessionId, jti: randomUUID() },
       {
         secret: this.refreshSecret,
         expiresIn: this.refreshExpiresIn,
@@ -45,5 +45,14 @@ export class SessionTokenService {
       access_token_expires: decodedAccess?.exp ?? null,
       refresh_token_expires: decodedRefresh?.exp ?? null,
     };
+  }
+
+  getSessionId(token: string | undefined | null): string | null {
+    if (!token) return null;
+    const cleanedToken = token.startsWith('Bearer ')
+      ? token.slice(7).trim()
+      : token.trim();
+    const payload = this.jwtService.decode<JwtPayload>(cleanedToken);
+    return typeof payload?.sid === 'string' ? payload.sid : null;
   }
 }
