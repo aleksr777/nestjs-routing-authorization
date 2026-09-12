@@ -1,7 +1,15 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, EntityManager, Not, Repository } from 'typeorm';
+import {
+  Brackets,
+  DataSource,
+  EntityManager,
+  IsNull,
+  Not,
+  Repository,
+} from 'typeorm';
 import { AuthService } from '../auth/auth.service';
+import { AuthSession } from '../auth/entities/auth-session.entity';
 import { HashService } from '../common/hash-service/hash.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { RedisService } from '../common/redis-service/redis.service';
@@ -191,14 +199,23 @@ export class AdminService {
       if (user.is_blocked) {
         this.errorsService.badRequest(ErrMsg.ACCOUNT_ALREADY_BLOCKED);
       }
+      const blockedAt = new Date();
       await qr.manager.update(
         User,
         { id: userId },
         {
           is_blocked: true,
-          blocked_at: new Date(),
+          blocked_at: blockedAt,
           blocked_by: adminId,
           blocked_reason: reason || null,
+        },
+      );
+      await qr.manager.update(
+        AuthSession,
+        { user_id: userId, revoked_at: IsNull() },
+        {
+          revoked_at: blockedAt,
+          revoked_reason: 'account_blocked',
         },
       );
       await qr.commitTransaction();
