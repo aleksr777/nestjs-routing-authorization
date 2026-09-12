@@ -248,7 +248,8 @@ export class AuthService {
     return sessions
       .filter(
         (session) =>
-          session.revoked_at === null && session.expires_at.getTime() > Date.now(),
+          session.revoked_at === null &&
+          session.expires_at.getTime() > Date.now(),
       )
       .map((session) => ({
         id: session.id,
