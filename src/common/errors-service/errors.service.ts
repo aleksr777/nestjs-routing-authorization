@@ -41,8 +41,6 @@ export class ErrorsService {
         return ErrMsg.INVALID_EMAIL_CHANGE_CODE;
       case TokenType.PASSWORD_CHANGE:
         return ErrMsg.INVALID_PASSWORD_CHANGE_CODE;
-      case TokenType.ADMIN_TRANSFER:
-        return ErrMsg.INVALID_ADMIN_TRANSFER_CODE;
       default:
         return ErrMsg.INVALID_TOKEN;
     }
@@ -54,8 +52,6 @@ export class ErrorsService {
         return ErrMsg.ACCESS_TOKEN_NOT_DEFINED;
       case TokenType.REFRESH:
         return ErrMsg.REFRESH_TOKEN_NOT_DEFINED;
-      case TokenType.ADMIN_TRANSFER:
-        return ErrMsg.ADMIN_TRANSFER_CODE_NOT_DEFINED;
       case TokenType.PASSWORD_RESET:
         return ErrMsg.PASSWORD_RESET_CODE_NOT_DEFINED;
       case TokenType.CURRENT_USER_PASSWORD_RESET:
