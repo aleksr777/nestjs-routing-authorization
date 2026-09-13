@@ -44,6 +44,10 @@ export enum ErrMsg {
   ADMINISTRATOR_CANNOT_BE_BLOCKED = 'The administrator cannot be blocked.',
   ADMINISTRATOR_CANNOT_BE_DELETED = 'The administrator cannot be deleted.',
 
+  CURRENT_USER_BLOCKED = 'Current user is blocked.',
+  TARGET_USER_BLOCKED = 'Target user is blocked.',
+  TOKEN_NOT_ISSUED_FOR_CURRENT_USER = 'Token not issued for current user',
+
   SERVICE_EMAIL_MATCH_USER_EMAIL = `The service mail must not match the user's email.`,
   NEW_EMAIL_MATCH_USER_EMAIL = 'The new email must not be the same as the current one.',
 
