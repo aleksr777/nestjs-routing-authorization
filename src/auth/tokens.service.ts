@@ -13,7 +13,6 @@ import { TokenType } from '../common/types/token-type.type';
 
 const RESET_REDIS_PREFIX = `reset:`;
 const REGISTER_REDIS_PREFIX = `register:`;
-const ADMIN_TRANSFER_REDIS_PREFIX = `admin:transfer:`;
 const EMAIL_CHANGE_REDIS_PREFIX = 'email-change:';
 const PASSWORD_CHANGE_PREFIX = 'password-change:';
 
@@ -23,7 +22,6 @@ export class TokensService {
   private readonly refreshSecret: string;
   private readonly accessExpiresIn: string;
   private readonly refreshExpiresIn: string;
-  private readonly transferExpiresIn: number;
   private readonly resetExpiresIn: number;
   private readonly registrationExpiresIn: number;
   private readonly emailChangeTokenExpiresIn: number;
@@ -40,10 +38,6 @@ export class TokensService {
     this.refreshSecret = this.envService.get('JWT_REFRESH_SECRET');
     this.accessExpiresIn = this.envService.get('JWT_ACCESS_EXPIRES_IN');
     this.refreshExpiresIn = this.envService.get('JWT_REFRESH_EXPIRES_IN');
-    this.transferExpiresIn = this.envService.get(
-      'ADMIN_TRANSFER_TOKEN_EXPIRES_IN',
-      'number',
-    );
     this.resetExpiresIn = this.envService.get(
       'RESET_TOKEN_EXPIRES_IN',
       'number',
@@ -301,37 +295,5 @@ export class TokensService {
 
   async deletePasswordChangeCode(code: string) {
     await this.redisService.del(`${PASSWORD_CHANGE_PREFIX}${code}`);
-  }
-
-  /* ADMIN TRANSFER CODE */
-  async saveTransferToken(code: string, fromId: number, toId: number) {
-    await this.redisService.set(
-      `${ADMIN_TRANSFER_REDIS_PREFIX}${code}`,
-      JSON.stringify({ fromId: fromId, toId: toId }),
-      {
-        EX: this.transferExpiresIn,
-      },
-    );
-  }
-
-  async getDataByTransferToken(
-    code: string,
-  ): Promise<{ fromId: number; toId: number } | undefined> {
-    const raw = await this.redisService.get(
-      `${ADMIN_TRANSFER_REDIS_PREFIX}${code}`,
-    );
-    if (!raw) {
-      return undefined;
-    } else {
-      const data = JSON.parse(raw) as {
-        fromId: number;
-        toId: number;
-      };
-      return data;
-    }
-  }
-
-  async deleteTransferToken(code: string) {
-    await this.redisService.del(`${ADMIN_TRANSFER_REDIS_PREFIX}${code}`);
   }
 }
