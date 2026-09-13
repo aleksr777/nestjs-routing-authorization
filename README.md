@@ -11,7 +11,6 @@ JWT_REFRESH_SECRET='secret_refresh_key'
 JWT_ACCESS_EXPIRES_IN='15m'
 JWT_REFRESH_EXPIRES_IN='7d'
 
-ADMIN_TRANSFER_TOKEN_EXPIRES_IN=300  # 5m
 REGISTRATION_TOKEN_EXPIRES_IN=600  # 10m
 RESET_TOKEN_EXPIRES_IN=600  # 10m
 EMAIL_CHANGE_TOKEN_EXPIRES_IN=600  # 10m
@@ -136,8 +135,6 @@ npx typeorm-ts-node-commonjs migration:run -d data-source.ts
 - `GET /api/admin/users/find` — Get list of users (with query support)
 - `PATCH /api/admin/users/block/:id` — Block user by ID
 - `PATCH /api/admin/users/unblock/:id` — Unblock user by ID
-- `POST /api/admin/transfer/initiate` — Initiate transfer of administrator rights
-- `POST /api/admin/transfer/confirm` — Confirm transfer of administrator rights
 - `DELETE /api/admin/users/delete/:id` — Delete user by ID
 
 ---
