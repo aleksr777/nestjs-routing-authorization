@@ -7,7 +7,6 @@ export enum ErrMsg {
   TOKEN_NOT_DEFINED = 'Token is not defined.',
   ACCESS_TOKEN_NOT_DEFINED = 'Access token is not defined.',
   REFRESH_TOKEN_NOT_DEFINED = 'Refresh token is not defined.',
-  ADMIN_TRANSFER_CODE_NOT_DEFINED = 'Admin transfer code is not defined.',
   RESET_CODE_NOT_DEFINED = 'Reset code is not defined.',
   REGISTRATION_CODE_NOT_DEFINED = 'Registration code is not defined.',
   EMAIL_CHANGE_CODE_NOT_DEFINED = 'Email change code is not defined.',
@@ -21,7 +20,6 @@ export enum ErrMsg {
   INVALID_RESET_CODE = 'Reset code is expired or invalid. Please request a new one.',
   INVALID_EMAIL_CHANGE_CODE = 'Email change code is expired or invalid. Please request a new one.',
   INVALID_PASSWORD_CHANGE_CODE = 'Password change code is expired or invalid. Please request a new one.',
-  INVALID_ADMIN_TRANSFER_CODE = 'Admin transfer code is expired or invalid. Please request a new one.',
 
   UNABLE_GENERATE_UNIQUE_CODE = 'Unable to generate unique code.',
 
@@ -45,15 +43,6 @@ export enum ErrMsg {
   ACCOUNT_NOT_BLOCKED = 'This account is not blocked.',
   ADMINISTRATOR_CANNOT_BE_BLOCKED = 'The administrator cannot be blocked.',
   ADMINISTRATOR_CANNOT_BE_DELETED = 'The administrator cannot be deleted.',
-
-  ONLY_ADMINISTRATOR_TRANSFER = 'Only administrator can initiate a transfer.',
-  CURRENT_USER_BLOCKED = 'Current user is blocked.',
-  TARGET_USER_BLOCKED = 'Target user is blocked.',
-  TARGET_USER_ALREADY_ADMINISTRATOR = 'Target user is already an administrator.',
-  TRANSFER_FAILED = 'Transfer failed.',
-  INITIATOR_IS_NO_ADMINISTRATOR = 'Initiator is no longer an administrator.',
-  TOKEN_NOT_ISSUED_FOR_CURRENT_USER = 'Token not issued for current user',
-  ADMIN_CANNOT_TRANSFER_THEMSELVES = 'Admin cannot transfer rights to themselves.',
 
   SERVICE_EMAIL_MATCH_USER_EMAIL = `The service mail must not match the user's email.`,
   NEW_EMAIL_MATCH_USER_EMAIL = 'The new email must not be the same as the current one.',
