@@ -1,7 +1,6 @@
 import {
   Get,
   Patch,
-  Post,
   Delete,
   Body,
   Req,
@@ -17,9 +16,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/types/role.enum';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { BlockUserDto } from './dto/block-user.dto';
-import { TransferInitiateDto } from './dto/transfer-rights-initiate.dto';
 import { AdminService } from './admin.service';
-import { AdminTransferService } from './transfer-rights.service';
 import { Request } from 'express';
 import { User } from '../users/entities/user.entity';
 
@@ -27,21 +24,7 @@ import { User } from '../users/entities/user.entity';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class AdminController {
-  constructor(
-    private readonly adminService: AdminService,
-    private readonly transfer: AdminTransferService,
-  ) {}
-
-  @Post('transfer/initiate')
-  async initiateTransfer(
-    @Body() dto: TransferInitiateDto,
-    @Req() req: Request,
-  ) {
-    const admin = req.user as User;
-    const adminId = +admin.id;
-    const userId = +dto.id;
-    return await this.transfer.initiateTransfer(adminId, userId);
-  }
+  constructor(private readonly adminService: AdminService) {}
 
   @Get('users/find')
   getUsers(@Query() q: GetUsersQueryDto) {
