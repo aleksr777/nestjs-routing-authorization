@@ -1,5 +1,4 @@
 export enum TokenType {
-  ADMIN_TRANSFER = 'ADMIN_TRANSFER',
   ACCESS = 'ACCESS',
   REFRESH = 'REFRESH',
   RESET = 'RESET',
