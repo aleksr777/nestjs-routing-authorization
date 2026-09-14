@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     container_name: postgres_db
     ports:
-      - '${DB_PORT}:${DB_PORT}'
+      - '${DB_PORT}:5432'
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USERNAME}
@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
     container_name: redis
     ports:
-      - '${REDIS_PORT}:${REDIS_PORT}'
+      - '${REDIS_PORT}:6379'
 
 volumes:
   pgdata:
