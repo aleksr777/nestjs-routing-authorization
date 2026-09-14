@@ -358,7 +358,9 @@ export class TokensService {
   }
 
   async getIdByPasswordChangeCode(code: string): Promise<number | null> {
-    const userId = await this.redisService.get(`${PASSWORD_CHANGE_PREFIX}${code}`);
+    const userId = await this.redisService.get(
+      `${PASSWORD_CHANGE_PREFIX}${code}`,
+    );
     return userId ? Number.parseInt(userId, 10) : null;
   }
 
