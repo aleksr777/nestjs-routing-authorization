@@ -12,8 +12,10 @@ const createService = () => {
   const findOne = jest.fn();
   const updateUser = jest.fn();
   const redisGet = jest.fn();
+  const redisGetDel = jest.fn();
   const redisSet = jest.fn();
   const redisDel = jest.fn();
+  const deleteIfValueMatches = jest.fn();
   const incrWithExpire = jest.fn();
   const verifyUserPassword = jest.fn();
   const loginNewSession = jest.fn();
@@ -23,8 +25,10 @@ const createService = () => {
   const users = { findOne, update: updateUser } as unknown as Repository<User>;
   const redis = {
     get: redisGet,
+    getDel: redisGetDel,
     set: redisSet,
     del: redisDel,
+    deleteIfValueMatches,
     incrWithExpire,
   } as unknown as RedisService;
   const securityConfig = {
@@ -51,12 +55,32 @@ const createService = () => {
   return {
     service,
     findOne,
+    updateUser,
     redisGet,
+    redisGetDel,
     redisDel,
+    deleteIfValueMatches,
     incrWithExpire,
     verifyUserPassword,
+    loginNewSession,
+    revokeOtherSessions,
+    getSessionIdFromToken,
     auditRecord,
   };
+};
+
+type MfaTestInternals = {
+  encrypt: (value: string) => string;
+  hotp: (secret: string, counter: number) => string;
+};
+
+const getEncryptedSecretAndCurrentCode = (service: MfaService) => {
+  const internals = service as unknown as MfaTestInternals;
+  const secret = 'JBSWY3DPEHPK3PXP';
+  const encryptedSecret = internals.encrypt(secret);
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  const code = internals.hotp(secret, counter);
+  return { encryptedSecret, code };
 };
 
 describe('MfaService security controls', () => {
@@ -71,6 +95,30 @@ describe('MfaService security controls', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(verifyUserPassword).toHaveBeenCalledWith(7, 'wrong-password');
     expect(redisGet).not.toHaveBeenCalled();
+  });
+
+  it('does not consume a newer MFA setup when the verified setup was replaced', async () => {
+    const {
+      service,
+      redisGet,
+      deleteIfValueMatches,
+      updateUser,
+      revokeOtherSessions,
+    } = createService();
+    const { encryptedSecret, code } = getEncryptedSecretAndCurrentCode(service);
+    redisGet.mockResolvedValue(encryptedSecret);
+    deleteIfValueMatches.mockResolvedValue(false);
+
+    await expect(
+      service.enable(7, 'current-password', code, 'session-id'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(deleteIfValueMatches).toHaveBeenCalledWith(
+      'mfa:totp:setup:7',
+      encryptedSecret,
+    );
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(revokeOtherSessions).not.toHaveBeenCalled();
   });
 
   it('limits MFA attempts across newly issued challenges for the same user', async () => {
@@ -100,5 +148,83 @@ describe('MfaService security controls', () => {
         userId: 7,
       }),
     );
+  });
+
+  it('rejects a replayed MFA challenge before creating another session', async () => {
+    const {
+      service,
+      findOne,
+      redisGet,
+      redisGetDel,
+      incrWithExpire,
+      loginNewSession,
+      auditRecord,
+    } = createService();
+    const { encryptedSecret, code } = getEncryptedSecretAndCurrentCode(service);
+    redisGet.mockResolvedValue('7');
+    incrWithExpire.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+    findOne.mockResolvedValue({
+      id: 7,
+      mfa_totp_secret: encryptedSecret,
+      mfa_totp_enabled: true,
+      is_blocked: false,
+    });
+    redisGetDel.mockResolvedValue(null);
+
+    await expect(
+      service.completeLogin('challenge', code, {
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-agent',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(redisGetDel).toHaveBeenCalledTimes(1);
+    expect(loginNewSession).not.toHaveBeenCalled();
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ADMIN_MFA_LOGIN_REPLAYED',
+        success: false,
+        userId: 7,
+      }),
+    );
+  });
+
+  it('creates a session only after atomically consuming the MFA challenge', async () => {
+    const {
+      service,
+      findOne,
+      redisGet,
+      redisGetDel,
+      redisDel,
+      incrWithExpire,
+      loginNewSession,
+      getSessionIdFromToken,
+    } = createService();
+    const { encryptedSecret, code } = getEncryptedSecretAndCurrentCode(service);
+    redisGet.mockResolvedValue('7');
+    redisGetDel.mockResolvedValue('7');
+    redisDel.mockResolvedValue(1);
+    incrWithExpire.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+    findOne.mockResolvedValue({
+      id: 7,
+      mfa_totp_secret: encryptedSecret,
+      mfa_totp_enabled: true,
+      is_blocked: false,
+    });
+    loginNewSession.mockResolvedValue({ access_token: 'access-token' });
+    getSessionIdFromToken.mockReturnValue('session-id');
+
+    await expect(
+      service.completeLogin('challenge', code, {
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-agent',
+      }),
+    ).resolves.toEqual({ access_token: 'access-token' });
+
+    expect(redisGetDel).toHaveBeenCalledTimes(1);
+    expect(loginNewSession).toHaveBeenCalledWith(7, {
+      ipAddress: '127.0.0.1',
+      userAgent: 'test-agent',
+    });
   });
 });
