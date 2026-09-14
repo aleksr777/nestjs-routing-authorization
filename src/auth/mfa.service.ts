@@ -189,18 +189,23 @@ export class MfaService {
     currentSessionId: string,
   ) {
     await this.authService.verifyUserPassword(userId, password);
-    const pending = await this.redis.get(`${SETUP_PREFIX}${userId}`);
+    const setupKey = `${SETUP_PREFIX}${userId}`;
+    const pending = await this.redis.get(setupKey);
     if (!pending) throw new UnauthorizedException('MFA setup has expired.');
     const secret = this.decrypt(pending);
     if (!this.verifyTotp(secret, code)) {
       throw new UnauthorizedException('Invalid MFA code.');
     }
 
+    const consumed = await this.redis.deleteIfValueMatches(setupKey, pending);
+    if (!consumed) {
+      throw new UnauthorizedException('MFA setup has expired.');
+    }
+
     await this.users.update(
       { id: userId, role: Role.ADMIN },
       { mfa_totp_secret: this.encrypt(secret), mfa_totp_enabled: true },
     );
-    await this.redis.del(`${SETUP_PREFIX}${userId}`);
     await this.authService.revokeOtherSessions(
       userId,
       currentSessionId,
@@ -319,8 +324,19 @@ export class MfaService {
       throw new UnauthorizedException('Invalid MFA code.');
     }
 
+    const consumedUserIdText = await this.redis.getDel(key);
+    if (consumedUserIdText !== userIdText) {
+      void this.audit.record({
+        event: 'ADMIN_MFA_LOGIN_REPLAYED',
+        success: false,
+        userId,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
+      throw new UnauthorizedException('MFA challenge has expired.');
+    }
+
     await Promise.all([
-      this.redis.del(key),
       this.redis.del(this.attemptsKey(challenge)),
       this.redis.del(this.userAttemptsKey(userId)),
     ]);
