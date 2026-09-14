@@ -1,5 +1,5 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { TokensService } from './tokens.service';
@@ -34,6 +34,7 @@ export class PasswordResetService {
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly redisService: RedisService,
+    private readonly dataSource: DataSource,
   ) {
     this.resetExpiresIn =
       this.envService.get('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
@@ -176,15 +177,19 @@ export class PasswordResetService {
       attemptSubject,
     );
 
-    try {
-      const userId = await this.tokensService.getIdByResetCode(code);
-      if (userId === null) {
-        return this.rejectInvalidCode(attemptSubject);
-      }
+    const userId = await this.tokensService.getIdByResetCode(code);
+    if (userId === null) {
+      return this.rejectInvalidCode(attemptSubject);
+    }
 
-      const user = await this.usersRepository.findOne({
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const user = await qr.manager.findOne(User, {
         where: { id: userId },
         select: [ID, EMAIL],
+        lock: { mode: 'pessimistic_write' },
       });
       if (!user || user.email.trim().toLowerCase() !== attemptSubject) {
         return this.rejectInvalidCode(attemptSubject);
@@ -199,15 +204,21 @@ export class PasswordResetService {
       }
 
       const hashedPassword = await this.hashService.hash(newPassword);
-      const result = await this.usersRepository.update(
+      const result = await qr.manager.update(
+        User,
         { id: userId },
         { password: hashedPassword },
       );
       if (result.affected === 0) {
         this.errorsService.userNotFound();
       }
+      await this.authService.revokeAllSessions(
+        userId,
+        'password_reset',
+        qr.manager,
+      );
+      await qr.commitTransaction();
 
-      await this.authService.revokeAllSessions(userId, 'password_reset');
       await this.tokensService.clearVerificationFailures(
         TokenType.PASSWORD_RESET,
         attemptSubject,
@@ -220,7 +231,10 @@ export class PasswordResetService {
         message: 'Password reset successfully. Please sign in.',
       };
     } catch (err: unknown) {
+      if (qr.isTransactionActive) await qr.rollbackTransaction();
       this.errorsService.resetPassword(err);
+    } finally {
+      await qr.release();
     }
   }
 }
