@@ -19,6 +19,20 @@ end
 return value
 `;
 
+const CONSUME_ACTIVE_TOKEN_SCRIPT = `
+local active = redis.call('GET', KEYS[1])
+if active ~= ARGV[1] then
+  return false
+end
+local payload = redis.call('GET', KEYS[2])
+if not payload then
+  return false
+end
+redis.call('DEL', KEYS[1])
+redis.call('DEL', KEYS[2])
+return payload
+`;
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
@@ -100,6 +114,30 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return await this.client.get(key);
     } catch (err) {
       this.errorsService.default(err, 'Redis error (get).');
+    }
+  }
+
+  async getDel(key: string): Promise<string | null> {
+    try {
+      return await this.client.getDel(key);
+    } catch (err) {
+      this.errorsService.default(err, 'Redis error (getDel).');
+    }
+  }
+
+  async consumeActiveToken(
+    activeKey: string,
+    expectedCode: string,
+    tokenKey: string,
+  ): Promise<string | null> {
+    try {
+      const result = await this.client.eval(CONSUME_ACTIVE_TOKEN_SCRIPT, {
+        keys: [activeKey, tokenKey],
+        arguments: [expectedCode],
+      });
+      return typeof result === 'string' ? result : null;
+    } catch (err) {
+      this.errorsService.default(err, 'Redis error (consumeActiveToken).');
     }
   }
 
