@@ -1,16 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import {
-  Injectable,
-  UnauthorizedException,
-  HttpException,
-} from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { HttpException, In, Injectable, UnauthorizedException } from '@nestjs/common';
+import { DataSource, IsNull, MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { TokensService } from './tokens.service';
 import { SessionTokenService } from './session-token.service';
 import { ActivityService } from '../activity/activity.service';
+import { SecurityAuditService } from '../audit/security-audit.service';
 import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
+import { SecurityConfigService } from '../common/security/security-config.service';
 import { User } from '../users/entities/user.entity';
 import { AuthSession } from './entities/auth-session.entity';
 import {
@@ -33,18 +30,18 @@ export type SessionContext = {
 
 @Injectable()
 export class AuthService {
-  config: any;
   constructor(
     @InjectRepository(User)
-    private usersRepository: Repository<User>,
+    private readonly usersRepository: Repository<User>,
     @InjectRepository(AuthSession)
-    private sessionsRepository: Repository<AuthSession>,
+    private readonly sessionsRepository: Repository<AuthSession>,
     private readonly dataSource: DataSource,
-    private readonly tokensService: TokensService,
     private readonly sessionTokenService: SessionTokenService,
     private readonly activityService: ActivityService,
     private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
+    private readonly securityConfig: SecurityConfigService,
+    private readonly audit: SecurityAuditService,
   ) {}
 
   removeSensitiveInfo<T extends object, K extends keyof T>(
@@ -53,40 +50,45 @@ export class AuthService {
   ): Omit<T, K> | Omit<T, K>[] {
     const remove = (item: T): Omit<T, K> => {
       const result = { ...item } as Partial<T>;
-      for (const key of keysToRemove) {
-        delete result[key];
-      }
+      for (const key of keysToRemove) delete result[key];
       return result as Omit<T, K>;
     };
-    if (Array.isArray(source)) {
-      return source.map(remove);
-    } else {
-      return remove(source);
-    }
+    return Array.isArray(source) ? source.map(remove) : remove(source);
   }
 
-  isUserBlocked(user: User) {
-    if (user.is_blocked) {
-      this.errorsService.accountBlocked(user.blocked_reason);
-    }
+  isUserBlocked(user: User): void {
+    if (user.is_blocked) this.errorsService.accountBlocked(user.blocked_reason);
   }
 
   async validateUserByEmailAndPassword(email: string, password: string) {
     let user: User;
     try {
       user = await this.usersRepository.findOneOrFail({
-        where: { email },
-        select: [...USER_PROFILE_FIELDS, PASSWORD, IS_BLOCKED, BLOCKED_REASON],
+        where: { email: email.trim().toLowerCase() },
+        select: [
+          ...USER_PROFILE_FIELDS,
+          PASSWORD,
+          IS_BLOCKED,
+          BLOCKED_REASON,
+          'mfa_totp_enabled',
+        ],
       });
-      const isPasswordValid = await this.hashService.compare(
-        password,
-        user.password,
-      );
+      const isPasswordValid = await this.hashService.compare(password, user.password);
       this.errorsService.invalidEmailOrPassword(null, isPasswordValid);
       return user;
     } catch (err: unknown) {
       this.errorsService.invalidEmailOrPassword(err);
       this.errorsService.default(err);
+    }
+  }
+
+  async verifyUserPassword(userId: number, password: string): Promise<void> {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: [ID, PASSWORD],
+    });
+    if (!user || !(await this.hashService.compare(password, user.password))) {
+      throw new UnauthorizedException('Invalid password.');
     }
   }
 
@@ -123,10 +125,38 @@ export class AuthService {
     return new Date(tokens.refresh_token_expires * 1000);
   }
 
+  private async enforceActiveSessionLimit(userId: number): Promise<void> {
+    const active = await this.sessionsRepository.find({
+      where: {
+        user_id: userId,
+        revoked_at: IsNull(),
+        expires_at: MoreThan(new Date()),
+      },
+      select: ['id', 'created_at'],
+      order: { created_at: 'DESC' },
+    });
+    const keepBeforeCreate = Math.max(this.securityConfig.getMaxActiveSessions() - 1, 0);
+    const overflow = active.slice(keepBeforeCreate).map((session) => session.id);
+    if (overflow.length === 0) return;
+
+    const now = new Date();
+    await this.sessionsRepository.update(
+      { user_id: userId, id: In(overflow) },
+      { revoked_at: now, revoked_reason: 'session_limit' },
+    );
+    await this.audit.record({
+      event: 'SESSION_LIMIT_REVOKED',
+      userId,
+      details: { count: overflow.length },
+    });
+  }
+
   private async createSession(
     userId: number,
     context: SessionContext = {},
   ): Promise<JwtTokens> {
+    await this.enforceActiveSessionLimit(userId);
+
     const sessionId = randomUUID();
     const tokens = this.sessionTokenService.generate(userId, sessionId);
     const now = new Date();
@@ -145,6 +175,13 @@ export class AuthService {
     void this.activityService
       .setSessionActivity(userId, sessionId, now)
       .catch(() => undefined);
+    void this.audit.record({
+      event: 'SESSION_CREATED',
+      userId,
+      sessionId,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
     return tokens;
   }
 
@@ -176,14 +213,11 @@ export class AuthService {
     sessionId: string | undefined,
     tokenType: TokenType,
   ): Promise<AuthSession> {
-    if (!sessionId) {
-      this.errorsService.invalidToken(null, tokenType);
-    }
+    if (!sessionId) this.errorsService.invalidToken(null, tokenType);
 
     const session = await this.sessionsRepository.findOne({
       where: { id: sessionId, user_id: userId },
     });
-
     if (
       !session ||
       session.revoked_at !== null ||
@@ -191,24 +225,15 @@ export class AuthService {
     ) {
       this.errorsService.invalidToken(null, tokenType);
     }
-
     return session;
   }
 
-  async logout(userId: number, access_token: string | undefined) {
-    if (!access_token) {
-      this.errorsService.tokenNotDefined(TokenType.ACCESS);
-    }
+  async logout(userId: number, accessToken: string | undefined) {
+    if (!accessToken) this.errorsService.tokenNotDefined(TokenType.ACCESS);
     try {
-      const sessionId = this.getSessionIdFromToken(access_token);
-      if (!sessionId) {
-        this.errorsService.invalidToken(null, TokenType.ACCESS);
-      }
+      const sessionId = this.getSessionIdFromToken(accessToken);
+      if (!sessionId) this.errorsService.invalidToken(null, TokenType.ACCESS);
       await this.revokeSession(userId, sessionId, 'logout');
-      await this.tokensService.addJwtTokenToBlacklist(
-        access_token,
-        TokenType.ACCESS,
-      );
     } catch (err: unknown) {
       if (err instanceof UnauthorizedException) {
         this.errorsService.invalidToken(err, TokenType.ACCESS);
@@ -218,29 +243,57 @@ export class AuthService {
     }
   }
 
-  async logoutAll(userId: number, access_token: string | undefined) {
-    if (!access_token) {
-      this.errorsService.tokenNotDefined(TokenType.ACCESS);
-    }
+  async logoutAll(userId: number): Promise<void> {
     await this.revokeAllSessions(userId, 'logout_all');
-    await this.tokensService.addJwtTokenToBlacklist(
-      access_token,
-      TokenType.ACCESS,
-    );
   }
 
-  async revokeAllSessions(userId: number, reason = 'revoked') {
+  async revokeAllSessions(userId: number, reason = 'revoked'): Promise<void> {
+    const now = new Date();
     await this.sessionsRepository.update(
-      { user_id: userId },
-      { revoked_at: new Date(), revoked_reason: reason },
+      { user_id: userId, revoked_at: IsNull() },
+      { revoked_at: now, revoked_reason: reason },
     );
+    void this.audit.record({
+      event: 'SESSIONS_REVOKED_ALL',
+      userId,
+      details: { reason },
+    });
+  }
+
+  async revokeOtherSessions(
+    userId: number,
+    currentSessionId: string,
+    reason = 'security_context_changed',
+  ): Promise<void> {
+    await this.sessionsRepository
+      .createQueryBuilder()
+      .update(AuthSession)
+      .set({ revoked_at: new Date(), revoked_reason: reason })
+      .where('user_id = :userId', { userId })
+      .andWhere('id <> :currentSessionId', { currentSessionId })
+      .andWhere('revoked_at IS NULL')
+      .execute();
+    void this.audit.record({
+      event: 'OTHER_SESSIONS_REVOKED',
+      userId,
+      sessionId: currentSessionId,
+      details: { reason },
+    });
   }
 
   async revokeSession(userId: number, sessionId: string, reason = 'revoked') {
     const result = await this.sessionsRepository.update(
-      { id: sessionId, user_id: userId },
+      { id: sessionId, user_id: userId, revoked_at: IsNull() },
       { revoked_at: new Date(), revoked_reason: reason },
     );
+    if ((result.affected ?? 0) > 0) {
+      void this.audit.record({
+        event: 'SESSION_REVOKED',
+        userId,
+        sessionId,
+        details: { reason },
+      });
+    }
     return (result.affected ?? 0) > 0;
   }
 
@@ -251,8 +304,7 @@ export class AuthService {
     });
     const activeSessions = sessions.filter(
       (session) =>
-        session.revoked_at === null &&
-        session.expires_at.getTime() > Date.now(),
+        session.revoked_at === null && session.expires_at.getTime() > Date.now(),
     );
 
     let liveActivity = new Map<string, Date>();
@@ -262,16 +314,13 @@ export class AuthService {
         activeSessions.map((session) => session.id),
       );
     } catch {
-      // DB timestamps remain a safe fallback if Redis is temporarily unavailable.
+      // Database timestamps remain a safe fallback if Redis is unavailable.
     }
 
     return activeSessions.map((session) => {
       const pending = liveActivity.get(session.id);
       const lastUsedAt =
-        pending && pending > session.last_used_at
-          ? pending
-          : session.last_used_at;
-
+        pending && pending > session.last_used_at ? pending : session.last_used_at;
       return {
         id: session.id,
         ip_address: session.ip_address,
@@ -290,9 +339,7 @@ export class AuthService {
     }
 
     const sessionId = this.getSessionIdFromToken(currentRefreshToken);
-    if (!sessionId) {
-      this.errorsService.invalidToken(null, TokenType.REFRESH);
-    }
+    if (!sessionId) this.errorsService.invalidToken(null, TokenType.REFRESH);
 
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
@@ -331,6 +378,12 @@ export class AuthService {
           { revoked_at: new Date(), revoked_reason: 'refresh_reuse' },
         );
         await qr.commitTransaction();
+        void this.audit.record({
+          event: 'REFRESH_TOKEN_REUSE',
+          success: false,
+          userId,
+          sessionId,
+        });
         this.errorsService.invalidToken(null, TokenType.REFRESH);
       }
 
@@ -345,15 +398,10 @@ export class AuthService {
         },
       );
       await qr.commitTransaction();
-
       return tokens;
     } catch (err: unknown) {
-      if (qr.isTransactionActive) {
-        await qr.rollbackTransaction();
-      }
-      if (err instanceof HttpException) {
-        throw err;
-      }
+      if (qr.isTransactionActive) await qr.rollbackTransaction();
+      if (err instanceof HttpException) throw err;
       this.errorsService.invalidToken(err, TokenType.REFRESH);
     } finally {
       await qr.release();
