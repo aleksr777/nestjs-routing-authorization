@@ -12,10 +12,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CookieOptions, Request, Response } from 'express';
+import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { SecurityConfigService } from '../common/security/security-config.service';
+import { Role } from '../common/types/role.enum';
+import { JwtTokens, AuthResponse } from '../common/types/jwt-tokens.type';
+import { User } from '../users/entities/user.entity';
 import { AuthService } from './auth.service';
-import { PasswordResetService } from './password-reset.service';
-import { RegistrationService } from './registration.service';
-import { PublicVerificationRateLimitService } from './public-verification-rate-limit.service';
+import { MfaDisableDto, MfaLoginVerifyDto, MfaTotpCodeDto } from './dto/mfa-totp.dto';
 import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { RegistrationConfirmDto } from './dto/registration-confirm.dto';
@@ -25,9 +29,10 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshOriginGuard } from './guards/refresh-origin.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
-import { User } from '../users/entities/user.entity';
-import { SecurityConfigService } from '../common/security/security-config.service';
-import { JwtTokens, AuthResponse } from '../common/types/jwt-tokens.type';
+import { MfaService } from './mfa.service';
+import { PasswordResetService } from './password-reset.service';
+import { PublicVerificationRateLimitService } from './public-verification-rate-limit.service';
+import { RegistrationService } from './registration.service';
 
 type RequestWithSafeCookies = Omit<Request, 'cookies'> & {
   cookies?: Record<string, unknown>;
@@ -41,6 +46,7 @@ export class AuthController {
     private readonly passwordResetService: PasswordResetService,
     private readonly publicVerificationRateLimitService: PublicVerificationRateLimitService,
     private readonly securityConfig: SecurityConfigService,
+    private readonly mfaService: MfaService,
   ) {}
 
   private getRefreshCookieOptions(maxAge?: number): CookieOptions {
@@ -59,7 +65,6 @@ export class AuthController {
       typeof tokens.refresh_token_expires === 'number'
         ? Math.max(tokens.refresh_token_expires * 1000 - Date.now(), 0)
         : undefined;
-
     res.cookie(
       'refresh_token',
       tokens.refresh_token,
@@ -96,38 +101,21 @@ export class AuthController {
   }
 
   private isJwtTokens(value: unknown): value is JwtTokens {
-    if (typeof value !== 'object' || value === null) {
-      return false;
-    }
-
+    if (typeof value !== 'object' || value === null) return false;
     const tokens = value as Partial<Record<keyof JwtTokens, unknown>>;
-
-    const isAccessTokenValid = typeof tokens.access_token === 'string';
-    const isRefreshTokenValid = typeof tokens.refresh_token === 'string';
-
-    const isAccessTokenExpiresValid =
-      typeof tokens.access_token_expires === 'number' ||
-      tokens.access_token_expires === null;
-
-    const isRefreshTokenExpiresValid =
-      typeof tokens.refresh_token_expires === 'number' ||
-      tokens.refresh_token_expires === null;
-
     return (
-      isAccessTokenValid &&
-      isRefreshTokenValid &&
-      isAccessTokenExpiresValid &&
-      isRefreshTokenExpiresValid
+      typeof tokens.access_token === 'string' &&
+      typeof tokens.refresh_token === 'string' &&
+      (typeof tokens.access_token_expires === 'number' ||
+        tokens.access_token_expires === null) &&
+      (typeof tokens.refresh_token_expires === 'number' ||
+        tokens.refresh_token_expires === null)
     );
   }
 
   private handleAuthResult(res: Response, result: unknown) {
-    if (!this.isJwtTokens(result)) {
-      return result;
-    }
-
+    if (!this.isJwtTokens(result)) return result;
     this.setRefreshCookie(res, result);
-
     return this.getAuthResponse(result);
   }
 
@@ -145,12 +133,71 @@ export class AuthController {
       };
     }
 
+    if (user.role === Role.ADMIN && user.mfa_totp_enabled) {
+      this.clearRefreshCookie(res);
+      return {
+        mfa_required: true,
+        challenge: await this.mfaService.createLoginChallenge(user.id),
+      };
+    }
+
     const tokens = await this.authService.loginNewSession(
       user.id,
       this.getSessionContext(req),
     );
-
     return this.handleAuthResult(res, tokens);
+  }
+
+  @Post('mfa/totp/login')
+  async verifyMfaLogin(
+    @Body() dto: MfaLoginVerifyDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const tokens = await this.mfaService.completeLogin(
+      dto.challenge,
+      dto.code,
+      this.getSessionContext(req),
+    );
+    return this.handleAuthResult(res, tokens);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Get('mfa/totp/status')
+  getMfaStatus(@Req() req: Request) {
+    return this.mfaService.getStatus(+(req.user as User).id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('mfa/totp/setup')
+  beginMfaSetup(@Req() req: Request) {
+    return this.mfaService.beginSetup(+(req.user as User).id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('mfa/totp/enable')
+  async enableMfa(@Body() dto: MfaTotpCodeDto, @Req() req: Request) {
+    const user = req.user as User;
+    const sessionId = this.authService.getSessionIdFromToken(
+      req.headers.authorization,
+    );
+    if (!sessionId) return this.authService.validateSession(+user.id, undefined, 'ACCESS' as never);
+    return this.mfaService.enable(+user.id, dto.code, sessionId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('mfa/totp/disable')
+  async disableMfa(@Body() dto: MfaDisableDto, @Req() req: Request) {
+    const user = req.user as User;
+    const sessionId = this.authService.getSessionIdFromToken(
+      req.headers.authorization,
+    );
+    if (!sessionId) return this.authService.validateSession(+user.id, undefined, 'ACCESS' as never);
+    return this.mfaService.disable(+user.id, dto.password, dto.code, sessionId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -162,15 +209,9 @@ export class AuthController {
   @Post('logout')
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const user = req.user as User;
-    const accessToken = req.headers.authorization;
-
-    await this.authService.logout(+user.id, accessToken);
-
+    await this.authService.logout(+user.id, req.headers.authorization);
     this.clearRefreshCookie(res);
-
-    return {
-      message: 'Logged out successfully.',
-    };
+    return { message: 'Logged out successfully.' };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -180,7 +221,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    await this.authService.logoutAll(+user.id, req.headers.authorization);
+    await this.authService.logoutAll(+user.id);
     this.clearRefreshCookie(res);
     return { message: 'Logged out from all sessions successfully.' };
   }
@@ -209,9 +250,7 @@ export class AuthController {
       req.headers.authorization,
     );
     await this.authService.revokeSession(+user.id, sessionId, 'user_revoked');
-    if (currentSessionId === sessionId) {
-      this.clearRefreshCookie(res);
-    }
+    if (currentSessionId === sessionId) this.clearRefreshCookie(res);
     return { message: 'Session revoked successfully.' };
   }
 
@@ -226,7 +265,6 @@ export class AuthController {
       +user.id,
       this.getRefreshToken(req),
     );
-
     return this.handleAuthResult(res, tokens);
   }
 
@@ -235,9 +273,7 @@ export class AuthController {
     @Req() req: Request,
     @Body() dto: RegistrationRequestDto,
   ) {
-    await this.publicVerificationRateLimitService.consume(
-      this.getRequestIp(req),
-    );
+    await this.publicVerificationRateLimitService.consume(this.getRequestIp(req));
     return this.registrationService.request(dto.email, dto.password);
   }
 
@@ -246,9 +282,7 @@ export class AuthController {
     @Req() req: Request,
     @Body() dto: RegistrationResendDto,
   ) {
-    await this.publicVerificationRateLimitService.consume(
-      this.getRequestIp(req),
-    );
+    await this.publicVerificationRateLimitService.consume(this.getRequestIp(req));
     return this.registrationService.resend(dto.email);
   }
 
@@ -258,7 +292,6 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.registrationService.confirm(dto.code, dto.email);
-
     return this.handleAuthResult(res, result);
   }
 
@@ -267,9 +300,7 @@ export class AuthController {
     @Req() req: Request,
     @Body() dto: PasswordResetRequestDto,
   ) {
-    await this.publicVerificationRateLimitService.consume(
-      this.getRequestIp(req),
-    );
+    await this.publicVerificationRateLimitService.consume(this.getRequestIp(req));
     return this.passwordResetService.request(dto.email);
   }
 
@@ -283,7 +314,6 @@ export class AuthController {
       dto.new_password,
       dto.email,
     );
-
     return this.handleAuthResult(res, result);
   }
 }
