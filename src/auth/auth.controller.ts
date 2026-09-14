@@ -20,7 +20,11 @@ import { Role } from '../common/types/role.enum';
 import { AuthResponse, JwtTokens } from '../common/types/jwt-tokens.type';
 import { User } from '../users/entities/user.entity';
 import { AuthService } from './auth.service';
-import { MfaDisableDto, MfaLoginVerifyDto, MfaTotpCodeDto } from './dto/mfa-totp.dto';
+import {
+  MfaDisableDto,
+  MfaLoginVerifyDto,
+  MfaTotpCodeDto,
+} from './dto/mfa-totp.dto';
 import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { RegistrationConfirmDto } from './dto/registration-confirm.dto';
