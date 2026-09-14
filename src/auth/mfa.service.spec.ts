@@ -58,6 +58,7 @@ const createService = () => {
     updateUser,
     redisGet,
     redisGetDel,
+    redisSet,
     redisDel,
     deleteIfValueMatches,
     incrWithExpire,
@@ -189,12 +190,59 @@ describe('MfaService security controls', () => {
     );
   });
 
-  it('creates a session only after atomically consuming the MFA challenge', async () => {
+  it('rejects a TOTP code replayed through a different valid challenge', async () => {
     const {
       service,
       findOne,
       redisGet,
       redisGetDel,
+      redisSet,
+      incrWithExpire,
+      loginNewSession,
+      auditRecord,
+    } = createService();
+    const { encryptedSecret, code } = getEncryptedSecretAndCurrentCode(service);
+    redisGet.mockResolvedValue('7');
+    redisGetDel.mockResolvedValue('7');
+    redisSet.mockResolvedValue(null);
+    incrWithExpire.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+    findOne.mockResolvedValue({
+      id: 7,
+      mfa_totp_secret: encryptedSecret,
+      mfa_totp_enabled: true,
+      is_blocked: false,
+    });
+
+    await expect(
+      service.completeLogin('different-challenge', code, {
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-agent',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(redisGetDel).toHaveBeenCalledTimes(1);
+    expect(redisSet).toHaveBeenCalledWith(
+      expect.stringMatching(/^mfa:totp:used:7:/),
+      '1',
+      { EX: 120, NX: true },
+    );
+    expect(loginNewSession).not.toHaveBeenCalled();
+    expect(auditRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ADMIN_MFA_TOTP_REPLAYED',
+        success: false,
+        userId: 7,
+      }),
+    );
+  });
+
+  it('creates a session only after atomically consuming the MFA challenge and TOTP code', async () => {
+    const {
+      service,
+      findOne,
+      redisGet,
+      redisGetDel,
+      redisSet,
       redisDel,
       incrWithExpire,
       loginNewSession,
@@ -203,6 +251,7 @@ describe('MfaService security controls', () => {
     const { encryptedSecret, code } = getEncryptedSecretAndCurrentCode(service);
     redisGet.mockResolvedValue('7');
     redisGetDel.mockResolvedValue('7');
+    redisSet.mockResolvedValue('OK');
     redisDel.mockResolvedValue(1);
     incrWithExpire.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
     findOne.mockResolvedValue({
@@ -222,6 +271,11 @@ describe('MfaService security controls', () => {
     ).resolves.toEqual({ access_token: 'access-token' });
 
     expect(redisGetDel).toHaveBeenCalledTimes(1);
+    expect(redisSet).toHaveBeenCalledWith(
+      expect.stringMatching(/^mfa:totp:used:7:/),
+      '1',
+      { EX: 120, NX: true },
+    );
     expect(loginNewSession).toHaveBeenCalledWith(7, {
       ipAddress: '127.0.0.1',
       userAgent: 'test-agent',
