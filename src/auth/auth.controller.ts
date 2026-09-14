@@ -22,8 +22,8 @@ import { User } from '../users/entities/user.entity';
 import { AuthService } from './auth.service';
 import {
   MfaDisableDto,
+  MfaEnableDto,
   MfaLoginVerifyDto,
-  MfaTotpCodeDto,
 } from './dto/mfa-totp.dto';
 import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
@@ -192,10 +192,11 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Post('mfa/totp/enable')
-  enableMfa(@Body() dto: MfaTotpCodeDto, @Req() req: Request) {
+  enableMfa(@Body() dto: MfaEnableDto, @Req() req: Request) {
     const user = req.user as User;
     return this.mfaService.enable(
       +user.id,
+      dto.password,
       dto.code,
       this.getCurrentSessionId(req),
     );
