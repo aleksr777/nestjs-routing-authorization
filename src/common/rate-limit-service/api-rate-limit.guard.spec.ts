@@ -57,17 +57,21 @@ describe('ApiRateLimitGuard', () => {
     incrWithExpire.mockRejectedValueOnce(new Error('Redis unavailable'));
     const guard = new ApiRateLimitGuard(redis, env, errors);
 
-    await expect(guard.canActivate(createContext('/api/users/me'))).resolves.toBe(true);
+    await expect(
+      guard.canActivate(createContext('/api/users/me')),
+    ).resolves.toBe(true);
     expect(warnSpy).toHaveBeenCalled();
   });
 
   it('fails closed for authentication throttling when Redis is unavailable', async () => {
-    incrWithExpire.mockResolvedValueOnce(1).mockRejectedValueOnce(new Error('Redis unavailable'));
+    incrWithExpire
+      .mockResolvedValueOnce(1)
+      .mockRejectedValueOnce(new Error('Redis unavailable'));
     const guard = new ApiRateLimitGuard(redis, env, errors);
 
-    await expect(guard.canActivate(createContext('/api/auth/login'))).rejects.toBeInstanceOf(
-      ServiceUnavailableException,
-    );
+    await expect(
+      guard.canActivate(createContext('/api/auth/login')),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(errorSpy).toHaveBeenCalled();
   });
 
@@ -88,7 +92,9 @@ describe('ApiRateLimitGuard', () => {
   it('bypasses rate limiting for health endpoints', async () => {
     const guard = new ApiRateLimitGuard(redis, env, errors);
 
-    await expect(guard.canActivate(createContext('/api/health/ready'))).resolves.toBe(true);
+    await expect(
+      guard.canActivate(createContext('/api/health/ready')),
+    ).resolves.toBe(true);
     expect(incrWithExpire).not.toHaveBeenCalled();
   });
 });
