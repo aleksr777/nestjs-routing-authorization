@@ -245,7 +245,7 @@ export class RegistrationService {
         code,
       );
       if (!data || data.email.trim().toLowerCase() !== attemptSubject) {
-        return this.rejectInvalidCode(attemptSubject);
+        await this.rejectInvalidCode(attemptSubject);
       }
 
       this.mailService.validateNotServiceEmail(data.email);
