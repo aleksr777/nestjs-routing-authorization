@@ -41,15 +41,7 @@ jobs:
         run: |
           set +e
           echo '=== KNIP_BEGIN ==='
-          npx --yes knip@5 --reporter compact \
-            --entry 'src/main.ts' \
-            --entry 'data-source.ts' \
-            --entry 'src/migrations/*.ts' \
-            --entry 'src/**/*.spec.ts' \
-            --entry 'test/**/*.ts' \
-            --project 'src/**/*.ts' \
-            --project 'test/**/*.ts' \
-            --project 'data-source.ts'
+          npx --yes knip@5 -c knip.audit.json --reporter compact
           echo "KNIP_EXIT=$?"
           echo '=== KNIP_END ==='
           exit 0
