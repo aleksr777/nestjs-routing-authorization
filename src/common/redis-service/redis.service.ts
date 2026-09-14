@@ -1,8 +1,14 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { createClient, RedisClientType } from 'redis';
 import type { SetOptions } from '@redis/client/dist/lib/commands/SET';
-import { EnvService } from '../../common/env-service/env.service';
-import { ErrorsService } from '../../common/errors-service/errors.service';
+import { EnvService } from '../env-service/env.service';
+import { ErrorsService } from '../errors-service/errors.service';
+import { SecurityConfigService } from '../security/security-config.service';
 
 const INCR_WITH_EXPIRE_SCRIPT = `
 local value = redis.call('INCR', KEYS[1])
@@ -15,60 +21,66 @@ return value
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
-  private client: RedisClientType;
-  private isShuttingDown = false; // Flag to prevent re-closing
+  private readonly logger = new Logger(RedisService.name);
+  private readonly client: RedisClientType;
+  private isShuttingDown = false;
 
   constructor(
-    private readonly envService: EnvService,
+    envService: EnvService,
+    securityConfig: SecurityConfigService,
     private readonly errorsService: ErrorsService,
   ) {
     const host = envService.get('REDIS_HOST');
     const port = envService.get('REDIS_PORT', 'number');
+    const username = securityConfig.getRedisUsername();
+    const password = securityConfig.getRedisPassword();
+    const protocol = securityConfig.getRedisTls() ? 'rediss' : 'redis';
+    const credentials = password
+      ? `${username ? encodeURIComponent(username) : ''}:${encodeURIComponent(password)}@`
+      : '';
 
     this.client = createClient({
-      url: `redis://${host}:${port}`,
-    });
-
-    // Process termination handling
-    const shutdownSignals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
-    shutdownSignals.forEach((signal) => {
-      process.on(signal, () => {
-        if (this.isShuttingDown) return;
-        this.isShuttingDown = true;
-        this.client
-          .quit()
-          .then(() => {
-            console.log(`Redis connection closed on ${signal}`);
-            process.exit(0);
-          })
-          .catch(() => {
-            console.error('Redis error (shutdownSignals)');
-            process.exit(1);
-          });
-      });
+      url: `${protocol}://${credentials}${host}:${port}`,
+      socket: {
+        connectTimeout: securityConfig.getRedisConnectTimeoutMs(),
+        reconnectStrategy: (retries) => Math.min(100 * 2 ** retries, 3_000),
+      },
     });
   }
 
   async onModuleInit(): Promise<void> {
     this.client.on('error', (err: unknown) => {
-      this.errorsService.default(err, 'Redis error (onModuleInit).');
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Redis connection error: ${message}`);
+    });
+    this.client.on('reconnecting', () => {
+      this.logger.warn('Redis reconnecting.');
     });
     await this.client.connect();
   }
 
   async onModuleDestroy(): Promise<void> {
-    if (this.isShuttingDown) return;
+    if (this.isShuttingDown || !this.client.isOpen) return;
     this.isShuttingDown = true;
     try {
       await this.client.quit();
-      console.log('Redis connection closed gracefully');
-    } catch (err) {
-      this.errorsService.default(err, 'Redis error (onModuleDestroy).');
+      this.logger.log('Redis connection closed gracefully.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Redis shutdown error: ${message}`);
     }
   }
 
   getClient(): RedisClientType {
     return this.client;
+  }
+
+  async ping(): Promise<boolean> {
+    try {
+      return (await this.client.ping()) === 'PONG';
+    } catch {
+      return false;
+    }
   }
 
   async set(
