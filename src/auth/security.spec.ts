@@ -1,6 +1,6 @@
 import { ExecutionContext, HttpException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { EnvService } from '../common/env-service/env.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { HashService } from '../common/hash-service/hash.service';
@@ -235,13 +235,49 @@ describe('authentication security primitives', () => {
   });
 
   describe('PasswordResetService', () => {
-    it('atomically consumes the reset code, revokes all sessions, and requires a fresh login', async () => {
-      const findOne = jest.fn().mockResolvedValue({
+    const createPasswordResetDataSource = (consumeUpdate = true) => {
+      const managerFindOne = jest.fn().mockResolvedValue({
         id: 7,
         email: 'admin@example.com',
       });
-      const update = jest.fn().mockResolvedValue({ affected: 1 });
-      const users = { findOne, update } as unknown as Repository<User>;
+      const managerUpdate = jest.fn().mockResolvedValue({
+        affected: consumeUpdate ? 1 : 0,
+      });
+      const queryRunner = {
+        isTransactionActive: false,
+        connect: jest.fn().mockResolvedValue(undefined),
+        startTransaction: jest.fn(function (this: {
+          isTransactionActive: boolean;
+        }) {
+          this.isTransactionActive = true;
+          return Promise.resolve();
+        }),
+        commitTransaction: jest.fn(function (this: {
+          isTransactionActive: boolean;
+        }) {
+          this.isTransactionActive = false;
+          return Promise.resolve();
+        }),
+        rollbackTransaction: jest.fn(function (this: {
+          isTransactionActive: boolean;
+        }) {
+          this.isTransactionActive = false;
+          return Promise.resolve();
+        }),
+        release: jest.fn().mockResolvedValue(undefined),
+        manager: {
+          findOne: managerFindOne,
+          update: managerUpdate,
+        },
+      };
+      const dataSource = {
+        createQueryRunner: jest.fn(() => queryRunner),
+      } as unknown as DataSource;
+      return { dataSource, queryRunner, managerUpdate };
+    };
+
+    it('atomically changes the password, revokes all sessions, and requires a fresh login', async () => {
+      const users = {} as Repository<User>;
       const revokeAllSessions = jest.fn().mockResolvedValue(undefined);
       const login = jest.fn();
       const authService = {
@@ -271,6 +307,8 @@ describe('authentication security primitives', () => {
       const redis = createRedisMock();
       redis.ttl.mockResolvedValue(0);
       redis.del.mockResolvedValue(1);
+      const { dataSource, queryRunner, managerUpdate } =
+        createPasswordResetDataSource();
       const service = new PasswordResetService(
         users,
         authService,
@@ -280,6 +318,7 @@ describe('authentication security primitives', () => {
         mailService,
         envService,
         redis as unknown as RedisService,
+        dataSource,
       );
 
       await expect(
@@ -289,21 +328,22 @@ describe('authentication security primitives', () => {
       });
 
       expect(consumeResetCode).toHaveBeenCalledWith(7, '123456');
-      expect(update).toHaveBeenCalledWith(
+      expect(managerUpdate).toHaveBeenCalledWith(
+        User,
         { id: 7 },
         { password: 'hashed-password' },
       );
-      expect(revokeAllSessions).toHaveBeenCalledWith(7, 'password_reset');
+      expect(revokeAllSessions).toHaveBeenCalledWith(
+        7,
+        'password_reset',
+        queryRunner.manager,
+      );
+      expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
       expect(login).not.toHaveBeenCalled();
     });
 
     it('rejects a reset code that was consumed by another request', async () => {
-      const findOne = jest.fn().mockResolvedValue({
-        id: 7,
-        email: 'admin@example.com',
-      });
-      const update = jest.fn();
-      const users = { findOne, update } as unknown as Repository<User>;
+      const users = {} as Repository<User>;
       const authService = {
         revokeAllSessions: jest.fn(),
       } as unknown as AuthService;
@@ -325,6 +365,8 @@ describe('authentication security primitives', () => {
       });
       const redis = createRedisMock();
       redis.ttl.mockResolvedValue(0);
+      const { dataSource, queryRunner, managerUpdate } =
+        createPasswordResetDataSource();
       const service = new PasswordResetService(
         users,
         authService,
@@ -334,12 +376,14 @@ describe('authentication security primitives', () => {
         {} as MailService,
         envService,
         redis as unknown as RedisService,
+        dataSource,
       );
 
       await expect(
         service.confirm('123456', 'new-password-123', 'admin@example.com'),
       ).rejects.toMatchObject({ status: 401 });
-      expect(update).not.toHaveBeenCalled();
+      expect(managerUpdate).not.toHaveBeenCalled();
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
       expect(registerVerificationFailure).toHaveBeenCalledWith(
         expect.anything(),
         'admin@example.com',
