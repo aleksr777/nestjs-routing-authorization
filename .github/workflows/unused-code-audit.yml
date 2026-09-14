@@ -1,0 +1,47 @@
+name: Temporary unused-code audit
+
+on:
+  push:
+    branches:
+      - security-hardening-suite
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript unused-symbol audit
+        shell: bash
+        run: |
+          set +e
+          echo '=== TSC_UNUSED_BEGIN ==='
+          npx tsc --noEmit --noUnusedLocals --noUnusedParameters --pretty false
+          echo "TSC_UNUSED_EXIT=$?"
+          echo '=== TSC_UNUSED_END ==='
+          exit 0
+
+      - name: Knip unused-code audit
+        shell: bash
+        run: |
+          set +e
+          echo '=== KNIP_BEGIN ==='
+          npx --yes knip@5 --reporter compact
+          echo "KNIP_EXIT=$?"
+          echo '=== KNIP_END ==='
+          exit 0
