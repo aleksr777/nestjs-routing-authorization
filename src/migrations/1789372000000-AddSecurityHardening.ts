@@ -40,8 +40,6 @@ export class AddSecurityHardening1789372000000 implements MigrationInterface {
     await queryRunner.query(
       'ALTER TABLE "user" DROP COLUMN "mfa_totp_enabled"',
     );
-    await queryRunner.query(
-      'ALTER TABLE "user" DROP COLUMN "mfa_totp_secret"',
-    );
+    await queryRunner.query('ALTER TABLE "user" DROP COLUMN "mfa_totp_secret"');
   }
 }
