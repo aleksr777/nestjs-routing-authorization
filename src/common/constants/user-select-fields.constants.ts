@@ -1,21 +1,21 @@
 export const ID = 'id';
 export const NICKNAME = 'nickname';
 export const EMAIL = 'email';
-export const PHONE_NUMBER = 'phone_number';
+const PHONE_NUMBER = 'phone_number';
 
-export const NAME = 'name';
-export const AGE = 'age';
+const NAME = 'name';
+const AGE = 'age';
 
 export const ROLE = 'role';
 export const PASSWORD = 'password';
 
-export const LAST_ACTIVITY_AT = 'last_activity_at';
-export const CREATED_AT = 'created_at';
-export const UPDATED_AT = 'updated_at';
+const LAST_ACTIVITY_AT = 'last_activity_at';
+const CREATED_AT = 'created_at';
+const UPDATED_AT = 'updated_at';
 
 export const IS_BLOCKED = 'is_blocked';
-export const BLOCKED_AT = 'blocked_at';
-export const BLOCKED_BY = 'blocked_by';
+const BLOCKED_AT = 'blocked_at';
+const BLOCKED_BY = 'blocked_by';
 export const BLOCKED_REASON = 'blocked_reason';
 
 export const USER_SEARCHABLE_FIELDS = [
@@ -25,7 +25,7 @@ export const USER_SEARCHABLE_FIELDS = [
   PHONE_NUMBER,
 ] as const;
 
-export const IS_BLOCKED_FIELDS = [
+const IS_BLOCKED_FIELDS = [
   IS_BLOCKED,
   BLOCKED_AT,
   BLOCKED_BY,
