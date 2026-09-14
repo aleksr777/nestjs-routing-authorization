@@ -1,7 +1,6 @@
 export enum ErrMsg {
   INTERNAL_SERVER_ERROR = 'Internal server error.',
 
-  ACCESS_TOKEN_IS_BLACKLISTED = 'Access token is blacklisted.',
   INVALID_EMAIL_OR_PASSWORD = 'Invalid email or password.',
 
   TOKEN_NOT_DEFINED = 'Token is not defined.',
@@ -33,13 +32,10 @@ export enum ErrMsg {
   PAYLOAD_NOT_DEFINED = 'Payload is not defined',
 
   USER_NOT_FOUND = 'User was not found in the database.',
-  ADMIN_NOT_FOUND = 'Admin was not found in the database.',
 
   CONFLICT_USER_EXISTS = 'A user with such unique data already exists in the database.',
 
   INSUFFICIENT_ACCESS_RIGHTS = 'The current user has insufficient access rights.',
-
-  AUTHORIZED = 'User is not authorized.',
 
   ACCOUNT_BLOCKED = 'Account has been blocked.',
   ACCOUNT_ALREADY_BLOCKED = 'This account has already been blocked.',
