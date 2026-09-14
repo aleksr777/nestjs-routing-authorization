@@ -10,22 +10,37 @@ import {
   UseGuards,
   ParseIntPipe,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
-import { Role } from '../common/types/role.enum';
-import { GetUsersQueryDto } from './dto/get-users-query.dto';
-import { BlockUserDto } from './dto/block-user.dto';
-import { AdminPasswordDto } from './dto/admin-password.dto';
-import { AdminService } from './admin.service';
 import { Request } from 'express';
+import { SecurityAuditService } from '../audit/security-audit.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Role } from '../common/types/role.enum';
 import { User } from '../users/entities/user.entity';
+import { AdminService } from './admin.service';
+import { AdminPasswordDto } from './dto/admin-password.dto';
+import { BlockUserDto } from './dto/block-user.dto';
+import { GetUsersQueryDto } from './dto/get-users-query.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly audit: SecurityAuditService,
+  ) {}
+
+  private record(req: Request, event: string, targetUserId: number) {
+    const admin = req.user as User;
+    void this.audit.record({
+      event,
+      userId: +admin.id,
+      ipAddress: req.ip || req.socket.remoteAddress || null,
+      userAgent: req.get('user-agent') ?? null,
+      details: { target_user_id: targetUserId },
+    });
+  }
 
   @Get('users/find')
   getUsers(@Query() q: GetUsersQueryDto) {
@@ -50,6 +65,7 @@ export class AdminController {
   ) {
     const admin = req.user as User;
     await this.adminService.deleteUserById(+admin.id, +id, dto.password);
+    this.record(req, 'ADMIN_USER_DELETED', +id);
   }
 
   @Patch('users/block/:id')
@@ -59,20 +75,22 @@ export class AdminController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     const admin = req.user as User;
-    const adminId = +admin.id;
-    const userId = +id;
-    const blocked_reason = dto.blocked_reason ? dto.blocked_reason : '';
+    const blockedReason = dto.blocked_reason ? dto.blocked_reason : '';
     await this.adminService.blockUserById(
-      adminId,
-      userId,
-      blocked_reason,
+      +admin.id,
+      +id,
+      blockedReason,
       dto.password,
     );
+    this.record(req, 'ADMIN_USER_BLOCKED', +id);
   }
 
   @Patch('users/unblock/:id')
-  async unblockUser(@Param('id', ParseIntPipe) id: number) {
-    const userId = +id;
-    await this.adminService.unblockUserById(userId);
+  async unblockUser(
+    @Req() req: Request,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    await this.adminService.unblockUserById(+id);
+    this.record(req, 'ADMIN_USER_UNBLOCKED', +id);
   }
 }
