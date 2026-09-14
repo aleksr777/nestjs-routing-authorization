@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  HttpException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { EnvService } from '../env-service/env.service';
 import { ErrorsService } from '../errors-service/errors.service';
@@ -13,6 +19,7 @@ const AUTH_RATE_LIMIT_MESSAGE =
 
 @Injectable()
 export class ApiRateLimitGuard implements CanActivate {
+  private readonly logger = new Logger(ApiRateLimitGuard.name);
   private readonly apiMaxRequests: number;
   private readonly apiWindowSeconds: number;
   private readonly authMaxRequests: number;
@@ -61,12 +68,27 @@ export class ApiRateLimitGuard implements CanActivate {
     this.errorsService.tooManyRequests(message, retryAfter);
   }
 
+  private async consumeSafely(
+    key: string,
+    maxRequests: number,
+    windowSeconds: number,
+    message: string,
+  ): Promise<void> {
+    try {
+      await this.consume(key, maxRequests, windowSeconds, message);
+    } catch (err: unknown) {
+      if (err instanceof HttpException && err.getStatus() === 429) throw err;
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`General API rate limiting unavailable: ${errorMessage}`);
+    }
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     if (request.method === 'OPTIONS' || this.isHealthRequest(request)) return true;
 
     const ip = this.getIp(request);
-    await this.consume(
+    await this.consumeSafely(
       `${API_RATE_LIMIT_PREFIX}${ip}`,
       this.apiMaxRequests,
       this.apiWindowSeconds,
@@ -74,7 +96,7 @@ export class ApiRateLimitGuard implements CanActivate {
     );
 
     if (this.isAuthRequest(request)) {
-      await this.consume(
+      await this.consumeSafely(
         `${AUTH_RATE_LIMIT_PREFIX}${ip}`,
         this.authMaxRequests,
         this.authWindowSeconds,
