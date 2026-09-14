@@ -1,7 +1,6 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Not } from 'typeorm';
-import { TokensService } from '../auth/tokens.service';
+import { DataSource, Not, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
@@ -18,7 +17,6 @@ import {
   SPECIAL_UPDATE_FIELDS,
   USER_UNIQUE_FIELDS,
 } from '../common/constants/user-select-fields.constants';
-import { TokenType } from '../common/types/token-type.type';
 import { specialUpdateFields } from '../common/types/special-update-fields.type';
 import { userUniqueFields } from '../common/types/user-unique-fields.type';
 import { Role } from '../common/types/role.enum';
@@ -31,7 +29,6 @@ export class UsersService {
     private readonly dataSource: DataSource,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    private readonly tokensService: TokensService,
     private readonly authService: AuthService,
     private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
@@ -52,14 +49,7 @@ export class UsersService {
     }
   }
 
-  async deleteCurrentUser(
-    userId: number,
-    password: string,
-    access_token: string | undefined,
-  ) {
-    if (!access_token) {
-      this.errorsService.tokenNotDefined(TokenType.ACCESS);
-    }
+  async deleteCurrentUser(userId: number, password: string) {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
@@ -79,10 +69,6 @@ export class UsersService {
         this.errorsService.badRequest(ErrMsg.CURRENT_PASSWORD_IS_INCORRECT);
       }
       await qr.manager.delete(User, { id: userId });
-      await this.tokensService.addJwtTokenToBlacklist(
-        access_token,
-        TokenType.ACCESS,
-      );
       await qr.commitTransaction();
     } catch (err: unknown) {
       await qr.rollbackTransaction();
