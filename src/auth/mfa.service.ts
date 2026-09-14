@@ -272,10 +272,7 @@ export class MfaService {
 
     const userId = Number.parseInt(userIdText, 10);
     const [challengeAttempts, userAttempts] = await Promise.all([
-      this.redis.incrWithExpire(
-        this.attemptsKey(challenge),
-        LOGIN_TTL_SECONDS,
-      ),
+      this.redis.incrWithExpire(this.attemptsKey(challenge), LOGIN_TTL_SECONDS),
       this.redis.incrWithExpire(
         this.userAttemptsKey(userId),
         LOGIN_TTL_SECONDS,
