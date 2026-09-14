@@ -335,6 +335,7 @@ export class AuthController {
       dto.new_password,
       dto.email,
     );
-    return this.handleAuthResult(res, result);
+    this.clearRefreshCookie(res);
+    return result;
   }
 }
