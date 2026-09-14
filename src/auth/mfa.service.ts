@@ -176,7 +176,13 @@ export class MfaService {
     return { secret, otpauth_uri: uri, expires_in: SETUP_TTL_SECONDS };
   }
 
-  async enable(userId: number, code: string, currentSessionId: string) {
+  async enable(
+    userId: number,
+    password: string,
+    code: string,
+    currentSessionId: string,
+  ) {
+    await this.authService.verifyUserPassword(userId, password);
     const pending = await this.redis.get(`${SETUP_PREFIX}${userId}`);
     if (!pending) throw new UnauthorizedException('MFA setup has expired.');
     const secret = this.decrypt(pending);
