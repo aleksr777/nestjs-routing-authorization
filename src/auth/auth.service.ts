@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { HttpException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { DataSource, In, IsNull, MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { SessionTokenService } from './session-token.service';
@@ -73,7 +77,10 @@ export class AuthService {
           'mfa_totp_enabled',
         ],
       });
-      const isPasswordValid = await this.hashService.compare(password, user.password);
+      const isPasswordValid = await this.hashService.compare(
+        password,
+        user.password,
+      );
       this.errorsService.invalidEmailOrPassword(null, isPasswordValid);
       return user;
     } catch (err: unknown) {
@@ -139,7 +146,9 @@ export class AuthService {
       this.securityConfig.getMaxActiveSessions() - 1,
       0,
     );
-    const overflow = active.slice(keepBeforeCreate).map((session) => session.id);
+    const overflow = active
+      .slice(keepBeforeCreate)
+      .map((session) => session.id);
     if (overflow.length === 0) return;
 
     const now = new Date();
@@ -307,7 +316,8 @@ export class AuthService {
     });
     const activeSessions = sessions.filter(
       (session) =>
-        session.revoked_at === null && session.expires_at.getTime() > Date.now(),
+        session.revoked_at === null &&
+        session.expires_at.getTime() > Date.now(),
     );
 
     let liveActivity = new Map<string, Date>();
@@ -323,7 +333,9 @@ export class AuthService {
     return activeSessions.map((session) => {
       const pending = liveActivity.get(session.id);
       const lastUsedAt =
-        pending && pending > session.last_used_at ? pending : session.last_used_at;
+        pending && pending > session.last_used_at
+          ? pending
+          : session.last_used_at;
       return {
         id: session.id,
         ip_address: session.ip_address,
