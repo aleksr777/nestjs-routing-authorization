@@ -192,7 +192,7 @@ export class PasswordResetService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!user || user.email.trim().toLowerCase() !== attemptSubject) {
-        return this.rejectInvalidCode(attemptSubject);
+        await this.rejectInvalidCode(attemptSubject);
       }
 
       const consumedUserId = await this.tokensService.consumeResetCode(
@@ -200,7 +200,7 @@ export class PasswordResetService {
         code,
       );
       if (consumedUserId !== userId) {
-        return this.rejectInvalidCode(attemptSubject);
+        await this.rejectInvalidCode(attemptSubject);
       }
 
       const hashedPassword = await this.hashService.hash(newPassword);
