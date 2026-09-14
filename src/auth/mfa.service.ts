@@ -22,12 +22,14 @@ const SETUP_PREFIX = 'mfa:totp:setup:';
 const LOGIN_PREFIX = 'mfa:totp:login:';
 const LOGIN_ATTEMPTS_PREFIX = 'mfa:totp:attempts:';
 const USER_LOGIN_ATTEMPTS_PREFIX = 'mfa:totp:user-attempts:';
+const USED_TOTP_PREFIX = 'mfa:totp:used:';
 const SETUP_TTL_SECONDS = 600;
 const LOGIN_TTL_SECONDS = 300;
 const MAX_LOGIN_ATTEMPTS = 5;
 const MAX_USER_LOGIN_ATTEMPTS = 10;
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
+const USED_TOTP_TTL_SECONDS = TOTP_PERIOD_SECONDS * 4;
 
 @Injectable()
 export class MfaService {
@@ -123,20 +125,35 @@ export class MfaService {
     return (binary % 10 ** TOTP_DIGITS).toString().padStart(TOTP_DIGITS, '0');
   }
 
-  private verifyTotp(secret: string, code: string): boolean {
-    if (!/^\d{6}$/.test(code)) return false;
+  private getValidTotpCounter(secret: string, code: string): number | null {
+    if (!/^\d{6}$/.test(code)) return null;
     const counter = Math.floor(Date.now() / 1000 / TOTP_PERIOD_SECONDS);
     for (const drift of [-1, 0, 1]) {
-      const expected = Buffer.from(this.hotp(secret, counter + drift));
+      const candidateCounter = counter + drift;
+      const expected = Buffer.from(this.hotp(secret, candidateCounter));
       const actual = Buffer.from(code);
       if (
         expected.length === actual.length &&
         timingSafeEqual(expected, actual)
       ) {
-        return true;
+        return candidateCounter;
       }
     }
-    return false;
+    return null;
+  }
+
+  private async reserveTotpUse(
+    userId: number,
+    secret: string,
+    counter: number,
+  ): Promise<boolean> {
+    const secretFingerprint = this.hashService.hashToken(secret);
+    const result = await this.redis.set(
+      `${USED_TOTP_PREFIX}${userId}:${secretFingerprint}:${counter}`,
+      '1',
+      { EX: USED_TOTP_TTL_SECONDS, NX: true },
+    );
+    return result === 'OK';
   }
 
   private challengeKey(challenge: string): string {
@@ -193,13 +210,17 @@ export class MfaService {
     const pending = await this.redis.get(setupKey);
     if (!pending) throw new UnauthorizedException('MFA setup has expired.');
     const secret = this.decrypt(pending);
-    if (!this.verifyTotp(secret, code)) {
+    const counter = this.getValidTotpCounter(secret, code);
+    if (counter === null) {
       throw new UnauthorizedException('Invalid MFA code.');
     }
 
     const consumed = await this.redis.deleteIfValueMatches(setupKey, pending);
     if (!consumed) {
       throw new UnauthorizedException('MFA setup has expired.');
+    }
+    if (!(await this.reserveTotpUse(userId, secret, counter))) {
+      throw new UnauthorizedException('MFA code has already been used.');
     }
 
     await this.users.update(
@@ -234,8 +255,12 @@ export class MfaService {
       return { enabled: false };
     }
     const secret = this.decrypt(user.mfa_totp_secret);
-    if (!this.verifyTotp(secret, code)) {
+    const counter = this.getValidTotpCounter(secret, code);
+    if (counter === null) {
       throw new UnauthorizedException('Invalid MFA code.');
+    }
+    if (!(await this.reserveTotpUse(userId, secret, counter))) {
+      throw new UnauthorizedException('MFA code has already been used.');
     }
 
     await this.users.update(
@@ -313,7 +338,8 @@ export class MfaService {
     }
 
     const secret = this.decrypt(user.mfa_totp_secret);
-    if (!this.verifyTotp(secret, code)) {
+    const counter = this.getValidTotpCounter(secret, code);
+    if (counter === null) {
       void this.audit.record({
         event: 'ADMIN_MFA_LOGIN_FAILED',
         success: false,
@@ -334,6 +360,16 @@ export class MfaService {
         userAgent: context.userAgent,
       });
       throw new UnauthorizedException('MFA challenge has expired.');
+    }
+    if (!(await this.reserveTotpUse(userId, secret, counter))) {
+      void this.audit.record({
+        event: 'ADMIN_MFA_TOTP_REPLAYED',
+        success: false,
+        userId,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
+      throw new UnauthorizedException('MFA code has already been used.');
     }
 
     await Promise.all([
