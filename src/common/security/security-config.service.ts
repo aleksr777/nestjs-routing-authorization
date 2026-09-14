@@ -117,16 +117,6 @@ export class SecurityConfigService {
     );
   }
 
-  getMfaEncryptionKey(): string {
-    const key = this.envService.getOptional('MFA_ENCRYPTION_KEY');
-    if (key) return key;
-    if (!this.isProduction()) return this.envService.get('JWT_REFRESH_SECRET');
-    this.errorsService.default(
-      null,
-      'MFA_ENCRYPTION_KEY is required in production.',
-    );
-  }
-
   isFrontendOrigin(origin: string | undefined): boolean {
     if (!origin) return false;
     try {
@@ -206,12 +196,6 @@ export class SecurityConfigService {
         this.errorsService.default(
           null,
           'DB_TYPEORM_SYNC=true is not allowed in production. Use migrations.',
-        );
-      }
-      if (this.getMfaEncryptionKey().length < MIN_SECRET_LENGTH) {
-        this.errorsService.default(
-          null,
-          `MFA_ENCRYPTION_KEY must be at least ${MIN_SECRET_LENGTH} characters long.`,
         );
       }
     }
