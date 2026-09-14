@@ -31,9 +31,18 @@ export class ApiRateLimitGuard implements CanActivate {
     private readonly errorsService: ErrorsService,
   ) {
     this.apiMaxRequests = this.envService.get('API_IP_MAX_REQUESTS', 'number');
-    this.apiWindowSeconds = this.envService.get('API_RATE_LIMIT_WINDOW', 'number');
-    this.authMaxRequests = this.envService.get('AUTH_IP_MAX_REQUESTS', 'number');
-    this.authWindowSeconds = this.envService.get('AUTH_RATE_LIMIT_WINDOW', 'number');
+    this.apiWindowSeconds = this.envService.get(
+      'API_RATE_LIMIT_WINDOW',
+      'number',
+    );
+    this.authMaxRequests = this.envService.get(
+      'AUTH_IP_MAX_REQUESTS',
+      'number',
+    );
+    this.authWindowSeconds = this.envService.get(
+      'AUTH_RATE_LIMIT_WINDOW',
+      'number',
+    );
   }
 
   private getIp(request: Request) {
@@ -79,13 +88,17 @@ export class ApiRateLimitGuard implements CanActivate {
     } catch (err: unknown) {
       if (err instanceof HttpException && err.getStatus() === 429) throw err;
       const errorMessage = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`General API rate limiting unavailable: ${errorMessage}`);
+      this.logger.warn(
+        `General API rate limiting unavailable: ${errorMessage}`,
+      );
     }
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    if (request.method === 'OPTIONS' || this.isHealthRequest(request)) return true;
+    if (request.method === 'OPTIONS' || this.isHealthRequest(request)) {
+      return true;
+    }
 
     const ip = this.getIp(request);
     await this.consumeSafely(
