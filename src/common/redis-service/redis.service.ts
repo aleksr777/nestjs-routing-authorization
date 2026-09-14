@@ -4,8 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import { createClient, RedisClientType } from 'redis';
-import type { SetOptions } from '@redis/client/dist/lib/commands/SET';
+import { createClient, RedisClientType, type SetOptions } from 'redis';
 import { EnvService } from '../env-service/env.service';
 import { ErrorsService } from '../errors-service/errors.service';
 import { SecurityConfigService } from '../security/security-config.service';
