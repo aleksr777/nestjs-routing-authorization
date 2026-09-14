@@ -102,7 +102,11 @@ export class PasswordChangeService {
         TokenType.CURRENT_USER_PASSWORD_RESET,
       );
     }
-    const tokens = await this.updatePassword(userId, newPassword);
+    const result = await this.updatePassword(
+      userId,
+      newPassword,
+      'password_reset',
+    );
     await this.tokensService
       .deleteCurrentUserPasswordResetCode(code)
       .catch(() => undefined);
@@ -112,7 +116,7 @@ export class PasswordChangeService {
         attemptSubject,
       )
       .catch(() => undefined);
-    return tokens;
+    return result;
   }
 
   async confirm(userId: number, code: string, newPassword: string) {
@@ -130,17 +134,25 @@ export class PasswordChangeService {
       );
       return this.errorsService.invalidToken(null, TokenType.PASSWORD_CHANGE);
     }
-    const tokens = await this.updatePassword(userId, newPassword);
+    const result = await this.updatePassword(
+      userId,
+      newPassword,
+      'password_changed',
+    );
     await this.tokensService
       .deletePasswordChangeCode(code)
       .catch(() => undefined);
     await this.tokensService
       .clearVerificationFailures(TokenType.PASSWORD_CHANGE, attemptSubject)
       .catch(() => undefined);
-    return tokens;
+    return result;
   }
 
-  private async updatePassword(userId: number, newPassword: string) {
+  private async updatePassword(
+    userId: number,
+    newPassword: string,
+    revokeReason: string,
+  ) {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
@@ -154,7 +166,8 @@ export class PasswordChangeService {
       const hash = await this.hashService.hash(newPassword);
       await qr.manager.update(User, { id: userId }, { password: hash });
       await qr.commitTransaction();
-      return this.authService.login(userId);
+      await this.authService.revokeAllSessions(userId, revokeReason);
+      return { message: 'Password changed successfully. Please sign in.' };
     } catch (err) {
       if (qr.isTransactionActive) await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;
