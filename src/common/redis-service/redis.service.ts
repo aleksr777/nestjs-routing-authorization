@@ -134,7 +134,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async deleteIfValueMatches(key: string, expectedValue: string): Promise<boolean> {
+  async deleteIfValueMatches(
+    key: string,
+    expectedValue: string,
+  ): Promise<boolean> {
     try {
       const result = await this.client.eval(DELETE_IF_VALUE_MATCHES_SCRIPT, {
         keys: [key],
