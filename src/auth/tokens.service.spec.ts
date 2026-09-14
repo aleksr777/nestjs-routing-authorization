@@ -77,12 +77,10 @@ describe('TokensService latest-only authenticated verification codes', () => {
 
     await expect(service.getPasswordChangeCode(7)).resolves.toBe('444444');
 
-    expect(set).toHaveBeenNthCalledWith(
-      1,
-      'password-change:444444',
-      '7',
-      { EX: 300, NX: true },
-    );
+    expect(set).toHaveBeenNthCalledWith(1, 'password-change:444444', '7', {
+      EX: 300,
+      NX: true,
+    });
     expect(set).toHaveBeenNthCalledWith(
       2,
       'password-change:active:7',
