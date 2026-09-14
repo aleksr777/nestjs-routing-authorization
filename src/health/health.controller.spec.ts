@@ -1,4 +1,3 @@
-import { ServiceUnavailableException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { RedisService } from '../common/redis-service/redis.service';
 import { HealthController } from './health.controller';
@@ -48,7 +47,7 @@ describe('HealthController', () => {
         database: false,
         redis: true,
       },
-    } satisfies Partial<ServiceUnavailableException>);
+    });
   });
 
   it('returns a degraded readiness result when Redis is unavailable', async () => {
@@ -63,6 +62,6 @@ describe('HealthController', () => {
         database: true,
         redis: false,
       },
-    } satisfies Partial<ServiceUnavailableException>);
+    });
   });
 });
