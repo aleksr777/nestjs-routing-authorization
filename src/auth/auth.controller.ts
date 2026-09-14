@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
@@ -151,6 +152,11 @@ export class AuthController {
 
     return this.handleAuthResult(res, tokens);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('session')
+  @HttpCode(204)
+  validateSession(): void {}
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
