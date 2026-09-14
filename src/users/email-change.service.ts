@@ -164,30 +164,56 @@ export class EmailChangeService {
       this.errorsService.conflict(ErrMsg.CONFLICT_USER_EXISTS);
     }
 
-    const activeKey = this.getActiveCodeKey(userId);
-    const previousCode = await this.redisService.get(activeKey);
-    const redisValue = { user_id: userId, new_email: newEmail };
-    const code = await this.tokensService.getEmailChangeCode(redisValue);
-    await this.redisService.set(activeKey, code, {
-      EX: this.emailChangeTokenTtl,
-    });
-    if (previousCode && previousCode !== code) {
-      await this.redisService.del(`${EMAIL_CHANGE_CODE_PREFIX}${previousCode}`);
-    }
-
-    await this.tokensService.clearVerificationFailures(
+    const attemptSubject = userId.toString();
+    const retryAfter = await this.tokensService.reserveVerificationCodeRequest(
       TokenType.EMAIL_CHANGE,
-      userId.toString(),
+      attemptSubject,
     );
-    const text =
-      `You requested to change your account email to ${newEmail}.\n` +
-      `To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): ${code}\n\nIf it wasn't you, ignore this message.`;
-    const html = `
-      <p>You requested to change your account email to ${newEmail}.</p>
-      <p>To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): 
-      <p style="font-weight: bold; font-size: 30px;">${code}</p>
-      <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
-    await this.mailService.send(newEmail, 'Confirm your new email', text, html);
+    let issuedCode: string | undefined;
+    try {
+      const activeKey = this.getActiveCodeKey(userId);
+      const previousCode = await this.redisService.get(activeKey);
+      const redisValue = { user_id: userId, new_email: newEmail };
+      issuedCode = await this.tokensService.getEmailChangeCode(redisValue);
+      await this.redisService.set(activeKey, issuedCode, {
+        EX: this.emailChangeTokenTtl,
+      });
+      if (previousCode && previousCode !== issuedCode) {
+        await this.redisService.del(
+          `${EMAIL_CHANGE_CODE_PREFIX}${previousCode}`,
+        );
+      }
+
+      const text =
+        `You requested to change your account email to ${newEmail}.\n` +
+        `To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): ${issuedCode}\n\nIf it wasn't you, ignore this message.`;
+      const html = `
+        <p>You requested to change your account email to ${newEmail}.</p>
+        <p>To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): 
+        <p style="font-weight: bold; font-size: 30px;">${issuedCode}</p>
+        <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
+      await this.mailService.send(newEmail, 'Confirm your new email', text, html);
+      await this.tokensService.clearVerificationFailures(
+        TokenType.EMAIL_CHANGE,
+        attemptSubject,
+      );
+      return {
+        message: 'Confirmation code sent to your new email.',
+        retry_after: retryAfter,
+        max_attempts: this.tokensService.getVerificationAttemptLimit(
+          TokenType.EMAIL_CHANGE,
+        ),
+      };
+    } catch (err: unknown) {
+      if (issuedCode) {
+        await this.invalidateActiveCode(userId).catch(() => undefined);
+      }
+      await this.tokensService
+        .releaseVerificationCodeRequest(TokenType.EMAIL_CHANGE, attemptSubject)
+        .catch(() => undefined);
+      if (err instanceof HttpException) throw err;
+      this.errorsService.default(err);
+    }
   }
 
   async confirm(currentUserId: number, dto: EmailChangeConfirmDto) {
