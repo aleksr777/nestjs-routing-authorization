@@ -6,6 +6,7 @@ import { Server } from 'node:http';
 import request from 'supertest';
 import { AuthController } from '../src/auth/auth.controller';
 import { AuthService } from '../src/auth/auth.service';
+import { MfaService } from '../src/auth/mfa.service';
 import { PasswordResetService } from '../src/auth/password-reset.service';
 import { PublicVerificationRateLimitService } from '../src/auth/public-verification-rate-limit.service';
 import { RegistrationService } from '../src/auth/registration.service';
@@ -35,6 +36,14 @@ describe('AuthController (e2e)', () => {
   let app: NestExpressApplication;
 
   const envValues = new Map<string, string>();
+  const parseEnvValue = (
+    value: string,
+    type: 'string' | 'number' | 'boolean',
+  ): string | number | boolean => {
+    if (type === 'boolean') return value === 'true';
+    if (type === 'number') return Number(value);
+    return value;
+  };
   const envService = {
     get: jest.fn(
       (
@@ -43,15 +52,30 @@ describe('AuthController (e2e)', () => {
       ): string | number | boolean => {
         const value = envValues.get(key);
         if (value === undefined) throw new Error(`Missing test env: ${key}`);
-        if (type === 'boolean') return value === 'true';
-        if (type === 'number') return Number(value);
-        return value;
+        return parseEnvValue(value, type);
+      },
+    ),
+    getOptional: jest.fn(
+      (
+        key: string,
+        type: 'string' | 'number' | 'boolean' = 'string',
+      ): string | number | boolean | undefined => {
+        const value = envValues.get(key);
+        return value === undefined ? undefined : parseEnvValue(value, type);
       },
     ),
   } as unknown as EnvService;
 
   const authService = {
     refreshJwtTokens: jest.fn(),
+  };
+  const mfaService = {
+    createLoginChallenge: jest.fn(),
+    completeLogin: jest.fn(),
+    getStatus: jest.fn(),
+    beginSetup: jest.fn(),
+    enable: jest.fn(),
+    disable: jest.fn(),
   };
   const registrationService = {
     request: jest.fn(),
@@ -75,6 +99,15 @@ describe('AuthController (e2e)', () => {
     envValues.set('REFRESH_COOKIE_SECURE', 'false');
     envValues.set('REFRESH_COOKIE_SAME_SITE', 'lax');
     envValues.set('TRUST_PROXY', 'false');
+    envValues.set(
+      'JWT_ACCESS_SECRET',
+      'access-secret-that-is-at-least-32-characters-long',
+    );
+    envValues.set(
+      'JWT_REFRESH_SECRET',
+      'refresh-secret-that-is-at-least-32-characters-long',
+    );
+    envValues.set('DB_TYPEORM_SYNC', 'false');
 
     const moduleRef = await Test.createTestingModule({
       controllers: [AuthController],
@@ -84,6 +117,7 @@ describe('AuthController (e2e)', () => {
         RefreshOriginGuard,
         { provide: EnvService, useValue: envService },
         { provide: AuthService, useValue: authService },
+        { provide: MfaService, useValue: mfaService },
         { provide: RegistrationService, useValue: registrationService },
         { provide: PasswordResetService, useValue: passwordResetService },
         {
@@ -134,13 +168,13 @@ describe('AuthController (e2e)', () => {
 
     const response = await request(getServer())
       .post('/api/auth/registration/request')
-      .send({ email: 'user@example.com', password: 'password123' })
+      .send({ email: 'user@example.com', password: 'password1234' })
       .expect(201);
 
     expect(publicVerificationRateLimitService.consume).toHaveBeenCalledTimes(1);
     expect(registrationService.request).toHaveBeenCalledWith(
       'user@example.com',
-      'password123',
+      'password1234',
     );
     expect(response.body as Record<string, unknown>).toMatchObject({
       retry_after: 60,
