@@ -192,7 +192,12 @@ export class EmailChangeService {
         <p>To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): 
         <p style="font-weight: bold; font-size: 30px;">${issuedCode}</p>
         <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
-      await this.mailService.send(newEmail, 'Confirm your new email', text, html);
+      await this.mailService.send(
+        newEmail,
+        'Confirm your new email',
+        text,
+        html,
+      );
       await this.tokensService.clearVerificationFailures(
         TokenType.EMAIL_CHANGE,
         attemptSubject,
