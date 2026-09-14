@@ -19,7 +19,10 @@ export class SecurityConfigService {
   ) {}
 
   isProduction(): boolean {
-    return (this.envService.getOptional('NODE_ENV') ?? 'development') === 'production';
+    return (
+      (this.envService.getOptional('NODE_ENV') ?? 'development') ===
+      'production'
+    );
   }
 
   getRefreshCookieSecure(): boolean {
@@ -27,7 +30,10 @@ export class SecurityConfigService {
   }
 
   getRefreshCookieSameSite(): RefreshCookieSameSite {
-    const value = this.envService.get('REFRESH_COOKIE_SAME_SITE').trim().toLowerCase();
+    const value = this.envService
+      .get('REFRESH_COOKIE_SAME_SITE')
+      .trim()
+      .toLowerCase();
     if (value === 'lax' || value === 'strict' || value === 'none') return value;
     this.errorsService.default(
       null,
@@ -65,7 +71,10 @@ export class SecurityConfigService {
   }
 
   getDatabaseSslRejectUnauthorized(): boolean {
-    return this.envService.getOptional('DB_SSL_REJECT_UNAUTHORIZED', 'boolean') ?? true;
+    return (
+      this.envService.getOptional('DB_SSL_REJECT_UNAUTHORIZED', 'boolean') ??
+      true
+    );
   }
 
   getRedisTls(): boolean {
@@ -141,10 +150,22 @@ export class SecurityConfigService {
     const refreshSecret = this.envService.get('JWT_REFRESH_SECRET');
 
     this.getTrustProxy();
-    this.validatePositiveInteger('REDIS_CONNECT_TIMEOUT_MS', this.getRedisConnectTimeoutMs());
-    this.validatePositiveInteger('SESSION_MAX_ACTIVE', this.getMaxActiveSessions());
-    this.validatePositiveInteger('SESSION_RETENTION_DAYS', this.getSessionRetentionDays());
-    this.validatePositiveInteger('AUDIT_RETENTION_DAYS', this.getAuditRetentionDays());
+    this.validatePositiveInteger(
+      'REDIS_CONNECT_TIMEOUT_MS',
+      this.getRedisConnectTimeoutMs(),
+    );
+    this.validatePositiveInteger(
+      'SESSION_MAX_ACTIVE',
+      this.getMaxActiveSessions(),
+    );
+    this.validatePositiveInteger(
+      'SESSION_RETENTION_DAYS',
+      this.getSessionRetentionDays(),
+    );
+    this.validatePositiveInteger(
+      'AUDIT_RETENTION_DAYS',
+      this.getAuditRetentionDays(),
+    );
 
     if (sameSite === 'none' && !secure) {
       this.errorsService.default(
@@ -152,19 +173,28 @@ export class SecurityConfigService {
         'REFRESH_COOKIE_SAME_SITE=none requires REFRESH_COOKIE_SECURE=true.',
       );
     }
-    if (accessSecret.length < MIN_SECRET_LENGTH || refreshSecret.length < MIN_SECRET_LENGTH) {
+    if (
+      accessSecret.length < MIN_SECRET_LENGTH ||
+      refreshSecret.length < MIN_SECRET_LENGTH
+    ) {
       this.errorsService.default(
         null,
         `JWT secrets must be at least ${MIN_SECRET_LENGTH} characters long.`,
       );
     }
     if (accessSecret === refreshSecret) {
-      this.errorsService.default(null, 'JWT access and refresh secrets must be different.');
+      this.errorsService.default(
+        null,
+        'JWT access and refresh secrets must be different.',
+      );
     }
 
     if (this.isProduction()) {
       if (!frontendOrigin.startsWith('https://')) {
-        this.errorsService.default(null, 'FRONTEND_URL must use HTTPS in production.');
+        this.errorsService.default(
+          null,
+          'FRONTEND_URL must use HTTPS in production.',
+        );
       }
       if (!secure) {
         this.errorsService.default(
