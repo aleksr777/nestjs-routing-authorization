@@ -4,25 +4,26 @@ import { SESSION_ACTIVITY_TTL_SECONDS } from './activity.constants';
 
 describe('ActivityService session activity', () => {
   const createService = () => {
+    const set = jest.fn();
     const client = {
       mGet: jest.fn(),
       scan: jest.fn(),
       del: jest.fn(),
     };
     const redis = {
-      set: jest.fn(),
+      set,
       getClient: jest.fn(() => client),
     } as unknown as RedisService;
 
     return {
       service: new ActivityService(redis),
-      redis,
+      set,
       client,
     };
   };
 
   it('stores one Redis activity key per user session', async () => {
-    const { service, redis } = createService();
+    const { service, set } = createService();
     const date = new Date('2026-09-14T08:00:00.000Z');
 
     await service.setSessionActivity(
@@ -31,7 +32,7 @@ describe('ActivityService session activity', () => {
       date,
     );
 
-    expect(redis.set).toHaveBeenCalledWith(
+    expect(set).toHaveBeenCalledWith(
       'session:last_activity:7:11111111-1111-4111-8111-111111111111',
       date.toISOString(),
       { EX: SESSION_ACTIVITY_TTL_SECONDS },
@@ -40,10 +41,7 @@ describe('ActivityService session activity', () => {
 
   it('returns pending activity only for valid Redis timestamps', async () => {
     const { service, client } = createService();
-    client.mGet.mockResolvedValue([
-      '2026-09-14T08:01:00.000Z',
-      'invalid-date',
-    ]);
+    client.mGet.mockResolvedValue(['2026-09-14T08:01:00.000Z', 'invalid-date']);
 
     const result = await service.getSessionActivities(7, [
       '11111111-1111-4111-8111-111111111111',
