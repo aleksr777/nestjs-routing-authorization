@@ -235,7 +235,7 @@ describe('authentication security primitives', () => {
   });
 
   describe('PasswordResetService', () => {
-    it('revokes all sessions and requires a fresh login after reset', async () => {
+    it('atomically consumes the reset code, revokes all sessions, and requires a fresh login', async () => {
       const findOne = jest.fn().mockResolvedValue({
         id: 7,
         email: 'admin@example.com',
@@ -252,14 +252,12 @@ describe('authentication security primitives', () => {
         .fn()
         .mockResolvedValue(undefined);
       const getIdByResetCode = jest.fn().mockResolvedValue(7);
-      const isActiveResetCode = jest.fn().mockResolvedValue(true);
-      const deletePassResetCode = jest.fn().mockResolvedValue(undefined);
+      const consumeResetCode = jest.fn().mockResolvedValue(7);
       const clearVerificationFailures = jest.fn().mockResolvedValue(undefined);
       const tokensService = {
         assertVerificationAttemptsAvailable,
         getIdByResetCode,
-        isActiveResetCode,
-        deletePassResetCode,
+        consumeResetCode,
         clearVerificationFailures,
       } as unknown as TokensService;
       const hashPassword = jest.fn().mockResolvedValue('hashed-password');
@@ -290,13 +288,60 @@ describe('authentication security primitives', () => {
         message: 'Password reset successfully. Please sign in.',
       });
 
+      expect(consumeResetCode).toHaveBeenCalledWith(7, '123456');
       expect(update).toHaveBeenCalledWith(
         { id: 7 },
         { password: 'hashed-password' },
       );
       expect(revokeAllSessions).toHaveBeenCalledWith(7, 'password_reset');
-      expect(deletePassResetCode).toHaveBeenCalledWith('123456', 7);
       expect(login).not.toHaveBeenCalled();
+    });
+
+    it('rejects a reset code that was consumed by another request', async () => {
+      const findOne = jest.fn().mockResolvedValue({
+        id: 7,
+        email: 'admin@example.com',
+      });
+      const update = jest.fn();
+      const users = { findOne, update } as unknown as Repository<User>;
+      const authService = {
+        revokeAllSessions: jest.fn(),
+      } as unknown as AuthService;
+      const registerVerificationFailure = jest.fn().mockResolvedValue(false);
+      const getVerificationAttemptsRemaining = jest.fn().mockResolvedValue(4);
+      const tokensService = {
+        assertVerificationAttemptsAvailable: jest.fn().mockResolvedValue(undefined),
+        getIdByResetCode: jest.fn().mockResolvedValue(7),
+        consumeResetCode: jest.fn().mockResolvedValue(null),
+        registerVerificationFailure,
+        getVerificationAttemptsRemaining,
+      } as unknown as TokensService;
+      const errorsService = new ErrorsService();
+      const envService = createEnvService({
+        RESET_TOKEN_EXPIRES_IN: 300,
+        PASSWORD_RESET_VERIFICATION_LOCKOUT: 180,
+      });
+      const redis = createRedisMock();
+      redis.ttl.mockResolvedValue(0);
+      const service = new PasswordResetService(
+        users,
+        authService,
+        tokensService,
+        { hash: jest.fn() } as unknown as HashService,
+        errorsService,
+        {} as MailService,
+        envService,
+        redis as unknown as RedisService,
+      );
+
+      await expect(
+        service.confirm('123456', 'new-password-123', 'admin@example.com'),
+      ).rejects.toMatchObject({ status: 401 });
+      expect(update).not.toHaveBeenCalled();
+      expect(registerVerificationFailure).toHaveBeenCalledWith(
+        expect.anything(),
+        'admin@example.com',
+      );
     });
   });
 });
