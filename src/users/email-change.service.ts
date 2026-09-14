@@ -1,6 +1,6 @@
-import { Injectable, HttpException } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
@@ -32,7 +32,8 @@ export class EmailChangeService {
 
   constructor(
     private readonly dataSource: DataSource,
-    @InjectRepository(User) private readonly usersRepository: Repository<User>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly errorsService: ErrorsService,
@@ -188,14 +189,7 @@ export class EmailChangeService {
     await this.mailService.send(newEmail, 'Confirm your new email', text, html);
   }
 
-  async confirm(
-    currentUserId: number,
-    dto: EmailChangeConfirmDto,
-    accessToken: string | undefined,
-  ) {
-    if (!accessToken) {
-      this.errorsService.tokenNotDefined(TokenType.ACCESS);
-    }
+  async confirm(currentUserId: number, dto: EmailChangeConfirmDto) {
     await this.assertNotLocked(currentUserId);
 
     const attemptSubject = currentUserId.toString();
@@ -255,10 +249,6 @@ export class EmailChangeService {
       await this.redisService
         .del(this.getLockoutKey(currentUserId))
         .catch(() => undefined);
-      await this.tokensService.addJwtTokenToBlacklist(
-        accessToken,
-        TokenType.ACCESS,
-      );
       return this.authService.login(user.id);
     } catch (err) {
       if (err instanceof HttpException) {
