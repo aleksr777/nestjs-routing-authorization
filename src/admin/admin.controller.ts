@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { SecurityAuditService } from '../audit/security-audit.service';
+import { AuthService } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -28,6 +29,7 @@ import { GetUsersQueryDto } from './dto/get-users-query.dto';
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
+    private readonly authService: AuthService,
     private readonly audit: SecurityAuditService,
   ) {}
 
@@ -87,9 +89,12 @@ export class AdminController {
 
   @Patch('users/unblock/:id')
   async unblockUser(
+    @Body() dto: AdminPasswordDto,
     @Req() req: Request,
     @Param('id', ParseIntPipe) id: number,
   ) {
+    const admin = req.user as User;
+    await this.authService.verifyUserPassword(+admin.id, dto.password);
     await this.adminService.unblockUserById(+id);
     this.record(req, 'ADMIN_USER_UNBLOCKED', +id);
   }
