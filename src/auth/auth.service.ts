@@ -81,7 +81,6 @@ export class AuthService {
           PASSWORD,
           IS_BLOCKED,
           BLOCKED_REASON,
-          'mfa_totp_enabled',
         ],
       });
       const isPasswordValid = await this.hashService.compare(
