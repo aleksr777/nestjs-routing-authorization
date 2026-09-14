@@ -21,9 +21,11 @@ const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const SETUP_PREFIX = 'mfa:totp:setup:';
 const LOGIN_PREFIX = 'mfa:totp:login:';
 const LOGIN_ATTEMPTS_PREFIX = 'mfa:totp:attempts:';
+const USER_LOGIN_ATTEMPTS_PREFIX = 'mfa:totp:user-attempts:';
 const SETUP_TTL_SECONDS = 600;
 const LOGIN_TTL_SECONDS = 300;
 const MAX_LOGIN_ATTEMPTS = 5;
+const MAX_USER_LOGIN_ATTEMPTS = 10;
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
 
@@ -145,6 +147,10 @@ export class MfaService {
     return `${LOGIN_ATTEMPTS_PREFIX}${this.hashService.hashToken(challenge)}`;
   }
 
+  private userAttemptsKey(userId: number): string {
+    return `${USER_LOGIN_ATTEMPTS_PREFIX}${userId}`;
+  }
+
   async getStatus(userId: number) {
     const user = await this.users.findOne({
       where: { id: userId },
@@ -264,16 +270,32 @@ export class MfaService {
       throw new UnauthorizedException('MFA challenge has expired.');
     }
 
-    const attempts = await this.redis.incrWithExpire(
-      this.attemptsKey(challenge),
-      LOGIN_TTL_SECONDS,
-    );
-    if (attempts > MAX_LOGIN_ATTEMPTS) {
+    const userId = Number.parseInt(userIdText, 10);
+    const [challengeAttempts, userAttempts] = await Promise.all([
+      this.redis.incrWithExpire(
+        this.attemptsKey(challenge),
+        LOGIN_TTL_SECONDS,
+      ),
+      this.redis.incrWithExpire(
+        this.userAttemptsKey(userId),
+        LOGIN_TTL_SECONDS,
+      ),
+    ]);
+    if (
+      challengeAttempts > MAX_LOGIN_ATTEMPTS ||
+      userAttempts > MAX_USER_LOGIN_ATTEMPTS
+    ) {
       await this.redis.del(key);
+      void this.audit.record({
+        event: 'ADMIN_MFA_LOGIN_RATE_LIMITED',
+        success: false,
+        userId,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
       throw new UnauthorizedException('MFA challenge has expired.');
     }
 
-    const userId = Number.parseInt(userIdText, 10);
     const user = await this.users.findOne({
       where: { id: userId, role: Role.ADMIN },
       select: ['id', 'mfa_totp_secret', 'mfa_totp_enabled', 'is_blocked'],
@@ -303,6 +325,7 @@ export class MfaService {
     await Promise.all([
       this.redis.del(key),
       this.redis.del(this.attemptsKey(challenge)),
+      this.redis.del(this.userAttemptsKey(userId)),
     ]);
     const tokens = await this.authService.loginNewSession(userId, context);
     void this.audit.record({
