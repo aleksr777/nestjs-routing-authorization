@@ -8,11 +8,11 @@ import {
   Not,
   Repository,
 } from 'typeorm';
+import { ActivityService } from '../activity/activity.service';
 import { AuthService } from '../auth/auth.service';
 import { AuthSession } from '../auth/entities/auth-session.entity';
 import { HashService } from '../common/hash-service/hash.service';
 import { MailService } from '../common/mail-service/mail.service';
-import { RedisService } from '../common/redis-service/redis.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { User } from '../users/entities/user.entity';
@@ -26,7 +26,6 @@ import {
   ADMIN_FIELDS,
   USER_SECRET_FIELDS,
 } from '../common/constants/user-select-fields.constants';
-import { LAST_ACTIVITY_KEY_PREFIX } from '../activity/activity.constants';
 import { UserSearchableFieldsType } from '../common/types/search-users-fields.type';
 import { Role } from '../common/types/role.enum';
 
@@ -39,7 +38,7 @@ export class AdminService {
     private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
     private readonly mailService: MailService,
-    private readonly redisService: RedisService,
+    private readonly activityService: ActivityService,
   ) {}
 
   private async verifyAdministratorPassword(
@@ -146,8 +145,9 @@ export class AdminService {
       }
       await qr.manager.delete(User, { id: userId });
       await qr.commitTransaction();
-      const activityKey = `${LAST_ACTIVITY_KEY_PREFIX}:${userId}`;
-      this.redisService.del(activityKey).catch(() => undefined);
+      void this.activityService
+        .deleteUserActivities(userId)
+        .catch(() => undefined);
       const subject = 'Account deleted by administrator';
       const text =
         `Hello, ${user.nickname}!\n\n` +
@@ -233,8 +233,8 @@ export class AdminService {
     } finally {
       await qr.release();
     }
-    await this.redisService
-      .del(`${LAST_ACTIVITY_KEY_PREFIX}:${userId}`)
+    void this.activityService
+      .deleteUserActivities(userId)
       .catch(() => undefined);
     if (email) {
       const subject = 'Account has been blocked.';
