@@ -10,6 +10,6 @@ export class PasswordResetConfirmDto {
   email!: string;
 
   @IsString()
-  @Length(8, 100)
+  @Length(12, 100)
   new_password!: string;
 }
