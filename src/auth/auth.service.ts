@@ -294,12 +294,24 @@ export class AuthService {
     await this.revokeAllSessions(userId, 'logout_all');
   }
 
-  async revokeAllSessions(userId: number, reason = 'revoked'): Promise<void> {
+  async revokeAllSessions(
+    userId: number,
+    reason = 'revoked',
+    manager?: EntityManager,
+  ): Promise<void> {
     const now = new Date();
-    await this.sessionsRepository.update(
-      { user_id: userId, revoked_at: IsNull() },
-      { revoked_at: now, revoked_reason: reason },
-    );
+    if (manager) {
+      await manager.update(
+        AuthSession,
+        { user_id: userId, revoked_at: IsNull() },
+        { revoked_at: now, revoked_reason: reason },
+      );
+    } else {
+      await this.sessionsRepository.update(
+        { user_id: userId, revoked_at: IsNull() },
+        { revoked_at: now, revoked_reason: reason },
+      );
+    }
     void this.audit.record({
       event: 'SESSIONS_REVOKED_ALL',
       userId,
