@@ -273,7 +273,7 @@ export class EmailChangeService {
         consumed.user_id !== currentUserId ||
         consumed.new_email.trim().toLowerCase() !== newEmail
       ) {
-        return this.rejectInvalidCode(currentUserId);
+        await this.rejectInvalidCode(currentUserId);
       }
 
       user.email = newEmail;
