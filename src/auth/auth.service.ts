@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { HttpException, In, Injectable, UnauthorizedException } from '@nestjs/common';
-import { DataSource, IsNull, MoreThan, Repository } from 'typeorm';
+import { HttpException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { DataSource, In, IsNull, MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { SessionTokenService } from './session-token.service';
 import { ActivityService } from '../activity/activity.service';
@@ -135,7 +135,10 @@ export class AuthService {
       select: ['id', 'created_at'],
       order: { created_at: 'DESC' },
     });
-    const keepBeforeCreate = Math.max(this.securityConfig.getMaxActiveSessions() - 1, 0);
+    const keepBeforeCreate = Math.max(
+      this.securityConfig.getMaxActiveSessions() - 1,
+      0,
+    );
     const overflow = active.slice(keepBeforeCreate).map((session) => session.id);
     if (overflow.length === 0) return;
 
