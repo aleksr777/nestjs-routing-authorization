@@ -60,22 +60,29 @@ export class PasswordChangeService {
   }
 
   async requestReset(userId: number) {
+    const attemptSubject = userId.toString();
+    const retryAfter = await this.tokensService.reserveVerificationCodeRequest(
+      TokenType.CURRENT_USER_PASSWORD_RESET,
+      attemptSubject,
+    );
+    let issuedCode: string | undefined;
+
     try {
       const user = await this.usersRepository.findOneOrFail({
         where: { id: userId },
         select: [ID, EMAIL],
       });
-      const code = await this.tokensService.getCurrentUserPasswordResetCode(
+      issuedCode = await this.tokensService.getCurrentUserPasswordResetCode(
         user.id,
       );
       const text =
         `You requested to change your password.\n` +
-        `Use this code within ${this.resetExpiresIn} min: ${code}\n\n` +
+        `Use this code within ${this.resetExpiresIn} min: ${issuedCode}\n\n` +
         `If it wasn't you, ignore this message.`;
       const html = `
         <p>You requested to change your password.</p>
         <p>Use this code within ${this.resetExpiresIn} min:</p>
-        <p style="font-weight: bold; font-size: 30px;">${code}</p>
+        <p style="font-weight: bold; font-size: 30px;">${issuedCode}</p>
         <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
       await this.mailService.send(
         user.email,
@@ -83,8 +90,30 @@ export class PasswordChangeService {
         text,
         html,
       );
-      return { message: 'Confirmation code sent to your email.' };
+      await this.tokensService.clearVerificationFailures(
+        TokenType.CURRENT_USER_PASSWORD_RESET,
+        attemptSubject,
+      );
+      return {
+        message: 'Confirmation code sent to your email.',
+        retry_after: retryAfter,
+        max_attempts: this.tokensService.getVerificationAttemptLimit(
+          TokenType.CURRENT_USER_PASSWORD_RESET,
+        ),
+      };
     } catch (err: unknown) {
+      if (issuedCode) {
+        await this.tokensService
+          .deleteCurrentUserPasswordResetCode(issuedCode, userId)
+          .catch(() => undefined);
+      }
+      await this.tokensService
+        .releaseVerificationCodeRequest(
+          TokenType.CURRENT_USER_PASSWORD_RESET,
+          attemptSubject,
+        )
+        .catch(() => undefined);
+      if (err instanceof HttpException) throw err;
       this.errorsService.userNotFound(err);
       this.errorsService.default(err);
     }
@@ -113,7 +142,7 @@ export class PasswordChangeService {
       revokeReason: 'password_reset',
       tokenType: TokenType.CURRENT_USER_PASSWORD_RESET,
       consumeCode: () =>
-        this.tokensService.consumeCurrentUserPasswordResetCode(code),
+        this.tokensService.consumeCurrentUserPasswordResetCode(userId, code),
     });
     await this.tokensService
       .clearVerificationFailures(
@@ -143,7 +172,8 @@ export class PasswordChangeService {
     const result = await this.updatePassword(userId, newPassword, {
       revokeReason: 'password_changed',
       tokenType: TokenType.PASSWORD_CHANGE,
-      consumeCode: () => this.tokensService.consumePasswordChangeCode(code),
+      consumeCode: () =>
+        this.tokensService.consumePasswordChangeCode(userId, code),
     });
     await this.tokensService
       .clearVerificationFailures(TokenType.PASSWORD_CHANGE, attemptSubject)
