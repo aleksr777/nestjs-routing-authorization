@@ -9,28 +9,36 @@ import { AuthService } from './auth.service';
 import { MfaService } from './mfa.service';
 
 const createService = () => {
-  const users = {
-    findOne: jest.fn(),
-    update: jest.fn(),
-  } as unknown as Repository<User>;
+  const findOne = jest.fn();
+  const updateUser = jest.fn();
+  const redisGet = jest.fn();
+  const redisSet = jest.fn();
+  const redisDel = jest.fn();
+  const incrWithExpire = jest.fn();
+  const verifyUserPassword = jest.fn();
+  const loginNewSession = jest.fn();
+  const revokeOtherSessions = jest.fn();
+  const getSessionIdFromToken = jest.fn();
+  const auditRecord = jest.fn().mockResolvedValue(undefined);
+  const users = { findOne, update: updateUser } as unknown as Repository<User>;
   const redis = {
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
-    incrWithExpire: jest.fn(),
+    get: redisGet,
+    set: redisSet,
+    del: redisDel,
+    incrWithExpire,
   } as unknown as RedisService;
   const securityConfig = {
-    getMfaEncryptionKey: jest.fn(() => 'mfa-encryption-key-for-tests-1234567890'),
+    getMfaEncryptionKey: jest.fn(
+      () => 'mfa-encryption-key-for-tests-1234567890',
+    ),
   } as unknown as SecurityConfigService;
   const authService = {
-    verifyUserPassword: jest.fn(),
-    loginNewSession: jest.fn(),
-    revokeOtherSessions: jest.fn(),
-    getSessionIdFromToken: jest.fn(),
+    verifyUserPassword,
+    loginNewSession,
+    revokeOtherSessions,
+    getSessionIdFromToken,
   } as unknown as AuthService;
-  const audit = {
-    record: jest.fn().mockResolvedValue(undefined),
-  } as unknown as SecurityAuditService;
+  const audit = { record: auditRecord } as unknown as SecurityAuditService;
   const service = new MfaService(
     users,
     redis,
@@ -40,14 +48,20 @@ const createService = () => {
     audit,
   );
 
-  return { service, users, redis, authService, audit };
+  return {
+    service,
+    findOne,
+    redisGet,
+    redisDel,
+    incrWithExpire,
+    verifyUserPassword,
+    auditRecord,
+  };
 };
 
 describe('MfaService security controls', () => {
   it('verifies the current password before enabling MFA', async () => {
-    const { service, redis, authService } = createService();
-    const verifyUserPassword = authService.verifyUserPassword as jest.Mock;
-    const redisGet = redis.get as jest.Mock;
+    const { service, redisGet, verifyUserPassword } = createService();
     verifyUserPassword.mockRejectedValueOnce(
       new UnauthorizedException('Invalid password.'),
     );
@@ -60,12 +74,14 @@ describe('MfaService security controls', () => {
   });
 
   it('limits MFA attempts across newly issued challenges for the same user', async () => {
-    const { service, users, redis, audit } = createService();
-    const redisGet = redis.get as jest.Mock;
-    const incrWithExpire = redis.incrWithExpire as jest.Mock;
-    const redisDel = redis.del as jest.Mock;
-    const findOne = users.findOne as jest.Mock;
-    const auditRecord = audit.record as jest.Mock;
+    const {
+      service,
+      findOne,
+      redisGet,
+      redisDel,
+      incrWithExpire,
+      auditRecord,
+    } = createService();
     redisGet.mockResolvedValueOnce('7');
     incrWithExpire.mockResolvedValueOnce(1).mockResolvedValueOnce(11);
     redisDel.mockResolvedValue(1);
