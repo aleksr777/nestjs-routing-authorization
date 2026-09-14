@@ -310,7 +310,9 @@ describe('authentication security primitives', () => {
       const registerVerificationFailure = jest.fn().mockResolvedValue(false);
       const getVerificationAttemptsRemaining = jest.fn().mockResolvedValue(4);
       const tokensService = {
-        assertVerificationAttemptsAvailable: jest.fn().mockResolvedValue(undefined),
+        assertVerificationAttemptsAvailable: jest
+          .fn()
+          .mockResolvedValue(undefined),
         getIdByResetCode: jest.fn().mockResolvedValue(7),
         consumeResetCode: jest.fn().mockResolvedValue(null),
         registerVerificationFailure,
