@@ -12,11 +12,7 @@ import {
 import { Request, Response } from 'express';
 import { SecurityAuditService } from '../audit/security-audit.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import {
-  clearRefreshCookie,
-  getAuthResponse,
-  setRefreshCookie,
-} from '../auth/auth-response.util';
+import { clearRefreshCookie } from '../auth/auth-response.util';
 import { SecurityConfigService } from '../common/security/security-config.service';
 import { DeleteCurrentUserDto } from './dto/delete-current-user.dto';
 import { EmailChangeConfirmDto } from './dto/email-change-confirm.dto';
@@ -97,15 +93,14 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    const tokens = await this.emailChangeService.confirm(+user.id, dto);
-    if (!tokens) return tokens;
-    setRefreshCookie(res, tokens, this.securityConfig);
+    const result = await this.emailChangeService.confirm(+user.id, dto);
+    clearRefreshCookie(res, this.securityConfig);
     void this.audit.record({
       event: 'EMAIL_CHANGED',
       userId: +user.id,
       ...this.auditContext(req),
     });
-    return getAuthResponse(tokens);
+    return result;
   }
 
   @Post('me/password/change/request')
@@ -121,19 +116,18 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    const tokens = await this.passwordChangeService.confirm(
+    const result = await this.passwordChangeService.confirm(
       +user.id,
       dto.code,
       dto.new_password,
     );
-    if (!tokens) return tokens;
-    setRefreshCookie(res, tokens, this.securityConfig);
+    clearRefreshCookie(res, this.securityConfig);
     void this.audit.record({
       event: 'PASSWORD_CHANGED',
       userId: +user.id,
       ...this.auditContext(req),
     });
-    return getAuthResponse(tokens);
+    return result;
   }
 
   @Post('me/password/reset/request')
@@ -149,18 +143,17 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    const tokens = await this.passwordChangeService.confirmReset(
+    const result = await this.passwordChangeService.confirmReset(
       +user.id,
       dto.code,
       dto.new_password,
     );
-    if (!tokens) return tokens;
-    setRefreshCookie(res, tokens, this.securityConfig);
+    clearRefreshCookie(res, this.securityConfig);
     void this.audit.record({
       event: 'PASSWORD_RESET',
       userId: +user.id,
       ...this.auditContext(req),
     });
-    return getAuthResponse(tokens);
+    return result;
   }
 }
