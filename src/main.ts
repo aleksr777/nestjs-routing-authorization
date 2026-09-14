@@ -43,7 +43,8 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err: unknown) => {
-  const message = err instanceof Error ? err.stack ?? err.message : String(err);
+  const message =
+    err instanceof Error ? (err.stack ?? err.message) : String(err);
   logger.error(`Application failed to start: ${message}`);
   process.exit(1);
 });
