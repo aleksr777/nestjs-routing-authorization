@@ -11,6 +11,7 @@ import { TokenType } from '../../common/types/token-type.type';
 type RequestWithSafeCookies = Omit<Request, 'cookies'> & {
   cookies?: Record<string, unknown>;
 };
+type SessionRequest = Request & { authSessionId?: string };
 
 const getRefreshTokenFromCookie = (req: Request): string | null => {
   const request = req as RequestWithSafeCookies;
@@ -53,6 +54,9 @@ export class JwtRefreshStrategy extends PassportStrategy(
       payload.sid,
       TokenType.REFRESH,
     );
+    if (typeof payload.sid === 'string') {
+      (req as SessionRequest).authSessionId = payload.sid;
+    }
 
     return user;
   }
