@@ -1,8 +1,9 @@
-import { Strategy } from 'passport-local';
-import { PassportStrategy } from '@nestjs/passport';
 import { Injectable } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
 import { Request } from 'express';
-import { AuthService } from '../../auth/auth.service';
+import { Strategy } from 'passport-local';
+import { SecurityAuditService } from '../../audit/security-audit.service';
+import { AuthService } from '../auth.service';
 import { LoginRateLimitService } from '../login-rate-limit.service';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly authService: AuthService,
     private readonly loginRateLimitService: LoginRateLimitService,
+    private readonly audit: SecurityAuditService,
   ) {
     super({
       usernameField: 'email',
@@ -31,6 +33,12 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       return user;
     } catch (err: unknown) {
       await this.loginRateLimitService.registerFailure(email, ip);
+      void this.audit.record({
+        event: 'LOGIN_FAILED',
+        success: false,
+        ipAddress: ip,
+        userAgent: req.get('user-agent') ?? null,
+      });
       throw err;
     }
   }
