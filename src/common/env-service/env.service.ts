@@ -17,40 +17,35 @@ export class EnvService {
     raw: string,
     type: EnvType,
   ): string | number | boolean {
-    switch (type) {
-      case 'number': {
-        const parsed = Number(raw);
-        if (!Number.isFinite(parsed)) {
-          this.errorsService.default(
-            null,
-            `Env var "${key}" value "${raw}" is not a valid number`,
-          );
-        }
-        return parsed;
-      }
-      case 'boolean': {
-        const normalized = raw.toLowerCase();
-        if (normalized === 'true' || normalized === '1') return true;
-        if (normalized === 'false' || normalized === '0') return false;
+    if (type === 'number') {
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) {
         this.errorsService.default(
           null,
-          `Env var "${key}" value "${raw}" is not a valid boolean`,
+          `Env var "${key}" value "${raw}" is not a valid number`,
         );
       }
-      case 'string':
-      default:
-        return raw;
+      return parsed;
     }
+
+    if (type === 'boolean') {
+      const normalized = raw.toLowerCase();
+      if (normalized === 'true' || normalized === '1') return true;
+      if (normalized === 'false' || normalized === '0') return false;
+      this.errorsService.default(
+        null,
+        `Env var "${key}" value "${raw}" is not a valid boolean`,
+      );
+    }
+
+    return raw;
   }
 
   public get(key: string): string;
   public get(key: string, type: 'string'): string;
   public get(key: string, type: 'number'): number;
   public get(key: string, type: 'boolean'): boolean;
-  public get(
-    key: string,
-    type: EnvType = 'string',
-  ): string | number | boolean {
+  public get(key: string, type: EnvType = 'string'): string | number | boolean {
     const raw = this.configService.getOrThrow<string>(key);
     return this.parseValue(key, raw, type);
   }
