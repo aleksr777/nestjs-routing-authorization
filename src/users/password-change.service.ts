@@ -1,6 +1,6 @@
-import { Injectable, HttpException } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
 import { HashService } from '../common/hash-service/hash.service';
@@ -22,7 +22,8 @@ export class PasswordChangeService {
 
   constructor(
     private readonly dataSource: DataSource,
-    @InjectRepository(User) private readonly usersRepository: Repository<User>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
     private readonly authService: AuthService,
     private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
@@ -83,15 +84,7 @@ export class PasswordChangeService {
     }
   }
 
-  async confirmReset(
-    userId: number,
-    code: string,
-    newPassword: string,
-    accessToken?: string,
-  ) {
-    if (!accessToken) {
-      return this.errorsService.invalidToken(null, TokenType.ACCESS);
-    }
+  async confirmReset(userId: number, code: string, newPassword: string) {
     const attemptSubject = userId.toString();
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.CURRENT_USER_PASSWORD_RESET,
@@ -109,7 +102,7 @@ export class PasswordChangeService {
         TokenType.CURRENT_USER_PASSWORD_RESET,
       );
     }
-    const tokens = await this.updatePassword(userId, newPassword, accessToken);
+    const tokens = await this.updatePassword(userId, newPassword);
     await this.tokensService
       .deleteCurrentUserPasswordResetCode(code)
       .catch(() => undefined);
@@ -122,15 +115,7 @@ export class PasswordChangeService {
     return tokens;
   }
 
-  async confirm(
-    userId: number,
-    code: string,
-    newPassword: string,
-    accessToken?: string,
-  ) {
-    if (!accessToken) {
-      return this.errorsService.invalidToken(null, TokenType.ACCESS);
-    }
+  async confirm(userId: number, code: string, newPassword: string) {
     const attemptSubject = userId.toString();
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.PASSWORD_CHANGE,
@@ -145,7 +130,7 @@ export class PasswordChangeService {
       );
       return this.errorsService.invalidToken(null, TokenType.PASSWORD_CHANGE);
     }
-    const tokens = await this.updatePassword(userId, newPassword, accessToken);
+    const tokens = await this.updatePassword(userId, newPassword);
     await this.tokensService
       .deletePasswordChangeCode(code)
       .catch(() => undefined);
@@ -155,11 +140,7 @@ export class PasswordChangeService {
     return tokens;
   }
 
-  private async updatePassword(
-    userId: number,
-    newPassword: string,
-    accessToken: string,
-  ) {
+  private async updatePassword(userId: number, newPassword: string) {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
@@ -173,13 +154,9 @@ export class PasswordChangeService {
       const hash = await this.hashService.hash(newPassword);
       await qr.manager.update(User, { id: userId }, { password: hash });
       await qr.commitTransaction();
-      await this.tokensService.addJwtTokenToBlacklist(
-        accessToken,
-        TokenType.ACCESS,
-      );
       return this.authService.login(userId);
     } catch (err) {
-      await qr.rollbackTransaction();
+      if (qr.isTransactionActive) await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;
       this.errorsService.userNotFound(err);
       this.errorsService.default(err);
