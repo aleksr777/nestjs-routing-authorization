@@ -12,8 +12,12 @@ export class MfaLoginVerifyDto extends MfaTotpCodeDto {
   challenge!: string;
 }
 
-export class MfaDisableDto extends MfaTotpCodeDto {
+class MfaPasswordCodeDto extends MfaTotpCodeDto {
   @IsString()
-  @Length(12, 100)
+  @Length(8, 100)
   password!: string;
 }
+
+export class MfaEnableDto extends MfaPasswordCodeDto {}
+
+export class MfaDisableDto extends MfaPasswordCodeDto {}
