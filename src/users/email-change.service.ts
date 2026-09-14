@@ -141,6 +141,7 @@ export class EmailChangeService {
 
   async request(userId: number, dto: EmailChangeRequestDto) {
     await this.assertNotLocked(userId);
+    await this.authService.verifyUserPassword(userId, dto.current_password);
 
     const user = await this.usersRepository
       .findOneOrFail({ where: { id: userId }, select: [ID, EMAIL, IS_BLOCKED] })
@@ -237,6 +238,7 @@ export class EmailChangeService {
       }
       user.email = newEmail;
       await this.usersRepository.save(user);
+      await this.authService.revokeAllSessions(user.id, 'email_changed');
       await this.tokensService
         .deleteEmailChangeCode(dto.code)
         .catch(() => undefined);
@@ -249,7 +251,7 @@ export class EmailChangeService {
       await this.redisService
         .del(this.getLockoutKey(currentUserId))
         .catch(() => undefined);
-      return this.authService.login(user.id);
+      return { message: 'Email changed successfully. Please sign in.' };
     } catch (err) {
       if (err instanceof HttpException) {
         throw err;
