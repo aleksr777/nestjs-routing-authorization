@@ -30,7 +30,6 @@ Authentication and authorization are enforced by backend guards. Frontend route 
 - Redis-backed login, public-verification, global API, auth-route, and per-session throttling;
 - one-time/latest-only verification codes with attempt limits and resend cooldowns;
 - transactionally coupled password/email security-context changes and session revocation;
-- administrator TOTP MFA with encrypted secrets, one-time login challenges, per-user attempt limits, and TOTP replay protection;
 - structured request logging with `X-Request-Id`;
 - persistent security-audit events with retention cleanup;
 - PostgreSQL and Redis TLS options;
@@ -38,6 +37,8 @@ Authentication and authorization are enforced by backend guards. Frontend route 
 - strict production configuration validation;
 - health/liveness and dependency-readiness endpoints;
 - scheduled cleanup of stale sessions and old audit events.
+
+Multi-factor authentication is intentionally not part of this base template. Add the MFA mechanism and recovery policy appropriate to each application separately.
 
 ## Requirements
 
@@ -79,7 +80,6 @@ Start from `.env.example`. At minimum, production must use:
 
 - `NODE_ENV=production`;
 - independent random `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`, each at least 32 characters;
-- a separate random `MFA_ENCRYPTION_KEY` of at least 32 characters;
 - `FRONTEND_URL` with HTTPS;
 - `REFRESH_COOKIE_SECURE=true`;
 - `DB_TYPEORM_SYNC=false`;
@@ -101,7 +101,6 @@ Use this order for deployments containing migrations:
 7. Start/restart the application.
 8. Verify `GET /api/health/live` and `GET /api/health/ready`.
 9. Verify login, refresh, logout, and an authenticated request.
-10. For releases changing authentication/MFA, verify those flows with a non-production test account before broad rollout.
 
 Do not enable automatic TypeORM synchronization as a migration substitute in production.
 
@@ -145,22 +144,6 @@ Six-digit codes are stored in Redis with TTLs and are protected by attempt count
 
 Public registration and password-reset requests are also protected by an IP-based verification request limit.
 
-## Administrator MFA
-
-TOTP MFA is available for the administrator account.
-
-- setup generates a 20-byte Base32 secret and an `otpauth://` URI;
-- pending setup state is short-lived in Redis;
-- the stored TOTP secret is encrypted with AES-256-GCM using a key derived from `MFA_ENCRYPTION_KEY`;
-- enabling/disabling requires the current password and a valid TOTP code;
-- MFA state changes and revocation of other sessions are performed transactionally;
-- login requires a short-lived random MFA challenge after password verification;
-- challenges are atomically single-use;
-- a successfully accepted TOTP time-step cannot be replayed through another challenge;
-- repeated attempts are limited per challenge and per administrator account.
-
-Protect `MFA_ENCRYPTION_KEY` as a production secret. Losing it makes existing encrypted MFA secrets unusable; leaking it weakens protection of those secrets.
-
 ## Rate limiting and Redis availability
 
 Authentication-sensitive rate limiting fails closed if Redis is unavailable. General API and per-session throttling fail open so an infrastructure problem in Redis does not unnecessarily take down ordinary authenticated API traffic.
@@ -169,11 +152,11 @@ Redis connection failures are logged and the client uses reconnection logic. Rea
 
 ## Security audit logging
 
-Security events are stored in PostgreSQL separately from ordinary request logs. Examples include session creation/revocation, refresh-token reuse, failed login, administrator MFA events, password/email changes, and administrator user-management actions.
+Security events are stored in PostgreSQL separately from ordinary request logs. Examples include session creation/revocation, refresh-token reuse, failed login, password/email changes, and administrator user-management actions.
 
 Audit-write failure is logged but does not interrupt the authentication operation itself. Old audit records are removed according to `AUDIT_RETENTION_DAYS`.
 
-Do not place passwords, JWTs, verification codes, MFA secrets, cookie contents, or Authorization headers in audit `details` or application logs.
+Do not place passwords, JWTs, verification codes, cookie contents, or Authorization headers in audit `details` or application logs.
 
 ## CI
 
