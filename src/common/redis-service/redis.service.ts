@@ -33,6 +33,15 @@ redis.call('DEL', KEYS[2])
 return payload
 `;
 
+const DELETE_IF_VALUE_MATCHES_SCRIPT = `
+local value = redis.call('GET', KEYS[1])
+if value ~= ARGV[1] then
+  return 0
+end
+redis.call('DEL', KEYS[1])
+return 1
+`;
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
@@ -122,6 +131,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return await this.client.getDel(key);
     } catch (err) {
       this.errorsService.default(err, 'Redis error (getDel).');
+    }
+  }
+
+  async deleteIfValueMatches(key: string, expectedValue: string): Promise<boolean> {
+    try {
+      const result = await this.client.eval(DELETE_IF_VALUE_MATCHES_SCRIPT, {
+        keys: [key],
+        arguments: [expectedValue],
+      });
+      return result === 1;
+    } catch (err) {
+      this.errorsService.default(err, 'Redis error (deleteIfValueMatches).');
     }
   }
 
