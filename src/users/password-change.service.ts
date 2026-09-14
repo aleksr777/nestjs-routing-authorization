@@ -16,6 +16,12 @@ import {
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokenType } from '../common/types/token-type.type';
 
+type PasswordUpdateOptions = {
+  revokeReason: string;
+  tokenType: TokenType;
+  consumeCode: () => Promise<number | null>;
+};
+
 @Injectable()
 export class PasswordChangeService {
   private readonly resetExpiresIn: number;
@@ -102,14 +108,13 @@ export class PasswordChangeService {
         TokenType.CURRENT_USER_PASSWORD_RESET,
       );
     }
-    const result = await this.updatePassword(
-      userId,
-      newPassword,
-      'password_reset',
-    );
-    await this.tokensService
-      .deleteCurrentUserPasswordResetCode(code)
-      .catch(() => undefined);
+
+    const result = await this.updatePassword(userId, newPassword, {
+      revokeReason: 'password_reset',
+      tokenType: TokenType.CURRENT_USER_PASSWORD_RESET,
+      consumeCode: () =>
+        this.tokensService.consumeCurrentUserPasswordResetCode(code),
+    });
     await this.tokensService
       .clearVerificationFailures(
         TokenType.CURRENT_USER_PASSWORD_RESET,
@@ -134,14 +139,12 @@ export class PasswordChangeService {
       );
       return this.errorsService.invalidToken(null, TokenType.PASSWORD_CHANGE);
     }
-    const result = await this.updatePassword(
-      userId,
-      newPassword,
-      'password_changed',
-    );
-    await this.tokensService
-      .deletePasswordChangeCode(code)
-      .catch(() => undefined);
+
+    const result = await this.updatePassword(userId, newPassword, {
+      revokeReason: 'password_changed',
+      tokenType: TokenType.PASSWORD_CHANGE,
+      consumeCode: () => this.tokensService.consumePasswordChangeCode(code),
+    });
     await this.tokensService
       .clearVerificationFailures(TokenType.PASSWORD_CHANGE, attemptSubject)
       .catch(() => undefined);
@@ -151,7 +154,7 @@ export class PasswordChangeService {
   private async updatePassword(
     userId: number,
     newPassword: string,
-    revokeReason: string,
+    options: PasswordUpdateOptions,
   ) {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
@@ -163,10 +166,16 @@ export class PasswordChangeService {
       });
       const same = await this.hashService.compare(newPassword, user.password);
       if (same) this.errorsService.badRequest(ErrMsg.NEW_PASSWORD_MUST_DIFFER);
+
+      const consumedUserId = await options.consumeCode();
+      if (consumedUserId !== userId) {
+        this.errorsService.invalidToken(null, options.tokenType);
+      }
+
       const hash = await this.hashService.hash(newPassword);
       await qr.manager.update(User, { id: userId }, { password: hash });
       await qr.commitTransaction();
-      await this.authService.revokeAllSessions(userId, revokeReason);
+      await this.authService.revokeAllSessions(userId, options.revokeReason);
       return { message: 'Password changed successfully. Please sign in.' };
     } catch (err) {
       if (qr.isTransactionActive) await qr.rollbackTransaction();
