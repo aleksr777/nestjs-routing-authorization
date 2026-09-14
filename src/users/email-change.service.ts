@@ -199,24 +199,16 @@ export class EmailChangeService {
       attemptSubject,
     );
 
-    const activeCode = await this.redisService.get(
-      this.getActiveCodeKey(currentUserId),
-    );
-    if (activeCode !== dto.code) {
-      return this.rejectInvalidCode(currentUserId);
-    }
-
     const data = await this.tokensService.getDataByEmailChangeCode(dto.code);
     if (
       !data ||
       typeof data.user_id !== 'number' ||
-      typeof data.new_email !== 'string'
+      typeof data.new_email !== 'string' ||
+      data.user_id !== currentUserId
     ) {
       return this.rejectInvalidCode(currentUserId);
     }
-    if (data.user_id !== currentUserId) {
-      return this.rejectInvalidCode(currentUserId);
-    }
+
     const newEmail = data.new_email.trim().toLowerCase();
     this.mailService.validateNotServiceEmail(newEmail);
     try {
@@ -236,15 +228,22 @@ export class EmailChangeService {
       if (isEmailTaken) {
         this.errorsService.conflict(ErrMsg.CONFLICT_USER_EXISTS);
       }
+
+      const consumed = await this.tokensService.consumeEmailChangeCode(
+        currentUserId,
+        dto.code,
+      );
+      if (
+        !consumed ||
+        consumed.user_id !== currentUserId ||
+        consumed.new_email.trim().toLowerCase() !== newEmail
+      ) {
+        return this.rejectInvalidCode(currentUserId);
+      }
+
       user.email = newEmail;
       await this.usersRepository.save(user);
       await this.authService.revokeAllSessions(user.id, 'email_changed');
-      await this.tokensService
-        .deleteEmailChangeCode(dto.code)
-        .catch(() => undefined);
-      await this.redisService
-        .del(this.getActiveCodeKey(currentUserId))
-        .catch(() => undefined);
       await this.tokensService
         .clearVerificationFailures(TokenType.EMAIL_CHANGE, attemptSubject)
         .catch(() => undefined);
