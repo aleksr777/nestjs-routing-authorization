@@ -15,8 +15,9 @@ const createService = () => {
   const transactionUpdate = jest.fn().mockResolvedValue({ affected: 1 });
   const transactionManager = { update: transactionUpdate };
   const transaction = jest.fn(
-    async (callback: (manager: typeof transactionManager) => Promise<unknown>) =>
-      callback(transactionManager),
+    async (
+      callback: (manager: typeof transactionManager) => Promise<unknown>,
+    ) => callback(transactionManager),
   );
   const redisGet = jest.fn();
   const redisGetDel = jest.fn();
