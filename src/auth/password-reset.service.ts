@@ -203,6 +203,8 @@ export class PasswordResetService {
       if (result.affected === 0) {
         this.errorsService.userNotFound();
       }
+
+      await this.authService.revokeAllSessions(userId, 'password_reset');
       await this.tokensService.deletePassResetCode(code, userId);
       await this.tokensService.clearVerificationFailures(
         TokenType.PASSWORD_RESET,
@@ -211,7 +213,10 @@ export class PasswordResetService {
       await this.redisService
         .del(this.getLockoutKey(attemptSubject))
         .catch(() => undefined);
-      return this.authService.login(userId);
+
+      return {
+        message: 'Password reset successfully. Please sign in.',
+      };
     } catch (err: unknown) {
       this.errorsService.resetPassword(err);
     }
