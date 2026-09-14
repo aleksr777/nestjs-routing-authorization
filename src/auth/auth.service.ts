@@ -323,9 +323,12 @@ export class AuthService {
     userId: number,
     currentSessionId: string,
     reason = 'security_context_changed',
+    manager?: EntityManager,
   ): Promise<void> {
-    await this.sessionsRepository
-      .createQueryBuilder()
+    const queryBuilder = manager
+      ? manager.createQueryBuilder()
+      : this.sessionsRepository.createQueryBuilder();
+    await queryBuilder
       .update(AuthSession)
       .set({ revoked_at: new Date(), revoked_reason: reason })
       .where('user_id = :userId', { userId })
