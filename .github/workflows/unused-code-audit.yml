@@ -36,12 +36,20 @@ jobs:
           echo '=== TSC_UNUSED_END ==='
           exit 0
 
-      - name: Knip unused-code audit
+      - name: Knip unused-code audit with explicit entry points
         shell: bash
         run: |
           set +e
           echo '=== KNIP_BEGIN ==='
-          npx --yes knip@5 --reporter compact
+          npx --yes knip@5 --reporter compact \
+            --entry 'src/main.ts' \
+            --entry 'data-source.ts' \
+            --entry 'src/migrations/*.ts' \
+            --entry 'src/**/*.spec.ts' \
+            --entry 'test/**/*.ts' \
+            --project 'src/**/*.ts' \
+            --project 'test/**/*.ts' \
+            --project 'data-source.ts'
           echo "KNIP_EXIT=$?"
           echo '=== KNIP_END ==='
           exit 0
