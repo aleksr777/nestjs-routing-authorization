@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
 import { CoreModule } from '../common/core.module';
+import { ActivityModule } from '../activity/activity.module';
 import { PassportModule } from '@nestjs/passport';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
@@ -25,6 +26,7 @@ import { AuthSession } from './entities/auth-session.entity';
     TypeOrmModule.forFeature([User, AuthSession]),
     PassportModule,
     ConfigModule,
+    ActivityModule,
     JwtModule.registerAsync({
       imports: [CoreModule],
       inject: [EnvService],

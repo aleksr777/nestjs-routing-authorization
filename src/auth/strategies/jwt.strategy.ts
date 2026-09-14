@@ -9,6 +9,8 @@ import { AuthService } from '../../auth/auth.service';
 import { TokensService } from '../tokens.service';
 import { ErrorsService } from '../../common/errors-service/errors.service';
 
+type SessionRequest = Request & { authSessionId?: string };
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
@@ -39,6 +41,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
           payload.sid,
           TokenType.ACCESS,
         );
+        if (typeof payload.sid === 'string') {
+          (req as SessionRequest).authSessionId = payload.sid;
+        }
       }
       return user;
     }
