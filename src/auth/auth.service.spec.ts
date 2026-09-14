@@ -1,14 +1,15 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { ActivityService } from '../activity/activity.service';
-import { AuthService } from './auth.service';
-import { SessionTokenService } from './session-token.service';
-import { TokensService } from './tokens.service';
+import { SecurityAuditService } from '../audit/security-audit.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { HashService } from '../common/hash-service/hash.service';
+import { SecurityConfigService } from '../common/security/security-config.service';
 import { JwtTokens } from '../common/types/jwt-tokens.type';
 import { User } from '../users/entities/user.entity';
+import { AuthService } from './auth.service';
 import { AuthSession } from './entities/auth-session.entity';
+import { SessionTokenService } from './session-token.service';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -69,7 +70,6 @@ describe('AuthService persistent sessions', () => {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn(),
     } as unknown as Repository<AuthSession>;
-    const tokensService = {} as TokensService;
     const sessionTokenService = {
       generate: jest.fn(() => createTokens(nextToken)),
       getSessionId: jest.fn(() => SESSION_ID),
@@ -78,16 +78,23 @@ describe('AuthService persistent sessions', () => {
       setSessionActivity: jest.fn().mockResolvedValue(undefined),
       getSessionActivities: jest.fn().mockResolvedValue(new Map()),
     } as unknown as ActivityService;
+    const securityConfig = {
+      getMaxActiveSessions: jest.fn(() => 10),
+    } as unknown as SecurityConfigService;
+    const audit = {
+      record: jest.fn().mockResolvedValue(undefined),
+    } as unknown as SecurityAuditService;
 
     const service = new AuthService(
       usersRepository,
       sessionsRepository,
       dataSource,
-      tokensService,
       sessionTokenService,
       activityService,
       hashService,
       errorsService,
+      securityConfig,
+      audit,
     );
 
     return { service, queryRunner, sessionsRepository, activityService };
