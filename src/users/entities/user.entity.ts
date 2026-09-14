@@ -24,7 +24,6 @@ export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  /* Account creation time */
   @CreateDateColumn({
     default: () => 'CURRENT_TIMESTAMP',
     name: 'created_at',
@@ -33,7 +32,6 @@ export class User {
   })
   created_at!: Date;
 
-  /* Data update time */
   @UpdateDateColumn({
     default: () => 'CURRENT_TIMESTAMP',
     onUpdate: 'CURRENT_TIMESTAMP',
@@ -43,7 +41,6 @@ export class User {
   })
   updated_at!: Date;
 
-  /* Last activity time */
   @Column({
     type: 'timestamp',
     name: 'last_activity_at',
@@ -51,7 +48,6 @@ export class User {
   })
   last_activity_at?: Date;
 
-  /* Email */
   @IsEmail()
   @Length(6, 255)
   @Column({
@@ -64,20 +60,17 @@ export class User {
   })
   email!: string;
 
-  /* Phone number */
   @IsPhoneNumber()
   @IsOptional()
   @Column({
     type: 'varchar',
     name: 'phone_number',
-    //unique: true,
     nullable: true,
     select: false,
     length: 30,
   })
   phone_number?: string | null;
 
-  /* Nickname */
   @IsOptional()
   @IsString()
   @Length(2, 50)
@@ -90,9 +83,8 @@ export class User {
   })
   nickname?: string | null;
 
-  /* Password */
   @IsString()
-  @Length(8, 100)
+  @Length(12, 100)
   @Column({
     type: 'varchar',
     name: 'password',
@@ -101,7 +93,6 @@ export class User {
   })
   password!: string;
 
-  /* role */
   @IsNotEmpty()
   @IsString()
   @Max(20)
@@ -113,7 +104,6 @@ export class User {
   })
   role!: Role;
 
-  /* is_blocked */
   @Column({
     type: 'boolean',
     name: 'is_blocked',
@@ -121,7 +111,6 @@ export class User {
   })
   is_blocked!: boolean;
 
-  /* blocked_at */
   @IsOptional()
   @Column({
     type: 'timestamp',
@@ -131,7 +120,6 @@ export class User {
   })
   blocked_at?: Date | null;
 
-  /* blocked_by */
   @IsOptional()
   @Column({
     type: 'int',
@@ -141,7 +129,6 @@ export class User {
   })
   blocked_by?: number | null;
 
-  /* blocked_reason */
   @IsOptional()
   @Column({
     type: 'varchar',
@@ -152,7 +139,6 @@ export class User {
   })
   blocked_reason?: string | null;
 
-  /* Name */
   @IsOptional()
   @IsString()
   @Length(2, 200)
@@ -165,7 +151,6 @@ export class User {
   })
   name?: string | null;
 
-  /* Age */
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -178,4 +163,20 @@ export class User {
     default: null,
   })
   age?: number | null;
+
+  @Column({
+    type: 'varchar',
+    name: 'mfa_totp_secret',
+    length: 512,
+    nullable: true,
+    select: false,
+  })
+  mfa_totp_secret?: string | null;
+
+  @Column({
+    type: 'boolean',
+    name: 'mfa_totp_enabled',
+    default: false,
+  })
+  mfa_totp_enabled!: boolean;
 }
