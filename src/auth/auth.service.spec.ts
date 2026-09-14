@@ -1,5 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
+import { ActivityService } from '../activity/activity.service';
 import { AuthService } from './auth.service';
 import { SessionTokenService } from './session-token.service';
 import { TokensService } from './tokens.service';
@@ -73,6 +74,10 @@ describe('AuthService persistent sessions', () => {
       generate: jest.fn(() => createTokens(nextToken)),
       getSessionId: jest.fn(() => SESSION_ID),
     } as unknown as SessionTokenService;
+    const activityService = {
+      setSessionActivity: jest.fn().mockResolvedValue(undefined),
+      getSessionActivities: jest.fn().mockResolvedValue(new Map()),
+    } as unknown as ActivityService;
 
     const service = new AuthService(
       usersRepository,
@@ -80,11 +85,12 @@ describe('AuthService persistent sessions', () => {
       dataSource,
       tokensService,
       sessionTokenService,
+      activityService,
       hashService,
       errorsService,
     );
 
-    return { service, queryRunner };
+    return { service, queryRunner, sessionsRepository, activityService };
   };
 
   it('rotates a valid refresh token inside the same session', async () => {
@@ -127,5 +133,36 @@ describe('AuthService persistent sessions', () => {
       }),
     );
     expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses newer pending activity when listing active sessions', async () => {
+    const { service, sessionsRepository, activityService } = createService(
+      hashService.hashToken('current-refresh-token'),
+      'next-refresh-token',
+    );
+    const persisted = new Date('2026-09-14T08:00:00.000Z');
+    const live = new Date('2026-09-14T08:01:00.000Z');
+
+    (sessionsRepository.find as jest.Mock).mockResolvedValue([
+      {
+        id: SESSION_ID,
+        user_id: 7,
+        ip_address: '127.0.0.1',
+        user_agent: 'test-agent',
+        created_at: new Date('2026-09-14T07:00:00.000Z'),
+        last_used_at: persisted,
+        expires_at: new Date('2030-01-01T00:00:00.000Z'),
+        revoked_at: null,
+      } as AuthSession,
+    ]);
+    (activityService.getSessionActivities as jest.Mock).mockResolvedValue(
+      new Map([[SESSION_ID, live]]),
+    );
+
+    const sessions = await service.getSessions(7, SESSION_ID);
+
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].last_used_at).toEqual(live);
+    expect(sessions[0].current).toBe(true);
   });
 });
