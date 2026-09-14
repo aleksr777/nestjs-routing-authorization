@@ -163,6 +163,7 @@ export class PasswordChangeService {
       const user = await qr.manager.findOneOrFail(User, {
         where: { id: userId },
         select: [ID, PASSWORD],
+        lock: { mode: 'pessimistic_write' },
       });
       const same = await this.hashService.compare(newPassword, user.password);
       if (same) this.errorsService.badRequest(ErrMsg.NEW_PASSWORD_MUST_DIFFER);
@@ -174,8 +175,12 @@ export class PasswordChangeService {
 
       const hash = await this.hashService.hash(newPassword);
       await qr.manager.update(User, { id: userId }, { password: hash });
+      await this.authService.revokeAllSessions(
+        userId,
+        options.revokeReason,
+        qr.manager,
+      );
       await qr.commitTransaction();
-      await this.authService.revokeAllSessions(userId, options.revokeReason);
       return { message: 'Password changed successfully. Please sign in.' };
     } catch (err) {
       if (qr.isTransactionActive) await qr.rollbackTransaction();
