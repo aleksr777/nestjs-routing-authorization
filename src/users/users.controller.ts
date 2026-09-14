@@ -10,6 +10,7 @@ import {
   Patch,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { SecurityAuditService } from '../audit/security-audit.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   clearRefreshCookie,
@@ -17,16 +18,16 @@ import {
   setRefreshCookie,
 } from '../auth/auth-response.util';
 import { SecurityConfigService } from '../common/security/security-config.service';
-import { UsersService } from './users.service';
-import { EmailChangeService } from './email-change.service';
-import { PasswordChangeService } from './password-change.service';
 import { DeleteCurrentUserDto } from './dto/delete-current-user.dto';
-import { EmailChangeRequestDto } from './dto/email-change-request.dto';
 import { EmailChangeConfirmDto } from './dto/email-change-confirm.dto';
+import { EmailChangeRequestDto } from './dto/email-change-request.dto';
 import { PasswordChangeByTokenDto } from './dto/password-change.dto';
 import { PasswordVerifyOldDto } from './dto/password-verify-old.dto';
 import { UpdatePartialUserDataDto } from './dto/update-partial-user-data.dto';
+import { EmailChangeService } from './email-change.service';
 import { User } from './entities/user.entity';
+import { PasswordChangeService } from './password-change.service';
+import { UsersService } from './users.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')
@@ -36,7 +37,15 @@ export class UsersController {
     private readonly emailChangeService: EmailChangeService,
     private readonly passwordChangeService: PasswordChangeService,
     private readonly securityConfig: SecurityConfigService,
+    private readonly audit: SecurityAuditService,
   ) {}
+
+  private auditContext(req: Request) {
+    return {
+      ipAddress: req.ip || req.socket.remoteAddress || null,
+      userAgent: req.get('user-agent') ?? null,
+    };
+  }
 
   @Get('me')
   async getCurrentProfile(@Req() req: Request) {
@@ -57,6 +66,11 @@ export class UsersController {
       req.headers.authorization,
     );
     clearRefreshCookie(res, this.securityConfig);
+    void this.audit.record({
+      event: 'USER_DELETED',
+      userId: +user.id,
+      ...this.auditContext(req),
+    });
   }
 
   @Patch('me/partial-data/update')
@@ -94,6 +108,11 @@ export class UsersController {
     );
     if (!tokens) return tokens;
     setRefreshCookie(res, tokens, this.securityConfig);
+    void this.audit.record({
+      event: 'EMAIL_CHANGED',
+      userId: +user.id,
+      ...this.auditContext(req),
+    });
     return getAuthResponse(tokens);
   }
 
@@ -118,6 +137,11 @@ export class UsersController {
     );
     if (!tokens) return tokens;
     setRefreshCookie(res, tokens, this.securityConfig);
+    void this.audit.record({
+      event: 'PASSWORD_CHANGED',
+      userId: +user.id,
+      ...this.auditContext(req),
+    });
     return getAuthResponse(tokens);
   }
 
@@ -142,6 +166,11 @@ export class UsersController {
     );
     if (!tokens) return tokens;
     setRefreshCookie(res, tokens, this.securityConfig);
+    void this.audit.record({
+      event: 'PASSWORD_RESET',
+      userId: +user.id,
+      ...this.auditContext(req),
+    });
     return getAuthResponse(tokens);
   }
 }
