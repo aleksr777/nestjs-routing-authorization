@@ -13,7 +13,6 @@ import { AuthService } from './auth.service';
 import { AuthSession } from './entities/auth-session.entity';
 import { RefreshOriginGuard } from './guards/refresh-origin.guard';
 import { LoginRateLimitService } from './login-rate-limit.service';
-import { MfaService } from './mfa.service';
 import { PasswordResetService } from './password-reset.service';
 import { PublicVerificationRateLimitService } from './public-verification-rate-limit.service';
 import { RegistrationService } from './registration.service';
@@ -51,7 +50,6 @@ import { TokensService } from './tokens.service';
     SessionRateLimitService,
     SessionMaintenanceService,
     SessionTokenService,
-    MfaService,
     RefreshOriginGuard,
     RolesGuard,
     LocalStrategy,
