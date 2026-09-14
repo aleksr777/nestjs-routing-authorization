@@ -1,6 +1,6 @@
-import { Injectable, HttpException } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
 import { HashService } from '../common/hash-service/hash.service';
@@ -16,13 +16,20 @@ import {
 import { ErrMsg } from '../common/errors-service/error-messages.type';
 import { TokenType } from '../common/types/token-type.type';
 
+type PasswordUpdateOptions = {
+  revokeReason: string;
+  tokenType: TokenType;
+  consumeCode: () => Promise<number | null>;
+};
+
 @Injectable()
 export class PasswordChangeService {
   private readonly resetExpiresIn: number;
 
   constructor(
     private readonly dataSource: DataSource,
-    @InjectRepository(User) private readonly usersRepository: Repository<User>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
     private readonly authService: AuthService,
     private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
@@ -53,22 +60,29 @@ export class PasswordChangeService {
   }
 
   async requestReset(userId: number) {
+    const attemptSubject = userId.toString();
+    const retryAfter = await this.tokensService.reserveVerificationCodeRequest(
+      TokenType.CURRENT_USER_PASSWORD_RESET,
+      attemptSubject,
+    );
+    let issuedCode: string | undefined;
+
     try {
       const user = await this.usersRepository.findOneOrFail({
         where: { id: userId },
         select: [ID, EMAIL],
       });
-      const code = await this.tokensService.getCurrentUserPasswordResetCode(
+      issuedCode = await this.tokensService.getCurrentUserPasswordResetCode(
         user.id,
       );
       const text =
         `You requested to change your password.\n` +
-        `Use this code within ${this.resetExpiresIn} min: ${code}\n\n` +
+        `Use this code within ${this.resetExpiresIn} min: ${issuedCode}\n\n` +
         `If it wasn't you, ignore this message.`;
       const html = `
         <p>You requested to change your password.</p>
         <p>Use this code within ${this.resetExpiresIn} min:</p>
-        <p style="font-weight: bold; font-size: 30px;">${code}</p>
+        <p style="font-weight: bold; font-size: 30px;">${issuedCode}</p>
         <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
       await this.mailService.send(
         user.email,
@@ -76,22 +90,36 @@ export class PasswordChangeService {
         text,
         html,
       );
-      return { message: 'Confirmation code sent to your email.' };
+      await this.tokensService.clearVerificationFailures(
+        TokenType.CURRENT_USER_PASSWORD_RESET,
+        attemptSubject,
+      );
+      return {
+        message: 'Confirmation code sent to your email.',
+        retry_after: retryAfter,
+        max_attempts: this.tokensService.getVerificationAttemptLimit(
+          TokenType.CURRENT_USER_PASSWORD_RESET,
+        ),
+      };
     } catch (err: unknown) {
+      if (issuedCode) {
+        await this.tokensService
+          .deleteCurrentUserPasswordResetCode(issuedCode, userId)
+          .catch(() => undefined);
+      }
+      await this.tokensService
+        .releaseVerificationCodeRequest(
+          TokenType.CURRENT_USER_PASSWORD_RESET,
+          attemptSubject,
+        )
+        .catch(() => undefined);
+      if (err instanceof HttpException) throw err;
       this.errorsService.userNotFound(err);
       this.errorsService.default(err);
     }
   }
 
-  async confirmReset(
-    userId: number,
-    code: string,
-    newPassword: string,
-    accessToken?: string,
-  ) {
-    if (!accessToken) {
-      return this.errorsService.invalidToken(null, TokenType.ACCESS);
-    }
+  async confirmReset(userId: number, code: string, newPassword: string) {
     const attemptSubject = userId.toString();
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.CURRENT_USER_PASSWORD_RESET,
@@ -109,28 +137,23 @@ export class PasswordChangeService {
         TokenType.CURRENT_USER_PASSWORD_RESET,
       );
     }
-    const tokens = await this.updatePassword(userId, newPassword, accessToken);
-    await this.tokensService
-      .deleteCurrentUserPasswordResetCode(code)
-      .catch(() => undefined);
+
+    const result = await this.updatePassword(userId, newPassword, {
+      revokeReason: 'password_reset',
+      tokenType: TokenType.CURRENT_USER_PASSWORD_RESET,
+      consumeCode: () =>
+        this.tokensService.consumeCurrentUserPasswordResetCode(userId, code),
+    });
     await this.tokensService
       .clearVerificationFailures(
         TokenType.CURRENT_USER_PASSWORD_RESET,
         attemptSubject,
       )
       .catch(() => undefined);
-    return tokens;
+    return result;
   }
 
-  async confirm(
-    userId: number,
-    code: string,
-    newPassword: string,
-    accessToken?: string,
-  ) {
-    if (!accessToken) {
-      return this.errorsService.invalidToken(null, TokenType.ACCESS);
-    }
+  async confirm(userId: number, code: string, newPassword: string) {
     const attemptSubject = userId.toString();
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.PASSWORD_CHANGE,
@@ -145,20 +168,23 @@ export class PasswordChangeService {
       );
       return this.errorsService.invalidToken(null, TokenType.PASSWORD_CHANGE);
     }
-    const tokens = await this.updatePassword(userId, newPassword, accessToken);
-    await this.tokensService
-      .deletePasswordChangeCode(code)
-      .catch(() => undefined);
+
+    const result = await this.updatePassword(userId, newPassword, {
+      revokeReason: 'password_changed',
+      tokenType: TokenType.PASSWORD_CHANGE,
+      consumeCode: () =>
+        this.tokensService.consumePasswordChangeCode(userId, code),
+    });
     await this.tokensService
       .clearVerificationFailures(TokenType.PASSWORD_CHANGE, attemptSubject)
       .catch(() => undefined);
-    return tokens;
+    return result;
   }
 
   private async updatePassword(
     userId: number,
     newPassword: string,
-    accessToken: string,
+    options: PasswordUpdateOptions,
   ) {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
@@ -167,19 +193,27 @@ export class PasswordChangeService {
       const user = await qr.manager.findOneOrFail(User, {
         where: { id: userId },
         select: [ID, PASSWORD],
+        lock: { mode: 'pessimistic_write' },
       });
       const same = await this.hashService.compare(newPassword, user.password);
       if (same) this.errorsService.badRequest(ErrMsg.NEW_PASSWORD_MUST_DIFFER);
+
+      const consumedUserId = await options.consumeCode();
+      if (consumedUserId !== userId) {
+        this.errorsService.invalidToken(null, options.tokenType);
+      }
+
       const hash = await this.hashService.hash(newPassword);
       await qr.manager.update(User, { id: userId }, { password: hash });
-      await qr.commitTransaction();
-      await this.tokensService.addJwtTokenToBlacklist(
-        accessToken,
-        TokenType.ACCESS,
+      await this.authService.revokeAllSessions(
+        userId,
+        options.revokeReason,
+        qr.manager,
       );
-      return this.authService.login(userId);
+      await qr.commitTransaction();
+      return { message: 'Password changed successfully. Please sign in.' };
     } catch (err) {
-      await qr.rollbackTransaction();
+      if (qr.isTransactionActive) await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;
       this.errorsService.userNotFound(err);
       this.errorsService.default(err);

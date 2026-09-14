@@ -1,25 +1,29 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
-import { CoreModule } from '../common/core.module';
-import { ActivityModule } from '../activity/activity.module';
+import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { LocalStrategy } from './strategies/local.strategy';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ActivityModule } from '../activity/activity.module';
+import { CoreModule } from '../common/core.module';
+import { EnvService } from '../common/env-service/env.service';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { User } from '../users/entities/user.entity';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { AuthSession } from './entities/auth-session.entity';
+import { RefreshOriginGuard } from './guards/refresh-origin.guard';
+import { LoginRateLimitService } from './login-rate-limit.service';
+import { MfaService } from './mfa.service';
+import { PasswordResetService } from './password-reset.service';
+import { PublicVerificationRateLimitService } from './public-verification-rate-limit.service';
+import { RegistrationService } from './registration.service';
+import { SessionMaintenanceService } from './session-maintenance.service';
+import { SessionRateLimitService } from './session-rate-limit.service';
+import { SessionTokenService } from './session-token.service';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
-import { AuthService } from './auth.service';
-import { RegistrationService } from './registration.service';
-import { PasswordResetService } from './password-reset.service';
-import { LoginRateLimitService } from './login-rate-limit.service';
-import { PublicVerificationRateLimitService } from './public-verification-rate-limit.service';
-import { SessionTokenService } from './session-token.service';
+import { LocalStrategy } from './strategies/local.strategy';
 import { TokensService } from './tokens.service';
-import { RefreshOriginGuard } from './guards/refresh-origin.guard';
-import { EnvService } from '../common/env-service/env.service';
-import { AuthController } from './auth.controller';
-import { User } from '../users/entities/user.entity';
-import { AuthSession } from './entities/auth-session.entity';
 
 @Module({
   imports: [
@@ -44,8 +48,12 @@ import { AuthSession } from './entities/auth-session.entity';
     PasswordResetService,
     LoginRateLimitService,
     PublicVerificationRateLimitService,
+    SessionRateLimitService,
+    SessionMaintenanceService,
     SessionTokenService,
+    MfaService,
     RefreshOriginGuard,
+    RolesGuard,
     LocalStrategy,
     JwtStrategy,
     JwtRefreshStrategy,

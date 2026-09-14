@@ -7,6 +7,9 @@
   "license": "UNLICENSED",
   "scripts": {
     "typeorm": "typeorm-ts-node-commonjs",
+    "migration:show": "npm run typeorm -- migration:show -d data-source.ts",
+    "migration:run": "npm run typeorm -- migration:run -d data-source.ts",
+    "migration:revert": "npm run typeorm -- migration:revert -d data-source.ts",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",

@@ -1,5 +1,5 @@
 import { HttpException, Injectable } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { TokensService } from './tokens.service';
@@ -34,6 +34,7 @@ export class PasswordResetService {
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly redisService: RedisService,
+    private readonly dataSource: DataSource,
   ) {
     this.resetExpiresIn =
       this.envService.get('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
@@ -176,34 +177,48 @@ export class PasswordResetService {
       attemptSubject,
     );
 
-    try {
-      const userId = await this.tokensService.getIdByResetCode(code);
-      if (userId === null) {
-        return this.rejectInvalidCode(attemptSubject);
-      }
+    const userId = await this.tokensService.getIdByResetCode(code);
+    if (userId === null) {
+      return this.rejectInvalidCode(attemptSubject);
+    }
 
-      const isActive = await this.tokensService.isActiveResetCode(userId, code);
-      const user = await this.usersRepository.findOne({
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const user = await qr.manager.findOne(User, {
         where: { id: userId },
         select: [ID, EMAIL],
+        lock: { mode: 'pessimistic_write' },
       });
-      if (
-        !isActive ||
-        !user ||
-        user.email.trim().toLowerCase() !== attemptSubject
-      ) {
-        return this.rejectInvalidCode(attemptSubject);
+      if (!user || user.email.trim().toLowerCase() !== attemptSubject) {
+        await this.rejectInvalidCode(attemptSubject);
+      }
+
+      const consumedUserId = await this.tokensService.consumeResetCode(
+        userId,
+        code,
+      );
+      if (consumedUserId !== userId) {
+        await this.rejectInvalidCode(attemptSubject);
       }
 
       const hashedPassword = await this.hashService.hash(newPassword);
-      const result = await this.usersRepository.update(
+      const result = await qr.manager.update(
+        User,
         { id: userId },
         { password: hashedPassword },
       );
       if (result.affected === 0) {
         this.errorsService.userNotFound();
       }
-      await this.tokensService.deletePassResetCode(code, userId);
+      await this.authService.revokeAllSessions(
+        userId,
+        'password_reset',
+        qr.manager,
+      );
+      await qr.commitTransaction();
+
       await this.tokensService.clearVerificationFailures(
         TokenType.PASSWORD_RESET,
         attemptSubject,
@@ -211,9 +226,15 @@ export class PasswordResetService {
       await this.redisService
         .del(this.getLockoutKey(attemptSubject))
         .catch(() => undefined);
-      return this.authService.login(userId);
+
+      return {
+        message: 'Password reset successfully. Please sign in.',
+      };
     } catch (err: unknown) {
+      if (qr.isTransactionActive) await qr.rollbackTransaction();
       this.errorsService.resetPassword(err);
+    } finally {
+      await qr.release();
     }
   }
 }

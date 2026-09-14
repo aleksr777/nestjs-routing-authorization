@@ -1,32 +1,29 @@
 import {
   Body,
-  Post,
   Controller,
+  Delete,
   Get,
+  Patch,
+  Post,
   Req,
   Res,
-  Delete,
   UseGuards,
-  Patch,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { SecurityAuditService } from '../audit/security-audit.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import {
-  clearRefreshCookie,
-  getAuthResponse,
-  setRefreshCookie,
-} from '../auth/auth-response.util';
+import { clearRefreshCookie } from '../auth/auth-response.util';
 import { SecurityConfigService } from '../common/security/security-config.service';
-import { UsersService } from './users.service';
-import { EmailChangeService } from './email-change.service';
-import { PasswordChangeService } from './password-change.service';
 import { DeleteCurrentUserDto } from './dto/delete-current-user.dto';
-import { EmailChangeRequestDto } from './dto/email-change-request.dto';
 import { EmailChangeConfirmDto } from './dto/email-change-confirm.dto';
+import { EmailChangeRequestDto } from './dto/email-change-request.dto';
 import { PasswordChangeByTokenDto } from './dto/password-change.dto';
 import { PasswordVerifyOldDto } from './dto/password-verify-old.dto';
 import { UpdatePartialUserDataDto } from './dto/update-partial-user-data.dto';
+import { EmailChangeService } from './email-change.service';
 import { User } from './entities/user.entity';
+import { PasswordChangeService } from './password-change.service';
+import { UsersService } from './users.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')
@@ -36,7 +33,15 @@ export class UsersController {
     private readonly emailChangeService: EmailChangeService,
     private readonly passwordChangeService: PasswordChangeService,
     private readonly securityConfig: SecurityConfigService,
+    private readonly audit: SecurityAuditService,
   ) {}
+
+  private auditContext(req: Request) {
+    return {
+      ipAddress: req.ip || req.socket.remoteAddress || null,
+      userAgent: req.get('user-agent') ?? null,
+    };
+  }
 
   @Get('me')
   async getCurrentProfile(@Req() req: Request) {
@@ -51,12 +56,13 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    await this.usersService.deleteCurrentUser(
-      +user.id,
-      dto.password,
-      req.headers.authorization,
-    );
+    await this.usersService.deleteCurrentUser(+user.id, dto.password);
     clearRefreshCookie(res, this.securityConfig);
+    void this.audit.record({
+      event: 'USER_DELETED',
+      userId: +user.id,
+      ...this.auditContext(req),
+    });
   }
 
   @Patch('me/partial-data/update')
@@ -87,14 +93,14 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    const tokens = await this.emailChangeService.confirm(
-      +user.id,
-      dto,
-      req.headers.authorization,
-    );
-    if (!tokens) return tokens;
-    setRefreshCookie(res, tokens, this.securityConfig);
-    return getAuthResponse(tokens);
+    const result = await this.emailChangeService.confirm(+user.id, dto);
+    clearRefreshCookie(res, this.securityConfig);
+    void this.audit.record({
+      event: 'EMAIL_CHANGED',
+      userId: +user.id,
+      ...this.auditContext(req),
+    });
+    return result;
   }
 
   @Post('me/password/change/request')
@@ -110,15 +116,18 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    const tokens = await this.passwordChangeService.confirm(
+    const result = await this.passwordChangeService.confirm(
       +user.id,
       dto.code,
       dto.new_password,
-      req.headers.authorization,
     );
-    if (!tokens) return tokens;
-    setRefreshCookie(res, tokens, this.securityConfig);
-    return getAuthResponse(tokens);
+    clearRefreshCookie(res, this.securityConfig);
+    void this.audit.record({
+      event: 'PASSWORD_CHANGED',
+      userId: +user.id,
+      ...this.auditContext(req),
+    });
+    return result;
   }
 
   @Post('me/password/reset/request')
@@ -134,14 +143,17 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    const tokens = await this.passwordChangeService.confirmReset(
+    const result = await this.passwordChangeService.confirmReset(
       +user.id,
       dto.code,
       dto.new_password,
-      req.headers.authorization,
     );
-    if (!tokens) return tokens;
-    setRefreshCookie(res, tokens, this.securityConfig);
-    return getAuthResponse(tokens);
+    clearRefreshCookie(res, this.securityConfig);
+    void this.audit.record({
+      event: 'PASSWORD_RESET',
+      userId: +user.id,
+      ...this.auditContext(req),
+    });
+    return result;
   }
 }

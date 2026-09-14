@@ -1,6 +1,6 @@
-import { Injectable, HttpException } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
@@ -32,7 +32,8 @@ export class EmailChangeService {
 
   constructor(
     private readonly dataSource: DataSource,
-    @InjectRepository(User) private readonly usersRepository: Repository<User>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly errorsService: ErrorsService,
@@ -140,6 +141,7 @@ export class EmailChangeService {
 
   async request(userId: number, dto: EmailChangeRequestDto) {
     await this.assertNotLocked(userId);
+    await this.authService.verifyUserPassword(userId, dto.current_password);
 
     const user = await this.usersRepository
       .findOneOrFail({ where: { id: userId }, select: [ID, EMAIL, IS_BLOCKED] })
@@ -162,40 +164,64 @@ export class EmailChangeService {
       this.errorsService.conflict(ErrMsg.CONFLICT_USER_EXISTS);
     }
 
-    const activeKey = this.getActiveCodeKey(userId);
-    const previousCode = await this.redisService.get(activeKey);
-    const redisValue = { user_id: userId, new_email: newEmail };
-    const code = await this.tokensService.getEmailChangeCode(redisValue);
-    await this.redisService.set(activeKey, code, {
-      EX: this.emailChangeTokenTtl,
-    });
-    if (previousCode && previousCode !== code) {
-      await this.redisService.del(`${EMAIL_CHANGE_CODE_PREFIX}${previousCode}`);
-    }
-
-    await this.tokensService.clearVerificationFailures(
+    const attemptSubject = userId.toString();
+    const retryAfter = await this.tokensService.reserveVerificationCodeRequest(
       TokenType.EMAIL_CHANGE,
-      userId.toString(),
+      attemptSubject,
     );
-    const text =
-      `You requested to change your account email to ${newEmail}.\n` +
-      `To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): ${code}\n\nIf it wasn't you, ignore this message.`;
-    const html = `
-      <p>You requested to change your account email to ${newEmail}.</p>
-      <p>To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): 
-      <p style="font-weight: bold; font-size: 30px;">${code}</p>
-      <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
-    await this.mailService.send(newEmail, 'Confirm your new email', text, html);
+    let issuedCode: string | undefined;
+    try {
+      const activeKey = this.getActiveCodeKey(userId);
+      const previousCode = await this.redisService.get(activeKey);
+      const redisValue = { user_id: userId, new_email: newEmail };
+      issuedCode = await this.tokensService.getEmailChangeCode(redisValue);
+      await this.redisService.set(activeKey, issuedCode, {
+        EX: this.emailChangeTokenTtl,
+      });
+      if (previousCode && previousCode !== issuedCode) {
+        await this.redisService.del(
+          `${EMAIL_CHANGE_CODE_PREFIX}${previousCode}`,
+        );
+      }
+
+      const text =
+        `You requested to change your account email to ${newEmail}.\n` +
+        `To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): ${issuedCode}\n\nIf it wasn't you, ignore this message.`;
+      const html = `
+        <p>You requested to change your account email to ${newEmail}.</p>
+        <p>To confirm, use the code below (within ${this.emailChangeTokenExpiresIn} min): 
+        <p style="font-weight: bold; font-size: 30px;">${issuedCode}</p>
+        <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
+      await this.mailService.send(
+        newEmail,
+        'Confirm your new email',
+        text,
+        html,
+      );
+      await this.tokensService.clearVerificationFailures(
+        TokenType.EMAIL_CHANGE,
+        attemptSubject,
+      );
+      return {
+        message: 'Confirmation code sent to your new email.',
+        retry_after: retryAfter,
+        max_attempts: this.tokensService.getVerificationAttemptLimit(
+          TokenType.EMAIL_CHANGE,
+        ),
+      };
+    } catch (err: unknown) {
+      if (issuedCode) {
+        await this.invalidateActiveCode(userId).catch(() => undefined);
+      }
+      await this.tokensService
+        .releaseVerificationCodeRequest(TokenType.EMAIL_CHANGE, attemptSubject)
+        .catch(() => undefined);
+      if (err instanceof HttpException) throw err;
+      this.errorsService.default(err);
+    }
   }
 
-  async confirm(
-    currentUserId: number,
-    dto: EmailChangeConfirmDto,
-    accessToken: string | undefined,
-  ) {
-    if (!accessToken) {
-      this.errorsService.tokenNotDefined(TokenType.ACCESS);
-    }
+  async confirm(currentUserId: number, dto: EmailChangeConfirmDto) {
     await this.assertNotLocked(currentUserId);
 
     const attemptSubject = currentUserId.toString();
@@ -204,30 +230,26 @@ export class EmailChangeService {
       attemptSubject,
     );
 
-    const activeCode = await this.redisService.get(
-      this.getActiveCodeKey(currentUserId),
-    );
-    if (activeCode !== dto.code) {
-      return this.rejectInvalidCode(currentUserId);
-    }
-
     const data = await this.tokensService.getDataByEmailChangeCode(dto.code);
     if (
       !data ||
       typeof data.user_id !== 'number' ||
-      typeof data.new_email !== 'string'
+      typeof data.new_email !== 'string' ||
+      data.user_id !== currentUserId
     ) {
       return this.rejectInvalidCode(currentUserId);
     }
-    if (data.user_id !== currentUserId) {
-      return this.rejectInvalidCode(currentUserId);
-    }
+
     const newEmail = data.new_email.trim().toLowerCase();
     this.mailService.validateNotServiceEmail(newEmail);
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
     try {
-      const user = await this.usersRepository.findOneOrFail({
+      const user = await qr.manager.findOneOrFail(User, {
         where: { id: currentUserId },
         select: [ID, EMAIL, IS_BLOCKED],
+        lock: { mode: 'pessimistic_write' },
       });
       if (user.is_blocked) {
         this.errorsService.badRequest(ErrMsg.CURRENT_USER_BLOCKED);
@@ -235,38 +257,51 @@ export class EmailChangeService {
       if (user.email.trim().toLowerCase() === newEmail) {
         this.errorsService.forbidden(ErrMsg.NEW_EMAIL_MATCH_USER_EMAIL);
       }
-      const isEmailTaken = await this.usersRepository.exists({
+      const isEmailTaken = await qr.manager.getRepository(User).exists({
         where: { email: newEmail },
       });
       if (isEmailTaken) {
         this.errorsService.conflict(ErrMsg.CONFLICT_USER_EXISTS);
       }
+
+      const consumed = await this.tokensService.consumeEmailChangeCode(
+        currentUserId,
+        dto.code,
+      );
+      if (
+        !consumed ||
+        consumed.user_id !== currentUserId ||
+        consumed.new_email.trim().toLowerCase() !== newEmail
+      ) {
+        await this.rejectInvalidCode(currentUserId);
+      }
+
       user.email = newEmail;
-      await this.usersRepository.save(user);
-      await this.tokensService
-        .deleteEmailChangeCode(dto.code)
-        .catch(() => undefined);
-      await this.redisService
-        .del(this.getActiveCodeKey(currentUserId))
-        .catch(() => undefined);
+      await qr.manager.save(User, user);
+      await this.authService.revokeAllSessions(
+        user.id,
+        'email_changed',
+        qr.manager,
+      );
+      await qr.commitTransaction();
+
       await this.tokensService
         .clearVerificationFailures(TokenType.EMAIL_CHANGE, attemptSubject)
         .catch(() => undefined);
       await this.redisService
         .del(this.getLockoutKey(currentUserId))
         .catch(() => undefined);
-      await this.tokensService.addJwtTokenToBlacklist(
-        accessToken,
-        TokenType.ACCESS,
-      );
-      return this.authService.login(user.id);
+      return { message: 'Email changed successfully. Please sign in.' };
     } catch (err) {
+      if (qr.isTransactionActive) await qr.rollbackTransaction();
       if (err instanceof HttpException) {
         throw err;
       }
       this.errorsService.userNotFound(err);
       this.errorsService.userConflict(err, [EMAIL]);
       this.errorsService.default(err);
+    } finally {
+      await qr.release();
     }
   }
 }

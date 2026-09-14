@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
@@ -7,16 +7,17 @@ import { EnvService } from './common/env-service/env.service';
 import { SecurityConfigService } from './common/security/security-config.service';
 import { configureHttpSecurity } from './common/security/security-http';
 
+const logger = new Logger('Bootstrap');
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-
   const envService = app.get(EnvService);
   const securityConfig = app.get(SecurityConfigService);
 
   envService.validateVariables();
   securityConfig.validate();
   configureHttpSecurity(app, securityConfig);
-
+  app.enableShutdownHooks();
   app.use(cookieParser());
 
   app.enableCors({
@@ -36,14 +37,14 @@ async function bootstrap() {
   );
 
   app.setGlobalPrefix('api');
-
   const serverPort = envService.get('SERVER_PORT', 'number');
-
   await app.listen(serverPort);
-  console.log(`Application is running on: http://localhost:${serverPort}/api`);
+  logger.log(`Application is running on port ${serverPort}.`);
 }
 
-bootstrap().catch((err) => {
-  console.error('Application failed to start:', err);
+bootstrap().catch((err: unknown) => {
+  const message =
+    err instanceof Error ? (err.stack ?? err.message) : String(err);
+  logger.error(`Application failed to start: ${message}`);
   process.exit(1);
 });
