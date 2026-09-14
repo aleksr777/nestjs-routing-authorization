@@ -8,6 +8,7 @@ import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TokensService } from './tokens.service';
 import { SessionTokenService } from './session-token.service';
+import { ActivityService } from '../activity/activity.service';
 import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { User } from '../users/entities/user.entity';
@@ -41,6 +42,7 @@ export class AuthService {
     private readonly dataSource: DataSource,
     private readonly tokensService: TokensService,
     private readonly sessionTokenService: SessionTokenService,
+    private readonly activityService: ActivityService,
     private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
   ) {}
@@ -140,6 +142,9 @@ export class AuthService {
       revoked_reason: null,
     });
     await this.sessionsRepository.save(session);
+    void this.activityService
+      .setSessionActivity(userId, sessionId, now)
+      .catch(() => undefined);
     return tokens;
   }
 
@@ -244,22 +249,37 @@ export class AuthService {
       where: { user_id: userId },
       order: { created_at: 'DESC' },
     });
+    const activeSessions = sessions.filter(
+      (session) =>
+        session.revoked_at === null &&
+        session.expires_at.getTime() > Date.now(),
+    );
 
-    return sessions
-      .filter(
-        (session) =>
-          session.revoked_at === null &&
-          session.expires_at.getTime() > Date.now(),
-      )
-      .map((session) => ({
+    let liveActivity = new Map<string, Date>();
+    try {
+      liveActivity = await this.activityService.getSessionActivities(
+        userId,
+        activeSessions.map((session) => session.id),
+      );
+    } catch {
+      // DB timestamps remain a safe fallback if Redis is temporarily unavailable.
+    }
+
+    return activeSessions.map((session) => {
+      const pending = liveActivity.get(session.id);
+      const lastUsedAt =
+        pending && pending > session.last_used_at ? pending : session.last_used_at;
+
+      return {
         id: session.id,
         ip_address: session.ip_address,
         user_agent: session.user_agent,
         created_at: session.created_at,
-        last_used_at: session.last_used_at,
+        last_used_at: lastUsedAt,
         expires_at: session.expires_at,
         current: session.id === currentSessionId,
-      }));
+      };
+    });
   }
 
   async refreshJwtTokens(userId: number, currentRefreshToken: string | null) {
