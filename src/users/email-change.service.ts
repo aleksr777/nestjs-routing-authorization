@@ -211,10 +211,14 @@ export class EmailChangeService {
 
     const newEmail = data.new_email.trim().toLowerCase();
     this.mailService.validateNotServiceEmail(newEmail);
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
     try {
-      const user = await this.usersRepository.findOneOrFail({
+      const user = await qr.manager.findOneOrFail(User, {
         where: { id: currentUserId },
         select: [ID, EMAIL, IS_BLOCKED],
+        lock: { mode: 'pessimistic_write' },
       });
       if (user.is_blocked) {
         this.errorsService.badRequest(ErrMsg.CURRENT_USER_BLOCKED);
@@ -222,7 +226,7 @@ export class EmailChangeService {
       if (user.email.trim().toLowerCase() === newEmail) {
         this.errorsService.forbidden(ErrMsg.NEW_EMAIL_MATCH_USER_EMAIL);
       }
-      const isEmailTaken = await this.usersRepository.exists({
+      const isEmailTaken = await qr.manager.getRepository(User).exists({
         where: { email: newEmail },
       });
       if (isEmailTaken) {
@@ -242,8 +246,14 @@ export class EmailChangeService {
       }
 
       user.email = newEmail;
-      await this.usersRepository.save(user);
-      await this.authService.revokeAllSessions(user.id, 'email_changed');
+      await qr.manager.save(User, user);
+      await this.authService.revokeAllSessions(
+        user.id,
+        'email_changed',
+        qr.manager,
+      );
+      await qr.commitTransaction();
+
       await this.tokensService
         .clearVerificationFailures(TokenType.EMAIL_CHANGE, attemptSubject)
         .catch(() => undefined);
@@ -252,12 +262,15 @@ export class EmailChangeService {
         .catch(() => undefined);
       return { message: 'Email changed successfully. Please sign in.' };
     } catch (err) {
+      if (qr.isTransactionActive) await qr.rollbackTransaction();
       if (err instanceof HttpException) {
         throw err;
       }
       this.errorsService.userNotFound(err);
       this.errorsService.userConflict(err, [EMAIL]);
       this.errorsService.default(err);
+    } finally {
+      await qr.release();
     }
   }
 }
