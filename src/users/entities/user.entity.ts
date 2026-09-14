@@ -163,20 +163,4 @@ export class User {
     default: null,
   })
   age?: number | null;
-
-  @Column({
-    type: 'varchar',
-    name: 'mfa_totp_secret',
-    length: 512,
-    nullable: true,
-    select: false,
-  })
-  mfa_totp_secret?: string | null;
-
-  @Column({
-    type: 'boolean',
-    name: 'mfa_totp_enabled',
-    default: false,
-  })
-  mfa_totp_enabled!: boolean;
 }

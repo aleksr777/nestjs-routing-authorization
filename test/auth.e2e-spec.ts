@@ -6,7 +6,6 @@ import { Server } from 'node:http';
 import request from 'supertest';
 import { AuthController } from '../src/auth/auth.controller';
 import { AuthService } from '../src/auth/auth.service';
-import { MfaService } from '../src/auth/mfa.service';
 import { PasswordResetService } from '../src/auth/password-reset.service';
 import { PublicVerificationRateLimitService } from '../src/auth/public-verification-rate-limit.service';
 import { RegistrationService } from '../src/auth/registration.service';
@@ -69,14 +68,6 @@ describe('AuthController (e2e)', () => {
   const authService = {
     refreshJwtTokens: jest.fn(),
   };
-  const mfaService = {
-    createLoginChallenge: jest.fn(),
-    completeLogin: jest.fn(),
-    getStatus: jest.fn(),
-    beginSetup: jest.fn(),
-    enable: jest.fn(),
-    disable: jest.fn(),
-  };
   const registrationService = {
     request: jest.fn(),
     resend: jest.fn(),
@@ -117,7 +108,6 @@ describe('AuthController (e2e)', () => {
         RefreshOriginGuard,
         { provide: EnvService, useValue: envService },
         { provide: AuthService, useValue: authService },
-        { provide: MfaService, useValue: mfaService },
         { provide: RegistrationService, useValue: registrationService },
         { provide: PasswordResetService, useValue: passwordResetService },
         {

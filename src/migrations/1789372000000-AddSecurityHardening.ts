@@ -4,12 +4,6 @@ export class AddSecurityHardening1789372000000 implements MigrationInterface {
   name = 'AddSecurityHardening1789372000000';
 
   async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      'ALTER TABLE "user" ADD COLUMN "mfa_totp_secret" varchar(512)',
-    );
-    await queryRunner.query(
-      'ALTER TABLE "user" ADD COLUMN "mfa_totp_enabled" boolean NOT NULL DEFAULT false',
-    );
     await queryRunner.query(`
       CREATE TABLE "security_audit_event" (
         "id" BIGSERIAL NOT NULL,
@@ -37,9 +31,5 @@ export class AddSecurityHardening1789372000000 implements MigrationInterface {
 
   async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query('DROP TABLE "security_audit_event"');
-    await queryRunner.query(
-      'ALTER TABLE "user" DROP COLUMN "mfa_totp_enabled"',
-    );
-    await queryRunner.query('ALTER TABLE "user" DROP COLUMN "mfa_totp_secret"');
   }
 }

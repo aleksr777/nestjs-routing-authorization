@@ -9,22 +9,13 @@ import {
   Post,
   Req,
   Res,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { CookieOptions, Request, Response } from 'express';
-import { Roles } from '../common/decorators/roles.decorator';
-import { RolesGuard } from '../common/guards/roles.guard';
 import { SecurityConfigService } from '../common/security/security-config.service';
-import { Role } from '../common/types/role.enum';
 import { AuthResponse, JwtTokens } from '../common/types/jwt-tokens.type';
 import { User } from '../users/entities/user.entity';
 import { AuthService } from './auth.service';
-import {
-  MfaDisableDto,
-  MfaEnableDto,
-  MfaLoginVerifyDto,
-} from './dto/mfa-totp.dto';
 import { PasswordResetConfirmDto } from './dto/password-reset-confirm.dto';
 import { PasswordResetRequestDto } from './dto/password-reset-request.dto';
 import { RegistrationConfirmDto } from './dto/registration-confirm.dto';
@@ -34,7 +25,6 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshOriginGuard } from './guards/refresh-origin.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
-import { MfaService } from './mfa.service';
 import { PasswordResetService } from './password-reset.service';
 import { PublicVerificationRateLimitService } from './public-verification-rate-limit.service';
 import { RegistrationService } from './registration.service';
@@ -51,7 +41,6 @@ export class AuthController {
     private readonly passwordResetService: PasswordResetService,
     private readonly publicVerificationRateLimitService: PublicVerificationRateLimitService,
     private readonly securityConfig: SecurityConfigService,
-    private readonly mfaService: MfaService,
   ) {}
 
   private getRefreshCookieOptions(maxAge?: number): CookieOptions {
@@ -105,14 +94,6 @@ export class AuthController {
     return typeof token === 'string' ? token : null;
   }
 
-  private getCurrentSessionId(req: Request): string {
-    const sessionId = this.authService.getSessionIdFromToken(
-      req.headers.authorization,
-    );
-    if (!sessionId) throw new UnauthorizedException('Invalid access token.');
-    return sessionId;
-  }
-
   private isJwtTokens(value: unknown): value is JwtTokens {
     if (typeof value !== 'object' || value === null) return false;
     const tokens = value as Partial<Record<keyof JwtTokens, unknown>>;
@@ -146,73 +127,11 @@ export class AuthController {
       };
     }
 
-    if (user.role === Role.ADMIN && user.mfa_totp_enabled) {
-      this.clearRefreshCookie(res);
-      return {
-        mfa_required: true,
-        challenge: await this.mfaService.createLoginChallenge(user.id),
-      };
-    }
-
     const tokens = await this.authService.loginNewSession(
       user.id,
       this.getSessionContext(req),
     );
     return this.handleAuthResult(res, tokens);
-  }
-
-  @Post('mfa/totp/login')
-  async verifyMfaLogin(
-    @Body() dto: MfaLoginVerifyDto,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const tokens = await this.mfaService.completeLogin(
-      dto.challenge,
-      dto.code,
-      this.getSessionContext(req),
-    );
-    return this.handleAuthResult(res, tokens);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Get('mfa/totp/status')
-  getMfaStatus(@Req() req: Request) {
-    return this.mfaService.getStatus(+(req.user as User).id);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Post('mfa/totp/setup')
-  beginMfaSetup(@Req() req: Request) {
-    return this.mfaService.beginSetup(+(req.user as User).id);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Post('mfa/totp/enable')
-  enableMfa(@Body() dto: MfaEnableDto, @Req() req: Request) {
-    const user = req.user as User;
-    return this.mfaService.enable(
-      +user.id,
-      dto.password,
-      dto.code,
-      this.getCurrentSessionId(req),
-    );
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Post('mfa/totp/disable')
-  disableMfa(@Body() dto: MfaDisableDto, @Req() req: Request) {
-    const user = req.user as User;
-    return this.mfaService.disable(
-      +user.id,
-      dto.password,
-      dto.code,
-      this.getCurrentSessionId(req),
-    );
   }
 
   @UseGuards(JwtAuthGuard)
