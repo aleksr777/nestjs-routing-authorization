@@ -24,27 +24,27 @@ export class ApiRateLimitGuard implements CanActivate {
     private readonly errorsService: ErrorsService,
   ) {
     this.apiMaxRequests = this.envService.get('API_IP_MAX_REQUESTS', 'number');
-    this.apiWindowSeconds = this.envService.get(
-      'API_RATE_LIMIT_WINDOW',
-      'number',
-    );
-    this.authMaxRequests = this.envService.get(
-      'AUTH_IP_MAX_REQUESTS',
-      'number',
-    );
-    this.authWindowSeconds = this.envService.get(
-      'AUTH_RATE_LIMIT_WINDOW',
-      'number',
-    );
+    this.apiWindowSeconds = this.envService.get('API_RATE_LIMIT_WINDOW', 'number');
+    this.authMaxRequests = this.envService.get('AUTH_IP_MAX_REQUESTS', 'number');
+    this.authWindowSeconds = this.envService.get('AUTH_RATE_LIMIT_WINDOW', 'number');
   }
 
   private getIp(request: Request) {
     return request.ip || request.socket.remoteAddress || 'unknown';
   }
 
+  private getPath(request: Request) {
+    return request.originalUrl.split('?')[0];
+  }
+
   private isAuthRequest(request: Request) {
-    const path = request.originalUrl.split('?')[0];
+    const path = this.getPath(request);
     return path === '/api/auth' || path.startsWith('/api/auth/');
+  }
+
+  private isHealthRequest(request: Request) {
+    const path = this.getPath(request);
+    return path === '/api/health/live' || path === '/api/health/ready';
   }
 
   private async consume(
@@ -63,7 +63,7 @@ export class ApiRateLimitGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    if (request.method === 'OPTIONS') return true;
+    if (request.method === 'OPTIONS' || this.isHealthRequest(request)) return true;
 
     const ip = this.getIp(request);
     await this.consume(
