@@ -34,7 +34,9 @@ export class SessionMaintenanceService {
         .execute();
 
       if ((result.affected ?? 0) > 0) {
-        this.logger.log(`Deleted ${result.affected} stale authentication sessions.`);
+        this.logger.log(
+          `Deleted ${result.affected} stale authentication sessions.`,
+        );
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
