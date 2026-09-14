@@ -78,7 +78,11 @@ export class ActivityFlushService {
   @CronSafe('*/1 * * * *')
   async flush(): Promise<void> {
     const updates = await this.activity.scanSessionActivities();
-    for (let i = 0; i < updates.length; i += SESSION_ACTIVITY_FLUSH_BATCH_SIZE) {
+    for (
+      let i = 0;
+      i < updates.length;
+      i += SESSION_ACTIVITY_FLUSH_BATCH_SIZE
+    ) {
       const batch = updates.slice(i, i + SESSION_ACTIVITY_FLUSH_BATCH_SIZE);
       try {
         await this.flushBatch(batch);
