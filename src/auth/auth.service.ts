@@ -268,7 +268,9 @@ export class AuthService {
     return activeSessions.map((session) => {
       const pending = liveActivity.get(session.id);
       const lastUsedAt =
-        pending && pending > session.last_used_at ? pending : session.last_used_at;
+        pending && pending > session.last_used_at
+          ? pending
+          : session.last_used_at;
 
       return {
         id: session.id,
