@@ -1,13 +1,13 @@
 import {
   Body,
-  Post,
   Controller,
+  Delete,
   Get,
+  Patch,
+  Post,
   Req,
   Res,
-  Delete,
   UseGuards,
-  Patch,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { SecurityAuditService } from '../audit/security-audit.service';
@@ -60,11 +60,7 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    await this.usersService.deleteCurrentUser(
-      +user.id,
-      dto.password,
-      req.headers.authorization,
-    );
+    await this.usersService.deleteCurrentUser(+user.id, dto.password);
     clearRefreshCookie(res, this.securityConfig);
     void this.audit.record({
       event: 'USER_DELETED',
@@ -101,11 +97,7 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    const tokens = await this.emailChangeService.confirm(
-      +user.id,
-      dto,
-      req.headers.authorization,
-    );
+    const tokens = await this.emailChangeService.confirm(+user.id, dto);
     if (!tokens) return tokens;
     setRefreshCookie(res, tokens, this.securityConfig);
     void this.audit.record({
@@ -133,7 +125,6 @@ export class UsersController {
       +user.id,
       dto.code,
       dto.new_password,
-      req.headers.authorization,
     );
     if (!tokens) return tokens;
     setRefreshCookie(res, tokens, this.securityConfig);
@@ -162,7 +153,6 @@ export class UsersController {
       +user.id,
       dto.code,
       dto.new_password,
-      req.headers.authorization,
     );
     if (!tokens) return tokens;
     setRefreshCookie(res, tokens, this.securityConfig);
