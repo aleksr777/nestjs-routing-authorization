@@ -223,15 +223,22 @@ export class MfaService {
       throw new UnauthorizedException('MFA code has already been used.');
     }
 
-    await this.users.update(
-      { id: userId, role: Role.ADMIN },
-      { mfa_totp_secret: this.encrypt(secret), mfa_totp_enabled: true },
-    );
-    await this.authService.revokeOtherSessions(
-      userId,
-      currentSessionId,
-      'mfa_enabled',
-    );
+    await this.users.manager.transaction(async (manager) => {
+      const result = await manager.update(
+        User,
+        { id: userId, role: Role.ADMIN },
+        { mfa_totp_secret: this.encrypt(secret), mfa_totp_enabled: true },
+      );
+      if ((result.affected ?? 0) !== 1) {
+        throw new UnauthorizedException('Administrator account state changed.');
+      }
+      await this.authService.revokeOtherSessions(
+        userId,
+        currentSessionId,
+        'mfa_enabled',
+        manager,
+      );
+    });
     void this.audit.record({
       event: 'ADMIN_MFA_ENABLED',
       userId,
@@ -263,15 +270,22 @@ export class MfaService {
       throw new UnauthorizedException('MFA code has already been used.');
     }
 
-    await this.users.update(
-      { id: userId },
-      { mfa_totp_secret: null, mfa_totp_enabled: false },
-    );
-    await this.authService.revokeOtherSessions(
-      userId,
-      currentSessionId,
-      'mfa_disabled',
-    );
+    await this.users.manager.transaction(async (manager) => {
+      const result = await manager.update(
+        User,
+        { id: userId, role: Role.ADMIN, mfa_totp_enabled: true },
+        { mfa_totp_secret: null, mfa_totp_enabled: false },
+      );
+      if ((result.affected ?? 0) !== 1) {
+        throw new UnauthorizedException('Administrator account state changed.');
+      }
+      await this.authService.revokeOtherSessions(
+        userId,
+        currentSessionId,
+        'mfa_disabled',
+        manager,
+      );
+    });
     void this.audit.record({
       event: 'ADMIN_MFA_DISABLED',
       userId,
