@@ -4,7 +4,7 @@ import { LessThan, Repository } from 'typeorm';
 import { SecurityConfigService } from '../common/security/security-config.service';
 import { SecurityAuditEvent } from './security-audit-event.entity';
 
-export type SecurityAuditInput = {
+type SecurityAuditInput = {
   event: string;
   success?: boolean;
   userId?: number | null;
