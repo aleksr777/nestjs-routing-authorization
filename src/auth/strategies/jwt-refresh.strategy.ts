@@ -26,7 +26,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
   'jwt-refresh',
 ) {
   constructor(
-    private readonly envService: EnvService,
+    envService: EnvService,
     private readonly authService: AuthService,
     private readonly errorsService: ErrorsService,
   ) {
