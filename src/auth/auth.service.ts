@@ -186,10 +186,7 @@ export class AuthService {
         select: [ID],
         lock: { mode: 'pessimistic_write' },
       });
-      revokedByLimit = await this.enforceActiveSessionLimit(
-        qr.manager,
-        userId,
-      );
+      revokedByLimit = await this.enforceActiveSessionLimit(qr.manager, userId);
 
       sessionId = randomUUID();
       const tokens = this.sessionTokenService.generate(userId, sessionId);
