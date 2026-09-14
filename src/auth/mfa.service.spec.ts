@@ -4,6 +4,7 @@ import { SecurityAuditService } from '../audit/security-audit.service';
 import { HashService } from '../common/hash-service/hash.service';
 import { RedisService } from '../common/redis-service/redis.service';
 import { SecurityConfigService } from '../common/security/security-config.service';
+import { Role } from '../common/types/role.enum';
 import { User } from '../users/entities/user.entity';
 import { AuthService } from './auth.service';
 import { MfaService } from './mfa.service';
@@ -11,6 +12,12 @@ import { MfaService } from './mfa.service';
 const createService = () => {
   const findOne = jest.fn();
   const updateUser = jest.fn();
+  const transactionUpdate = jest.fn().mockResolvedValue({ affected: 1 });
+  const transactionManager = { update: transactionUpdate };
+  const transaction = jest.fn(
+    async (callback: (manager: typeof transactionManager) => Promise<unknown>) =>
+      callback(transactionManager),
+  );
   const redisGet = jest.fn();
   const redisGetDel = jest.fn();
   const redisSet = jest.fn();
@@ -19,10 +26,14 @@ const createService = () => {
   const incrWithExpire = jest.fn();
   const verifyUserPassword = jest.fn();
   const loginNewSession = jest.fn();
-  const revokeOtherSessions = jest.fn();
+  const revokeOtherSessions = jest.fn().mockResolvedValue(undefined);
   const getSessionIdFromToken = jest.fn();
   const auditRecord = jest.fn().mockResolvedValue(undefined);
-  const users = { findOne, update: updateUser } as unknown as Repository<User>;
+  const users = {
+    findOne,
+    update: updateUser,
+    manager: { transaction },
+  } as unknown as Repository<User>;
   const redis = {
     get: redisGet,
     getDel: redisGetDel,
@@ -56,6 +67,9 @@ const createService = () => {
     service,
     findOne,
     updateUser,
+    transaction,
+    transactionUpdate,
+    transactionManager,
     redisGet,
     redisGetDel,
     redisSet,
@@ -120,6 +134,100 @@ describe('MfaService security controls', () => {
     );
     expect(updateUser).not.toHaveBeenCalled();
     expect(revokeOtherSessions).not.toHaveBeenCalled();
+  });
+
+  it('enables MFA and revokes other sessions in the same transaction', async () => {
+    const {
+      service,
+      redisGet,
+      redisSet,
+      deleteIfValueMatches,
+      transaction,
+      transactionUpdate,
+      transactionManager,
+      revokeOtherSessions,
+    } = createService();
+    const { encryptedSecret, code } = getEncryptedSecretAndCurrentCode(service);
+    redisGet.mockResolvedValue(encryptedSecret);
+    deleteIfValueMatches.mockResolvedValue(true);
+    redisSet.mockResolvedValue('OK');
+
+    await expect(
+      service.enable(7, 'current-password', code, 'session-id'),
+    ).resolves.toEqual({ enabled: true });
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(transactionUpdate).toHaveBeenCalledWith(
+      User,
+      { id: 7, role: Role.ADMIN },
+      expect.objectContaining({ mfa_totp_enabled: true }),
+    );
+    expect(revokeOtherSessions).toHaveBeenCalledWith(
+      7,
+      'session-id',
+      'mfa_enabled',
+      transactionManager,
+    );
+  });
+
+  it('does not report MFA enabled when the administrator state changed concurrently', async () => {
+    const {
+      service,
+      redisGet,
+      redisSet,
+      deleteIfValueMatches,
+      transactionUpdate,
+      revokeOtherSessions,
+      auditRecord,
+    } = createService();
+    const { encryptedSecret, code } = getEncryptedSecretAndCurrentCode(service);
+    redisGet.mockResolvedValue(encryptedSecret);
+    deleteIfValueMatches.mockResolvedValue(true);
+    redisSet.mockResolvedValue('OK');
+    transactionUpdate.mockResolvedValue({ affected: 0 });
+
+    await expect(
+      service.enable(7, 'current-password', code, 'session-id'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(revokeOtherSessions).not.toHaveBeenCalled();
+    expect(auditRecord).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'ADMIN_MFA_ENABLED' }),
+    );
+  });
+
+  it('disables MFA and revokes other sessions in the same transaction', async () => {
+    const {
+      service,
+      findOne,
+      redisSet,
+      transactionUpdate,
+      transactionManager,
+      revokeOtherSessions,
+    } = createService();
+    const { encryptedSecret, code } = getEncryptedSecretAndCurrentCode(service);
+    findOne.mockResolvedValue({
+      id: 7,
+      mfa_totp_secret: encryptedSecret,
+      mfa_totp_enabled: true,
+    });
+    redisSet.mockResolvedValue('OK');
+
+    await expect(
+      service.disable(7, 'current-password', code, 'session-id'),
+    ).resolves.toEqual({ enabled: false });
+
+    expect(transactionUpdate).toHaveBeenCalledWith(
+      User,
+      { id: 7, role: Role.ADMIN, mfa_totp_enabled: true },
+      { mfa_totp_secret: null, mfa_totp_enabled: false },
+    );
+    expect(revokeOtherSessions).toHaveBeenCalledWith(
+      7,
+      'session-id',
+      'mfa_disabled',
+      transactionManager,
+    );
   });
 
   it('limits MFA attempts across newly issued challenges for the same user', async () => {
