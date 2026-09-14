@@ -182,16 +182,19 @@ export class PasswordResetService {
         return this.rejectInvalidCode(attemptSubject);
       }
 
-      const isActive = await this.tokensService.isActiveResetCode(userId, code);
       const user = await this.usersRepository.findOne({
         where: { id: userId },
         select: [ID, EMAIL],
       });
-      if (
-        !isActive ||
-        !user ||
-        user.email.trim().toLowerCase() !== attemptSubject
-      ) {
+      if (!user || user.email.trim().toLowerCase() !== attemptSubject) {
+        return this.rejectInvalidCode(attemptSubject);
+      }
+
+      const consumedUserId = await this.tokensService.consumeResetCode(
+        userId,
+        code,
+      );
+      if (consumedUserId !== userId) {
         return this.rejectInvalidCode(attemptSubject);
       }
 
@@ -205,7 +208,6 @@ export class PasswordResetService {
       }
 
       await this.authService.revokeAllSessions(userId, 'password_reset');
-      await this.tokensService.deletePassResetCode(code, userId);
       await this.tokensService.clearVerificationFailures(
         TokenType.PASSWORD_RESET,
         attemptSubject,
