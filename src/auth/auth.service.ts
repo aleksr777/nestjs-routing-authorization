@@ -4,7 +4,14 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { DataSource, In, IsNull, MoreThan, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  IsNull,
+  MoreThan,
+  Repository,
+} from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { SessionTokenService } from './session-token.service';
 import { ActivityService } from '../activity/activity.service';
@@ -132,8 +139,11 @@ export class AuthService {
     return new Date(tokens.refresh_token_expires * 1000);
   }
 
-  private async enforceActiveSessionLimit(userId: number): Promise<void> {
-    const active = await this.sessionsRepository.find({
+  private async enforceActiveSessionLimit(
+    manager: EntityManager,
+    userId: number,
+  ): Promise<number> {
+    const active = await manager.find(AuthSession, {
       where: {
         user_id: userId,
         revoked_at: IsNull(),
@@ -149,52 +159,80 @@ export class AuthService {
     const overflow = active
       .slice(keepBeforeCreate)
       .map((session) => session.id);
-    if (overflow.length === 0) return;
+    if (overflow.length === 0) return 0;
 
-    const now = new Date();
-    await this.sessionsRepository.update(
+    await manager.update(
+      AuthSession,
       { user_id: userId, id: In(overflow) },
-      { revoked_at: now, revoked_reason: 'session_limit' },
+      { revoked_at: new Date(), revoked_reason: 'session_limit' },
     );
-    await this.audit.record({
-      event: 'SESSION_LIMIT_REVOKED',
-      userId,
-      details: { count: overflow.length },
-    });
+    return overflow.length;
   }
 
   private async createSession(
     userId: number,
     context: SessionContext = {},
   ): Promise<JwtTokens> {
-    await this.enforceActiveSessionLimit(userId);
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
 
-    const sessionId = randomUUID();
-    const tokens = this.sessionTokenService.generate(userId, sessionId);
-    const now = new Date();
-    const session = this.sessionsRepository.create({
-      id: sessionId,
-      user_id: userId,
-      refresh_token_hash: this.hashService.hashToken(tokens.refresh_token),
-      ip_address: context.ipAddress ?? null,
-      user_agent: context.userAgent?.slice(0, 512) ?? null,
-      last_used_at: now,
-      expires_at: this.getRefreshExpiration(tokens),
-      revoked_at: null,
-      revoked_reason: null,
-    });
-    await this.sessionsRepository.save(session);
-    void this.activityService
-      .setSessionActivity(userId, sessionId, now)
-      .catch(() => undefined);
-    void this.audit.record({
-      event: 'SESSION_CREATED',
-      userId,
-      sessionId,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
-    });
-    return tokens;
+    let sessionId: string | null = null;
+    let now: Date | null = null;
+    let revokedByLimit = 0;
+    try {
+      await qr.manager.findOneOrFail(User, {
+        where: { id: userId },
+        select: [ID],
+        lock: { mode: 'pessimistic_write' },
+      });
+      revokedByLimit = await this.enforceActiveSessionLimit(
+        qr.manager,
+        userId,
+      );
+
+      sessionId = randomUUID();
+      const tokens = this.sessionTokenService.generate(userId, sessionId);
+      now = new Date();
+      const session = qr.manager.create(AuthSession, {
+        id: sessionId,
+        user_id: userId,
+        refresh_token_hash: this.hashService.hashToken(tokens.refresh_token),
+        ip_address: context.ipAddress ?? null,
+        user_agent: context.userAgent?.slice(0, 512) ?? null,
+        last_used_at: now,
+        expires_at: this.getRefreshExpiration(tokens),
+        revoked_at: null,
+        revoked_reason: null,
+      });
+      await qr.manager.save(AuthSession, session);
+      await qr.commitTransaction();
+
+      if (revokedByLimit > 0) {
+        void this.audit.record({
+          event: 'SESSION_LIMIT_REVOKED',
+          userId,
+          details: { count: revokedByLimit },
+        });
+      }
+      void this.activityService
+        .setSessionActivity(userId, sessionId, now)
+        .catch(() => undefined);
+      void this.audit.record({
+        event: 'SESSION_CREATED',
+        userId,
+        sessionId,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
+      return tokens;
+    } catch (err: unknown) {
+      if (qr.isTransactionActive) await qr.rollbackTransaction();
+      if (err instanceof HttpException) throw err;
+      this.errorsService.default(err);
+    } finally {
+      await qr.release();
+    }
   }
 
   async login(userId: number, context: SessionContext = {}) {
