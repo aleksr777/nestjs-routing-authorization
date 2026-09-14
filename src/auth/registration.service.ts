@@ -240,16 +240,11 @@ export class RegistrationService {
     await qr.connect();
     await qr.startTransaction();
     try {
-      const data = await this.tokensService.getDataByRegistrationCode(code);
-      const isActive = await this.tokensService.isActiveRegistrationCode(
+      const data = await this.tokensService.consumeRegistrationCode(
         attemptSubject,
         code,
       );
-      if (
-        !data ||
-        !isActive ||
-        data.email.trim().toLowerCase() !== attemptSubject
-      ) {
+      if (!data || data.email.trim().toLowerCase() !== attemptSubject) {
         return this.rejectInvalidCode(attemptSubject);
       }
 
@@ -274,7 +269,6 @@ export class RegistrationService {
       });
       await qr.manager.save(User, newUser);
       await qr.commitTransaction();
-      await this.tokensService.deleteRegistrationCode(code, attemptSubject);
       await this.tokensService.clearVerificationFailures(
         TokenType.REGISTRATION,
         attemptSubject,
