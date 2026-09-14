@@ -9,11 +9,14 @@ import { TokenType } from '../common/types/token-type.type';
 const RESET_REDIS_PREFIX = 'reset:';
 const RESET_ACTIVE_REDIS_PREFIX = 'reset:active:';
 const CURRENT_USER_PASSWORD_RESET_REDIS_PREFIX = 'current-user-password-reset:';
+const CURRENT_USER_PASSWORD_RESET_ACTIVE_REDIS_PREFIX =
+  'current-user-password-reset:active:';
 const REGISTER_REDIS_PREFIX = 'register:';
 const REGISTER_ACTIVE_REDIS_PREFIX = 'register:active:';
 const EMAIL_CHANGE_REDIS_PREFIX = 'email-change:';
 const EMAIL_CHANGE_ACTIVE_REDIS_PREFIX = 'email-change:active:';
 const PASSWORD_CHANGE_PREFIX = 'password-change:';
+const PASSWORD_CHANGE_ACTIVE_PREFIX = 'password-change:active:';
 const VERIFICATION_ATTEMPTS_PREFIX = 'verification:attempts:';
 const VERIFICATION_RESEND_PREFIX = 'verification:resend:';
 const DEFAULT_VERIFICATION_ATTEMPTS = 5;
@@ -131,8 +134,16 @@ export class TokensService {
     return `${RESET_ACTIVE_REDIS_PREFIX}${userId}`;
   }
 
+  private getCurrentUserPasswordResetActiveKey(userId: number) {
+    return `${CURRENT_USER_PASSWORD_RESET_ACTIVE_REDIS_PREFIX}${userId}`;
+  }
+
   private getEmailChangeActiveKey(userId: number) {
     return `${EMAIL_CHANGE_ACTIVE_REDIS_PREFIX}${userId}`;
+  }
+
+  private getPasswordChangeActiveKey(userId: number) {
+    return `${PASSWORD_CHANGE_ACTIVE_PREFIX}${userId}`;
   }
 
   getVerificationAttemptLimit(tokenType: TokenType) {
@@ -225,6 +236,19 @@ export class TokensService {
       if (result === 'OK') return code;
     }
     this.errorsService.default(null, ErrMsg.UNABLE_GENERATE_UNIQUE_CODE);
+  }
+
+  private async replaceActiveUserCode(
+    activeKey: string,
+    code: string,
+    tokenPrefix: string,
+    expiresIn: number,
+  ) {
+    const previousCode = await this.redisService.get(activeKey);
+    await this.redisService.set(activeKey, code, { EX: expiresIn });
+    if (previousCode && previousCode !== code) {
+      await this.redisService.del(`${tokenPrefix}${previousCode}`);
+    }
   }
 
   async getRegistrationCode(value: { email: string; password: string }) {
@@ -341,11 +365,18 @@ export class TokensService {
 
   async getCurrentUserPasswordResetCode(userId: number) {
     if (!userId) this.errorsService.default(null, ErrMsg.USER_ID_NOT_DEFINED);
-    return this.saveVerificationToken(
+    const code = await this.saveVerificationToken(
       CURRENT_USER_PASSWORD_RESET_REDIS_PREFIX,
       userId.toString(),
       this.resetExpiresIn,
     );
+    await this.replaceActiveUserCode(
+      this.getCurrentUserPasswordResetActiveKey(userId),
+      code,
+      CURRENT_USER_PASSWORD_RESET_REDIS_PREFIX,
+      this.resetExpiresIn,
+    );
+    return code;
   }
 
   async getIdByCurrentUserPasswordResetCode(
@@ -359,19 +390,26 @@ export class TokensService {
   }
 
   async consumeCurrentUserPasswordResetCode(
+    userId: number,
     code: string,
   ): Promise<number | null> {
-    return this.parseUserId(
-      await this.redisService.getDel(
-        `${CURRENT_USER_PASSWORD_RESET_REDIS_PREFIX}${code}`,
-      ),
+    const raw = await this.redisService.consumeActiveToken(
+      this.getCurrentUserPasswordResetActiveKey(userId),
+      code,
+      `${CURRENT_USER_PASSWORD_RESET_REDIS_PREFIX}${code}`,
     );
+    const consumedUserId = this.parseUserId(raw);
+    return consumedUserId === userId ? consumedUserId : null;
   }
 
-  async deleteCurrentUserPasswordResetCode(code: string) {
+  async deleteCurrentUserPasswordResetCode(code: string, userId?: number) {
     await this.redisService.del(
       `${CURRENT_USER_PASSWORD_RESET_REDIS_PREFIX}${code}`,
     );
+    if (!userId) return;
+    const activeKey = this.getCurrentUserPasswordResetActiveKey(userId);
+    const activeCode = await this.redisService.get(activeKey);
+    if (activeCode === code) await this.redisService.del(activeKey);
   }
 
   async getEmailChangeCode(value: { user_id: number; new_email: string }) {
@@ -407,11 +445,18 @@ export class TokensService {
 
   async getPasswordChangeCode(userId: number) {
     if (!userId) this.errorsService.default(null, ErrMsg.USER_ID_NOT_DEFINED);
-    return this.saveVerificationToken(
+    const code = await this.saveVerificationToken(
       PASSWORD_CHANGE_PREFIX,
       userId.toString(),
       this.passwordChangeTokenExpiresIn,
     );
+    await this.replaceActiveUserCode(
+      this.getPasswordChangeActiveKey(userId),
+      code,
+      PASSWORD_CHANGE_PREFIX,
+      this.passwordChangeTokenExpiresIn,
+    );
+    return code;
   }
 
   async getIdByPasswordChangeCode(code: string): Promise<number | null> {
@@ -420,13 +465,24 @@ export class TokensService {
     );
   }
 
-  async consumePasswordChangeCode(code: string): Promise<number | null> {
-    return this.parseUserId(
-      await this.redisService.getDel(`${PASSWORD_CHANGE_PREFIX}${code}`),
+  async consumePasswordChangeCode(
+    userId: number,
+    code: string,
+  ): Promise<number | null> {
+    const raw = await this.redisService.consumeActiveToken(
+      this.getPasswordChangeActiveKey(userId),
+      code,
+      `${PASSWORD_CHANGE_PREFIX}${code}`,
     );
+    const consumedUserId = this.parseUserId(raw);
+    return consumedUserId === userId ? consumedUserId : null;
   }
 
-  async deletePasswordChangeCode(code: string) {
+  async deletePasswordChangeCode(code: string, userId?: number) {
     await this.redisService.del(`${PASSWORD_CHANGE_PREFIX}${code}`);
+    if (!userId) return;
+    const activeKey = this.getPasswordChangeActiveKey(userId);
+    const activeCode = await this.redisService.get(activeKey);
+    if (activeCode === code) await this.redisService.del(activeKey);
   }
 }
