@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { EnvService } from '../env-service/env.service';
 import { ErrorsService } from '../errors-service/errors.service';
 
-export type RefreshCookieSameSite = 'lax' | 'strict' | 'none';
-export type TrustProxySetting = boolean | number | string;
+type RefreshCookieSameSite = 'lax' | 'strict' | 'none';
+type TrustProxySetting = boolean | number | string;
 
 const MIN_SECRET_LENGTH = 32;
 const DEFAULT_REDIS_CONNECT_TIMEOUT_MS = 5_000;

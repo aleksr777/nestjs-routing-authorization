@@ -1,6 +1,6 @@
 import { IsString, Length, Matches } from 'class-validator';
 
-export class MfaTotpCodeDto {
+class MfaTotpCodeDto {
   @IsString()
   @Matches(/^\d{6}$/, { message: 'MFA code must contain exactly 6 digits' })
   code!: string;

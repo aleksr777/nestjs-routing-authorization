@@ -180,10 +180,6 @@ export class ErrorsService {
     }
   }
 
-  jwtTokenBlacklisted(): never {
-    throw new UnauthorizedException(ErrMsg.ACCESS_TOKEN_IS_BLACKLISTED);
-  }
-
   resetPassword(err: unknown): never {
     if (
       err instanceof BadRequestException ||
