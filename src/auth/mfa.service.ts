@@ -81,7 +81,10 @@ export class MfaService {
   private encrypt(value: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
-    const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+    const encrypted = Buffer.concat([
+      cipher.update(value, 'utf8'),
+      cipher.final(),
+    ]);
     const tag = cipher.getAuthTag();
     return `${iv.toString('base64url')}.${tag.toString('base64url')}.${encrypted.toString('base64url')}`;
   }
@@ -124,7 +127,10 @@ export class MfaService {
     for (const drift of [-1, 0, 1]) {
       const expected = Buffer.from(this.hotp(secret, counter + drift));
       const actual = Buffer.from(code);
-      if (expected.length === actual.length && timingSafeEqual(expected, actual)) {
+      if (
+        expected.length === actual.length &&
+        timingSafeEqual(expected, actual)
+      ) {
         return true;
       }
     }
@@ -144,7 +150,9 @@ export class MfaService {
       where: { id: userId },
       select: ['id', 'role', 'mfa_totp_enabled'],
     });
-    return { enabled: user?.role === Role.ADMIN && user.mfa_totp_enabled === true };
+    return {
+      enabled: user?.role === Role.ADMIN && user.mfa_totp_enabled === true,
+    };
   }
 
   async beginSetup(userId: number) {
@@ -181,7 +189,11 @@ export class MfaService {
       { mfa_totp_secret: this.encrypt(secret), mfa_totp_enabled: true },
     );
     await this.redis.del(`${SETUP_PREFIX}${userId}`);
-    await this.authService.revokeOtherSessions(userId, currentSessionId, 'mfa_enabled');
+    await this.authService.revokeOtherSessions(
+      userId,
+      currentSessionId,
+      'mfa_enabled',
+    );
     void this.audit.record({
       event: 'ADMIN_MFA_ENABLED',
       userId,
@@ -213,7 +225,11 @@ export class MfaService {
       { id: userId },
       { mfa_totp_secret: null, mfa_totp_enabled: false },
     );
-    await this.authService.revokeOtherSessions(userId, currentSessionId, 'mfa_disabled');
+    await this.authService.revokeOtherSessions(
+      userId,
+      currentSessionId,
+      'mfa_disabled',
+    );
     void this.audit.record({
       event: 'ADMIN_MFA_DISABLED',
       userId,
@@ -238,7 +254,9 @@ export class MfaService {
   ) {
     const key = this.challengeKey(challenge);
     const userIdText = await this.redis.get(key);
-    if (!userIdText) throw new UnauthorizedException('MFA challenge has expired.');
+    if (!userIdText) {
+      throw new UnauthorizedException('MFA challenge has expired.');
+    }
 
     const attempts = await this.redis.incrWithExpire(
       this.attemptsKey(challenge),
@@ -254,7 +272,12 @@ export class MfaService {
       where: { id: userId, role: Role.ADMIN },
       select: ['id', 'mfa_totp_secret', 'mfa_totp_enabled', 'is_blocked'],
     });
-    if (!user || user.is_blocked || !user.mfa_totp_enabled || !user.mfa_totp_secret) {
+    if (
+      !user ||
+      user.is_blocked ||
+      !user.mfa_totp_enabled ||
+      !user.mfa_totp_secret
+    ) {
       await this.redis.del(key);
       throw new UnauthorizedException('MFA challenge is invalid.');
     }
