@@ -9,6 +9,7 @@ import {
   Post,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { CookieOptions, Request, Response } from 'express';
@@ -16,7 +17,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { SecurityConfigService } from '../common/security/security-config.service';
 import { Role } from '../common/types/role.enum';
-import { JwtTokens, AuthResponse } from '../common/types/jwt-tokens.type';
+import { AuthResponse, JwtTokens } from '../common/types/jwt-tokens.type';
 import { User } from '../users/entities/user.entity';
 import { AuthService } from './auth.service';
 import { MfaDisableDto, MfaLoginVerifyDto, MfaTotpCodeDto } from './dto/mfa-totp.dto';
@@ -100,6 +101,14 @@ export class AuthController {
     return typeof token === 'string' ? token : null;
   }
 
+  private getCurrentSessionId(req: Request): string {
+    const sessionId = this.authService.getSessionIdFromToken(
+      req.headers.authorization,
+    );
+    if (!sessionId) throw new UnauthorizedException('Invalid access token.');
+    return sessionId;
+  }
+
   private isJwtTokens(value: unknown): value is JwtTokens {
     if (typeof value !== 'object' || value === null) return false;
     const tokens = value as Partial<Record<keyof JwtTokens, unknown>>;
@@ -179,25 +188,26 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Post('mfa/totp/enable')
-  async enableMfa(@Body() dto: MfaTotpCodeDto, @Req() req: Request) {
+  enableMfa(@Body() dto: MfaTotpCodeDto, @Req() req: Request) {
     const user = req.user as User;
-    const sessionId = this.authService.getSessionIdFromToken(
-      req.headers.authorization,
+    return this.mfaService.enable(
+      +user.id,
+      dto.code,
+      this.getCurrentSessionId(req),
     );
-    if (!sessionId) return this.authService.validateSession(+user.id, undefined, 'ACCESS' as never);
-    return this.mfaService.enable(+user.id, dto.code, sessionId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Post('mfa/totp/disable')
-  async disableMfa(@Body() dto: MfaDisableDto, @Req() req: Request) {
+  disableMfa(@Body() dto: MfaDisableDto, @Req() req: Request) {
     const user = req.user as User;
-    const sessionId = this.authService.getSessionIdFromToken(
-      req.headers.authorization,
+    return this.mfaService.disable(
+      +user.id,
+      dto.password,
+      dto.code,
+      this.getCurrentSessionId(req),
     );
-    if (!sessionId) return this.authService.validateSession(+user.id, undefined, 'ACCESS' as never);
-    return this.mfaService.disable(+user.id, dto.password, dto.code, sessionId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -273,7 +283,9 @@ export class AuthController {
     @Req() req: Request,
     @Body() dto: RegistrationRequestDto,
   ) {
-    await this.publicVerificationRateLimitService.consume(this.getRequestIp(req));
+    await this.publicVerificationRateLimitService.consume(
+      this.getRequestIp(req),
+    );
     return this.registrationService.request(dto.email, dto.password);
   }
 
@@ -282,7 +294,9 @@ export class AuthController {
     @Req() req: Request,
     @Body() dto: RegistrationResendDto,
   ) {
-    await this.publicVerificationRateLimitService.consume(this.getRequestIp(req));
+    await this.publicVerificationRateLimitService.consume(
+      this.getRequestIp(req),
+    );
     return this.registrationService.resend(dto.email);
   }
 
@@ -300,7 +314,9 @@ export class AuthController {
     @Req() req: Request,
     @Body() dto: PasswordResetRequestDto,
   ) {
-    await this.publicVerificationRateLimitService.consume(this.getRequestIp(req));
+    await this.publicVerificationRateLimitService.consume(
+      this.getRequestIp(req),
+    );
     return this.passwordResetService.request(dto.email);
   }
 
