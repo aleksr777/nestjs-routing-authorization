@@ -276,7 +276,7 @@ describe('authentication security primitives', () => {
       return { dataSource, queryRunner, managerUpdate };
     };
 
-    it('atomically changes the password, revokes all sessions, and requires a fresh login', async () => {
+    it('atomically changes the password and revokes old sessions before the controller signs in', async () => {
       const users = {} as Repository<User>;
       const revokeAllSessions = jest.fn().mockResolvedValue(undefined);
       const login = jest.fn();
@@ -324,7 +324,7 @@ describe('authentication security primitives', () => {
       await expect(
         service.confirm('123456', 'new-password-123', ' ADMIN@example.com '),
       ).resolves.toEqual({
-        message: 'Password reset successfully. Please sign in.',
+        message: 'Password reset successfully.',
       });
 
       expect(consumeResetCode).toHaveBeenCalledWith(7, '123456');

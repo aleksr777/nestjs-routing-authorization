@@ -228,7 +228,7 @@ export class PasswordResetService {
         .catch(() => undefined);
 
       return {
-        message: 'Password reset successfully. Please sign in.',
+        message: 'Password reset successfully.',
       };
     } catch (err: unknown) {
       if (qr.isTransactionActive) await qr.rollbackTransaction();

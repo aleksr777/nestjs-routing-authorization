@@ -37,7 +37,9 @@ Every login creates a persistent server-side authentication session. Access and 
 
 Only a SHA-256 hash of the current refresh token is stored in the session row. Refresh rotation is performed while holding a pessimistic database lock on that session. If an older refresh token is replayed, only the affected session/token family is revoked with the `refresh_reuse` reason, so unrelated devices remain signed in.
 
-Normal login can create multiple device sessions. Security-sensitive credential changes use the stricter reauthentication path, which revokes existing sessions before issuing replacement credentials.
+Normal login can create multiple device sessions. An authenticated email or password change (including password reset from account settings) preserves the session performing the change and revokes the user's other sessions in the same database transaction as the credential update. The current refresh cookie remains valid.
+
+Public password recovery revokes all old sessions in the password-update transaction. After successful verification, the recovery endpoint creates a new session, sets its HttpOnly refresh cookie, and returns an access token so the frontend can continue directly to the profile. Blocked accounts cannot use recovery to sign in. Registration confirmation likewise returns authentication credentials for immediate access to the profile.
 
 Authenticated session-management endpoints are:
 

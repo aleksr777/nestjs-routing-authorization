@@ -250,7 +250,11 @@ export class AuthController {
     @Body() dto: PasswordResetConfirmDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    await this.passwordResetService.confirm(dto.code, dto.new_password, dto.email);
+    await this.passwordResetService.confirm(
+      dto.code,
+      dto.new_password,
+      dto.email,
+    );
     const user = await this.authService.validateUserByEmailAndPassword(
       dto.email,
       dto.new_password,

@@ -1,4 +1,8 @@
-import { HttpException, ValidationPipe } from '@nestjs/common';
+import {
+  HttpException,
+  UnauthorizedException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
@@ -67,6 +71,9 @@ describe('AuthController (e2e)', () => {
 
   const authService = {
     refreshJwtTokens: jest.fn(),
+    validateUserByEmailAndPassword: jest.fn(),
+    isUserBlocked: jest.fn(),
+    loginNewSession: jest.fn(),
   };
   const registrationService = {
     request: jest.fn(),
@@ -85,6 +92,14 @@ describe('AuthController (e2e)', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    for (const service of [
+      authService,
+      registrationService,
+      passwordResetService,
+      publicVerificationRateLimitService,
+    ]) {
+      for (const mock of Object.values(service)) mock.mockReset();
+    }
     envValues.clear();
     envValues.set('FRONTEND_URL', FRONTEND_ORIGIN);
     envValues.set('REFRESH_COOKIE_SECURE', 'false');
@@ -251,5 +266,105 @@ describe('AuthController (e2e)', () => {
       .expect(400);
 
     expect(registrationService.request).not.toHaveBeenCalled();
+  });
+
+  it('returns access credentials and an HttpOnly refresh cookie after registration', async () => {
+    registrationService.confirm.mockResolvedValue(refreshTokens);
+    const response = await request(getServer())
+      .post('/api/auth/registration/confirm')
+      .send({ code: '123456', email: 'user@example.com' })
+      .expect(201);
+
+    expect(response.body as AuthResponseBody).toEqual({
+      access_token: refreshTokens.access_token,
+      access_token_expires: refreshTokens.access_token_expires,
+    });
+    expect(response.headers['set-cookie']?.[0]).toContain('HttpOnly');
+    expect(response.headers['set-cookie']?.[0]).toContain(
+      'refresh_token=new-refresh-token',
+    );
+  });
+
+  it('authenticates a successful recovery and replaces the old refresh cookie', async () => {
+    passwordResetService.confirm.mockResolvedValue({
+      message: 'Password reset.',
+    });
+    authService.validateUserByEmailAndPassword.mockResolvedValue({
+      id: 7,
+      is_blocked: false,
+    });
+    authService.loginNewSession.mockResolvedValue(refreshTokens);
+    const response = await request(getServer())
+      .post('/api/auth/password-reset/confirm')
+      .set('User-Agent', 'recovery-test')
+      .set('Cookie', ['refresh_token=old-refresh-token'])
+      .send({
+        code: '123456',
+        email: 'user@example.com',
+        new_password: 'new-password123',
+      })
+      .expect(201);
+
+    expect(passwordResetService.confirm).toHaveBeenCalledWith(
+      '123456',
+      'new-password123',
+      'user@example.com',
+    );
+    expect(authService.loginNewSession).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ userAgent: 'recovery-test' }),
+    );
+    expect(response.body as AuthResponseBody).toEqual({
+      access_token: refreshTokens.access_token,
+      access_token_expires: refreshTokens.access_token_expires,
+    });
+    expect(response.headers['set-cookie']?.[0]).toContain(
+      'refresh_token=new-refresh-token',
+    );
+    expect(response.headers['set-cookie']?.[0]).toContain('HttpOnly');
+  });
+
+  it('does not issue credentials when a recovery code is rejected', async () => {
+    passwordResetService.confirm.mockRejectedValue(
+      new UnauthorizedException('Invalid code'),
+    );
+    const response = await request(getServer())
+      .post('/api/auth/password-reset/confirm')
+      .send({
+        code: '654321',
+        email: 'user@example.com',
+        new_password: 'new-password123',
+      })
+      .expect(401);
+
+    expect(authService.loginNewSession).not.toHaveBeenCalled();
+    expect(response.headers['set-cookie']).toBeUndefined();
+    expect(
+      (response.body as Partial<AuthResponseBody>).access_token,
+    ).toBeUndefined();
+  });
+
+  it('does not authenticate a blocked account after recovery', async () => {
+    passwordResetService.confirm.mockResolvedValue({
+      message: 'Password reset.',
+    });
+    authService.validateUserByEmailAndPassword.mockResolvedValue({
+      id: 7,
+      is_blocked: true,
+    });
+    authService.isUserBlocked.mockImplementation(() => {
+      throw new HttpException('Blocked', 403);
+    });
+    const response = await request(getServer())
+      .post('/api/auth/password-reset/confirm')
+      .send({
+        code: '123456',
+        email: 'user@example.com',
+        new_password: 'new-password123',
+      })
+      .expect(403);
+
+    expect(authService.loginNewSession).not.toHaveBeenCalled();
+    expect(response.headers['set-cookie']).toBeUndefined();
   });
 });
