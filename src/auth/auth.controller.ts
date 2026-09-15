@@ -246,15 +246,24 @@ export class AuthController {
 
   @Post('password-reset/confirm')
   async resetPassword(
+    @Req() req: Request,
     @Body() dto: PasswordResetConfirmDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.passwordResetService.confirm(
+    await this.passwordResetService.confirm(
       dto.code,
       dto.new_password,
       dto.email,
     );
-    this.clearRefreshCookie(res);
-    return result;
+    const user = await this.authService.validateUserByEmailAndPassword(
+      dto.email,
+      dto.new_password,
+    );
+    this.authService.isUserBlocked(user);
+    const tokens = await this.authService.loginNewSession(
+      user.id,
+      this.getSessionContext(req),
+    );
+    return this.handleAuthResult(res, tokens);
   }
 }

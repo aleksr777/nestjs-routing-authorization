@@ -132,6 +132,8 @@ Each login creates an `AuthSession` containing session metadata, refresh-token h
 
 Session creation is serialized for the same user with a database row lock so concurrent logins cannot bypass `SESSION_MAX_ACTIVE`. When the limit is exceeded, the oldest sessions are revoked before the new session is committed.
 
+Email/password changes from account settings preserve the current session and revoke the user's other sessions. Public password recovery revokes all old sessions and returns a new access token plus an HttpOnly refresh cookie for automatic sign-in. Registration confirmation also returns authentication credentials. The frontend sends successful registration, recovery, and account changes to `/users/me`.
+
 Session activity is buffered through Redis and periodically persisted to PostgreSQL. If Redis activity lookup is unavailable, persisted timestamps remain the fallback for session-list responses.
 
 Revoked and long-expired sessions are removed by scheduled retention cleanup.
@@ -174,3 +176,5 @@ e2e tests
 ```
 
 A change should not be deployed when the current commit has a failing security/audit/migration/build/test check.
+
+The credential/session integration suite uses a real PostgreSQL database and creates a uniquely named, temporary schema. CI sets `TEST_DATABASE_URL` and always runs this suite. To run it locally, point `TEST_DATABASE_URL` at a disposable PostgreSQL test database and run `npm run test:e2e -- --runInBand`. Without this variable, the database suite is skipped; the HTTP contract suite still runs. Mail delivery and short-lived verification-code storage are mocked in these tests, while credential updates, session persistence, revocation, and refresh-token validation use the real services and database.

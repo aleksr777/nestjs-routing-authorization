@@ -19,6 +19,7 @@ import { TokenType } from '../common/types/token-type.type';
 type PasswordUpdateOptions = {
   revokeReason: string;
   tokenType: TokenType;
+  currentSessionId: string;
   consumeCode: () => Promise<number | null>;
 };
 
@@ -119,7 +120,12 @@ export class PasswordChangeService {
     }
   }
 
-  async confirmReset(userId: number, code: string, newPassword: string) {
+  async confirmReset(
+    userId: number,
+    code: string,
+    newPassword: string,
+    currentSessionId: string,
+  ) {
     const attemptSubject = userId.toString();
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.CURRENT_USER_PASSWORD_RESET,
@@ -141,6 +147,7 @@ export class PasswordChangeService {
     const result = await this.updatePassword(userId, newPassword, {
       revokeReason: 'password_reset',
       tokenType: TokenType.CURRENT_USER_PASSWORD_RESET,
+      currentSessionId,
       consumeCode: () =>
         this.tokensService.consumeCurrentUserPasswordResetCode(userId, code),
     });
@@ -153,7 +160,12 @@ export class PasswordChangeService {
     return result;
   }
 
-  async confirm(userId: number, code: string, newPassword: string) {
+  async confirm(
+    userId: number,
+    code: string,
+    newPassword: string,
+    currentSessionId: string,
+  ) {
     const attemptSubject = userId.toString();
     await this.tokensService.assertVerificationAttemptsAvailable(
       TokenType.PASSWORD_CHANGE,
@@ -172,6 +184,7 @@ export class PasswordChangeService {
     const result = await this.updatePassword(userId, newPassword, {
       revokeReason: 'password_changed',
       tokenType: TokenType.PASSWORD_CHANGE,
+      currentSessionId,
       consumeCode: () =>
         this.tokensService.consumePasswordChangeCode(userId, code),
     });
@@ -205,13 +218,14 @@ export class PasswordChangeService {
 
       const hash = await this.hashService.hash(newPassword);
       await qr.manager.update(User, { id: userId }, { password: hash });
-      await this.authService.revokeAllSessions(
+      await this.authService.revokeOtherSessions(
         userId,
+        options.currentSessionId,
         options.revokeReason,
         qr.manager,
       );
       await qr.commitTransaction();
-      return { message: 'Password changed successfully. Please sign in.' };
+      return { message: 'Password changed successfully.' };
     } catch (err) {
       if (qr.isTransactionActive) await qr.rollbackTransaction();
       if (err instanceof HttpException) throw err;

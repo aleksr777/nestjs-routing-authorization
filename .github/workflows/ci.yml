@@ -48,6 +48,7 @@ jobs:
       DB_PASSWORD: postgres
       DB_SSL: false
       DB_SSL_REJECT_UNAUTHORIZED: true
+      TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/app_test
       INITIAL_ADMIN_EMAIL: admin@example.com
       INITIAL_ADMIN_PASSWORD: ReleaseAuditPassword123!
       INITIAL_ADMIN_NICKNAME: admin

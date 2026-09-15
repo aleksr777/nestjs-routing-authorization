@@ -25,6 +25,8 @@ import { User } from './entities/user.entity';
 import { PasswordChangeService } from './password-change.service';
 import { UsersService } from './users.service';
 
+type AuthenticatedRequest = Request & { authSessionId?: string };
+
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
@@ -41,6 +43,12 @@ export class UsersController {
       ipAddress: req.ip || req.socket.remoteAddress || null,
       userAgent: req.get('user-agent') ?? null,
     };
+  }
+
+  private currentSessionId(req: Request): string {
+    const sessionId = (req as AuthenticatedRequest).authSessionId;
+    if (!sessionId) throw new Error('Authenticated session id is missing.');
+    return sessionId;
   }
 
   @Get('me')
@@ -90,11 +98,13 @@ export class UsersController {
   async confirmUpdateEmail(
     @Body() dto: EmailChangeConfirmDto,
     @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
-    const result = await this.emailChangeService.confirm(+user.id, dto);
-    clearRefreshCookie(res, this.securityConfig);
+    const result = await this.emailChangeService.confirm(
+      +user.id,
+      dto,
+      this.currentSessionId(req),
+    );
     void this.audit.record({
       event: 'EMAIL_CHANGED',
       userId: +user.id,
@@ -113,15 +123,14 @@ export class UsersController {
   async changePasswordByToken(
     @Body() dto: PasswordChangeByTokenDto,
     @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
     const result = await this.passwordChangeService.confirm(
       +user.id,
       dto.code,
       dto.new_password,
+      this.currentSessionId(req),
     );
-    clearRefreshCookie(res, this.securityConfig);
     void this.audit.record({
       event: 'PASSWORD_CHANGED',
       userId: +user.id,
@@ -140,15 +149,14 @@ export class UsersController {
   async confirmCurrentUserPasswordReset(
     @Body() dto: PasswordChangeByTokenDto,
     @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
     const result = await this.passwordChangeService.confirmReset(
       +user.id,
       dto.code,
       dto.new_password,
+      this.currentSessionId(req),
     );
-    clearRefreshCookie(res, this.securityConfig);
     void this.audit.record({
       event: 'PASSWORD_RESET',
       userId: +user.id,
