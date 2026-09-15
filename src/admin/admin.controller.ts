@@ -65,7 +65,8 @@ export class AdminController {
     @Req() req: Request,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    const sessions = await this.adminService.getUserSessions(id);
+    await this.adminService.getUserById(id);
+    const sessions = await this.authService.getSessions(id, null);
     this.record(req, 'ADMIN_USER_SESSIONS_VIEWED', id);
     return { sessions };
   }
@@ -76,7 +77,8 @@ export class AdminController {
     @Param('id', ParseIntPipe) id: number,
     @Param('sessionId', new ParseUUIDPipe()) sessionId: string,
   ) {
-    await this.adminService.revokeUserSession(id, sessionId);
+    await this.adminService.getUserById(id);
+    await this.authService.revokeSession(id, sessionId, 'admin_revoked');
     this.record(req, 'ADMIN_USER_SESSION_REVOKED', id, {
       target_session_id: sessionId,
     });
@@ -88,7 +90,8 @@ export class AdminController {
     @Req() req: Request,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    await this.adminService.revokeAllUserSessions(id);
+    await this.adminService.getUserById(id);
+    await this.authService.revokeAllSessions(id, 'admin_revoked_all');
     this.record(req, 'ADMIN_USER_SESSIONS_REVOKED_ALL', id);
     return { message: 'All user sessions terminated successfully.' };
   }
