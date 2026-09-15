@@ -16,7 +16,8 @@ The backend uses a server-side session model instead of relying on JWT validity 
 - reuse of an old refresh token revokes the affected session;
 - logout and remote session revocation take effect for access tokens because every protected request validates the server-side session;
 - the access token is not maintained in a Redis blacklist;
-- active sessions can be listed and individually revoked;
+- account owners can list and individually revoke their active sessions;
+- administrators can inspect and revoke active sessions of managed users;
 - a configurable maximum number of active sessions is enforced transactionally per user.
 
 Authentication and authorization are enforced by backend guards. Frontend route guards are a UX layer, not the authorization boundary.
@@ -134,6 +135,16 @@ Session creation is serialized for the same user with a database row lock so con
 
 Email/password changes from account settings preserve the current session and revoke the user's other sessions. Public password recovery revokes all old sessions and returns a new access token plus an HttpOnly refresh cookie for automatic sign-in. Registration confirmation also returns authentication credentials. The frontend sends successful registration, recovery, and account changes to `/users/me`.
 
+Authenticated users can inspect their own active sessions through `GET /api/auth/sessions` and revoke a session through `DELETE /api/auth/sessions/:sessionId`.
+
+Administrators can inspect and manage sessions for users available through User management:
+
+- `GET /api/admin/users/:id/sessions` — list the user's active sessions;
+- `DELETE /api/admin/users/:id/sessions/:sessionId` — revoke one session;
+- `DELETE /api/admin/users/:id/sessions` — revoke all active sessions for the user.
+
+These administrator endpoints remain behind `JwtAuthGuard`, `RolesGuard`, and `Role.ADMIN`. Administrative session viewing and revocation are written to the security audit log.
+
 Session activity is buffered through Redis and periodically persisted to PostgreSQL. If Redis activity lookup is unavailable, persisted timestamps remain the fallback for session-list responses.
 
 Revoked and long-expired sessions are removed by scheduled retention cleanup.
@@ -154,7 +165,7 @@ Redis connection failures are logged and the client uses reconnection logic. Rea
 
 ## Security audit logging
 
-Security events are stored in PostgreSQL separately from ordinary request logs. Examples include session creation/revocation, refresh-token reuse, failed login, password/email changes, and administrator user-management actions.
+Security events are stored in PostgreSQL separately from ordinary request logs. Examples include session creation/revocation, refresh-token reuse, failed login, password/email changes, administrator user-management actions, and administrator session inspection/revocation.
 
 Audit-write failure is logged but does not interrupt the authentication operation itself. Old audit records are removed according to `AUDIT_RETENTION_DAYS`.
 
