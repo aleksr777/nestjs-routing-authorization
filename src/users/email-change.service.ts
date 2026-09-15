@@ -221,7 +221,11 @@ export class EmailChangeService {
     }
   }
 
-  async confirm(currentUserId: number, dto: EmailChangeConfirmDto) {
+  async confirm(
+    currentUserId: number,
+    dto: EmailChangeConfirmDto,
+    currentSessionId: string,
+  ) {
     await this.assertNotLocked(currentUserId);
 
     const attemptSubject = currentUserId.toString();
@@ -278,8 +282,9 @@ export class EmailChangeService {
 
       user.email = newEmail;
       await qr.manager.save(User, user);
-      await this.authService.revokeAllSessions(
+      await this.authService.revokeOtherSessions(
         user.id,
+        currentSessionId,
         'email_changed',
         qr.manager,
       );
@@ -291,7 +296,7 @@ export class EmailChangeService {
       await this.redisService
         .del(this.getLockoutKey(currentUserId))
         .catch(() => undefined);
-      return { message: 'Email changed successfully. Please sign in.' };
+      return { message: 'Email changed successfully.' };
     } catch (err) {
       if (qr.isTransactionActive) await qr.rollbackTransaction();
       if (err instanceof HttpException) {
