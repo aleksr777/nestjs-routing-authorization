@@ -6,6 +6,8 @@ import {
   UnauthorizedException,
   BadRequestException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { QueryFailedError, EntityNotFoundError } from 'typeorm';
 import { ErrMsg } from './error-messages.type';
@@ -31,14 +33,14 @@ export class ErrorsService {
         return ErrMsg.INVALID_REFRESH_TOKEN;
       case TokenType.REGISTRATION:
         return ErrMsg.INVALID_REGISTRATION_CODE;
-      case TokenType.RESET:
-        return ErrMsg.INVALID_RESET_CODE;
+      case TokenType.PASSWORD_RESET:
+        return ErrMsg.INVALID_PASSWORD_RESET_CODE;
+      case TokenType.CURRENT_USER_PASSWORD_RESET:
+        return ErrMsg.INVALID_CURRENT_USER_PASSWORD_RESET_CODE;
       case TokenType.EMAIL_CHANGE:
         return ErrMsg.INVALID_EMAIL_CHANGE_CODE;
       case TokenType.PASSWORD_CHANGE:
         return ErrMsg.INVALID_PASSWORD_CHANGE_CODE;
-      case TokenType.ADMIN_TRANSFER:
-        return ErrMsg.INVALID_ADMIN_TRANSFER_CODE;
       default:
         return ErrMsg.INVALID_TOKEN;
     }
@@ -50,10 +52,10 @@ export class ErrorsService {
         return ErrMsg.ACCESS_TOKEN_NOT_DEFINED;
       case TokenType.REFRESH:
         return ErrMsg.REFRESH_TOKEN_NOT_DEFINED;
-      case TokenType.ADMIN_TRANSFER:
-        return ErrMsg.ADMIN_TRANSFER_CODE_NOT_DEFINED;
-      case TokenType.RESET:
-        return ErrMsg.RESET_CODE_NOT_DEFINED;
+      case TokenType.PASSWORD_RESET:
+        return ErrMsg.PASSWORD_RESET_CODE_NOT_DEFINED;
+      case TokenType.CURRENT_USER_PASSWORD_RESET:
+        return ErrMsg.CURRENT_USER_PASSWORD_RESET_CODE_NOT_DEFINED;
       case TokenType.REGISTRATION:
         return ErrMsg.REGISTRATION_CODE_NOT_DEFINED;
       case TokenType.EMAIL_CHANGE:
@@ -87,6 +89,17 @@ export class ErrorsService {
     throw new ConflictException(msg);
   }
 
+  tooManyRequests(message: string, retryAfter: number, locked = false): never {
+    throw new HttpException(
+      {
+        message,
+        retry_after: Math.max(1, Math.ceil(retryAfter)),
+        ...(locked ? { locked: true } : {}),
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
   userConflict(err: unknown, fields?: string[]) {
     if (this.isUniqueError(err)) {
       if (fields && fields.length > 0) {
@@ -113,6 +126,23 @@ export class ErrorsService {
   tokenNotDefined(tokenType?: TokenType): never {
     const errMessage = this.getTokenNotDefinedMessage(tokenType);
     throw new UnauthorizedException(errMessage);
+  }
+
+  invalidTokenWithAttempts(
+    tokenType: TokenType,
+    attemptsRemaining: number,
+    retryAfter?: number,
+  ): never {
+    throw new UnauthorizedException({
+      message: this.getInvalidTokenMessage(tokenType),
+      attempts_remaining: Math.max(0, attemptsRemaining),
+      ...(retryAfter !== undefined
+        ? {
+            retry_after: Math.max(1, Math.ceil(retryAfter)),
+            locked: true,
+          }
+        : {}),
+    });
   }
 
   invalidToken(err: unknown, tokenType?: TokenType): never {
@@ -148,10 +178,6 @@ export class ErrorsService {
     if (!isPasswordValid) {
       throw new UnauthorizedException(ErrMsg.INVALID_EMAIL_OR_PASSWORD);
     }
-  }
-
-  jwtTokenBlacklisted(): never {
-    throw new UnauthorizedException(ErrMsg.ACCESS_TOKEN_IS_BLACKLISTED);
   }
 
   resetPassword(err: unknown): never {

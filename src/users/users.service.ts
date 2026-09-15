@@ -1,14 +1,15 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Not } from 'typeorm';
-import { TokensService } from '../auth/tokens.service';
+import { DataSource, Not, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
+import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { User } from './entities/user.entity';
 import { UpdatePartialUserDataDto } from './dto/update-partial-user-data.dto';
 import {
   ID,
   ROLE,
+  PASSWORD,
   USER_PUBLIC_FIELDS,
   USER_PROFILE_FIELDS,
   USER_SECRET_FIELDS,
@@ -16,7 +17,6 @@ import {
   SPECIAL_UPDATE_FIELDS,
   USER_UNIQUE_FIELDS,
 } from '../common/constants/user-select-fields.constants';
-import { TokenType } from '../common/types/token-type.type';
 import { specialUpdateFields } from '../common/types/special-update-fields.type';
 import { userUniqueFields } from '../common/types/user-unique-fields.type';
 import { Role } from '../common/types/role.enum';
@@ -29,8 +29,8 @@ export class UsersService {
     private readonly dataSource: DataSource,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    private readonly tokensService: TokensService,
     private readonly authService: AuthService,
+    private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
   ) {}
 
@@ -48,26 +48,27 @@ export class UsersService {
       this.errorsService.default(err);
     }
   }
-  async deleteCurrentUser(userId: number, access_token: string | undefined) {
-    if (!access_token) {
-      this.errorsService.tokenNotDefined(TokenType.ACCESS);
-    }
+
+  async deleteCurrentUser(userId: number, password: string) {
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
     try {
       const user = await qr.manager.findOneOrFail(User, {
         where: { id: userId },
-        select: [ID, ROLE],
+        select: [ID, ROLE, PASSWORD],
       });
       if (user.role === Role.ADMIN) {
         this.errorsService.badRequest(ErrMsg.ADMINISTRATOR_CANNOT_BE_DELETED);
       }
-      await qr.manager.delete(User, { id: userId });
-      await this.tokensService.addJwtTokenToBlacklist(
-        access_token,
-        TokenType.ACCESS,
+      const isPasswordValid = await this.hashService.compare(
+        password,
+        user.password,
       );
+      if (!isPasswordValid) {
+        this.errorsService.badRequest(ErrMsg.CURRENT_PASSWORD_IS_INCORRECT);
+      }
+      await qr.manager.delete(User, { id: userId });
       await qr.commitTransaction();
     } catch (err: unknown) {
       await qr.rollbackTransaction();
@@ -110,13 +111,17 @@ export class UsersService {
     const specialFields: string[] = [];
     const emptyFields: string[] = [];
     const conflictsFields: string[] = [];
-    const patch = dto as Record<string, unknown>;
-    if (!dto || Object.keys(dto).length === 0) {
+    const patch = Object.fromEntries(
+      Object.entries(dto).filter(([, value]) => value !== undefined),
+    ) as Record<string, unknown>;
+    if (Object.keys(patch).length === 0) {
       this.errorsService.badRequest(ErrMsg.NO_FIELDS_FOR_UPDATE);
     }
-    for (const key of Object.keys(dto)) {
-      const v = patch[key];
-      if (!v) {
+    for (const [key, value] of Object.entries(patch)) {
+      if (
+        value === null ||
+        (typeof value === 'string' && value.trim().length === 0)
+      ) {
         emptyFields.push(key);
       }
       if (SPECIAL_UPDATE_FIELDS.includes(key as specialUpdateFields)) {
@@ -136,11 +141,11 @@ export class UsersService {
     await qr.connect();
     await qr.startTransaction();
     try {
-      for (const key of Object.keys(dto)) {
+      for (const key of Object.keys(patch)) {
         if (USER_UNIQUE_FIELDS.includes(key as userUniqueFields)) {
-          const v = patch[key];
+          const value = patch[key];
           const exists = await qr.manager.getRepository(User).exists({
-            where: { [key]: v, id: Not(userId) },
+            where: { [key]: value, id: Not(userId) },
           });
           if (exists) conflictsFields.push(key);
         }
@@ -148,7 +153,7 @@ export class UsersService {
       const result = await qr.manager
         .createQueryBuilder()
         .update(User)
-        .set(dto)
+        .set(patch)
         .where('id = :id', { id: userId })
         .execute();
       if (result.affected === 0) {

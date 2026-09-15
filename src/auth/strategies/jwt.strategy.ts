@@ -3,18 +3,20 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Request } from 'express';
 import { Injectable } from '@nestjs/common';
 import { EnvService } from '../../common/env-service/env.service';
-import { JwtPayload } from '../../common/types/jwt-payload.type';
+import { JwtPayload } from '../../common/types/jwt-tokens.type';
 import { TokenType } from '../../common/types/token-type.type';
-import { AuthService } from '../../auth/auth.service';
-import { TokensService } from '../tokens.service';
+import { AuthService } from '../auth.service';
+import { SessionRateLimitService } from '../session-rate-limit.service';
 import { ErrorsService } from '../../common/errors-service/errors.service';
+
+type SessionRequest = Request & { authSessionId?: string };
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
-    private readonly envService: EnvService,
+    envService: EnvService,
     private readonly authService: AuthService,
-    private readonly tokensService: TokensService,
+    private readonly sessionRateLimit: SessionRateLimitService,
     private readonly errorsService: ErrorsService,
   ) {
     super({
@@ -26,16 +28,25 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(req: Request, payload: JwtPayload) {
-    const access_token = req.headers.authorization;
-    if (!access_token) {
+    if (!req.headers.authorization) {
       this.errorsService.tokenNotDefined(TokenType.ACCESS);
-    } else {
-      await this.tokensService.isJwtTokenBlacklisted(access_token);
-      const user = await this.authService.validateUserById(+payload.sub);
-      if (user) {
-        this.authService.isUserBlocked(user);
-      }
-      return user;
     }
+
+    const user = await this.authService.validateUserById(+payload.sub);
+    if (!user) return user;
+
+    this.authService.isUserBlocked(user);
+    await this.authService.validateSession(
+      +payload.sub,
+      payload.sid,
+      TokenType.ACCESS,
+    );
+
+    if (typeof payload.sid === 'string') {
+      (req as SessionRequest).authSessionId = payload.sid;
+      await this.sessionRateLimit.consume(payload.sid);
+    }
+
+    return user;
   }
 }

@@ -5,12 +5,14 @@ import { Role } from '../common/types/role.enum';
 
 export class CreateAdminUser1755070000001 implements MigrationInterface {
   public async up(q: QueryRunner): Promise<void> {
-    const email = process.env.ADMIN_EMAIL;
-    const plainPass = process.env.ADMIN_PASSWORD;
-    const baseNickname = process.env.ADMIN_NICKNAME || 'admin';
+    const email = process.env.INITIAL_ADMIN_EMAIL;
+    const plainPass = process.env.INITIAL_ADMIN_PASSWORD;
+    const baseNickname = process.env.INITIAL_ADMIN_NICKNAME || 'admin';
 
     if (!email || !plainPass) {
-      throw new Error('ADMIN_EMAIL or ADMIN_PASSWORD is not defined');
+      throw new Error(
+        'INITIAL_ADMIN_EMAIL or INITIAL_ADMIN_PASSWORD is not defined',
+      );
     }
 
     // Check for existing user
@@ -68,8 +70,8 @@ export class CreateAdminUser1755070000001 implements MigrationInterface {
   }
 
   public async down(q: QueryRunner): Promise<void> {
-    const email = process.env.ADMIN_EMAIL;
-    if (!email) throw new Error('ADMIN_EMAIL is not defined');
+    const email = process.env.INITIAL_ADMIN_EMAIL;
+    if (!email) throw new Error('INITIAL_ADMIN_EMAIL is not defined');
     await q.query(`UPDATE "user" SET role = $1 WHERE email = $2`, [
       Role.USER,
       email,
