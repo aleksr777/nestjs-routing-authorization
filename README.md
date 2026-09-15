@@ -49,7 +49,7 @@ Multi-factor authentication is intentionally not part of this base template. Add
 
 ## Local setup
 
-Copy the example environment file and replace placeholders:
+Copy the example environment file and replace placeholders. `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD` must be set before the first migration because the migration chain creates the initial administrator on a clean database.
 
 ```bash
 cp .env.example .env
@@ -64,7 +64,7 @@ Do not commit `.env` or production secrets.
 
 ## Database migrations
 
-Schema changes are managed through TypeORM migrations. `DB_TYPEORM_SYNC=true` is rejected when `NODE_ENV=production`.
+Schema changes are managed through TypeORM migrations. The migration chain is self-contained and can initialize a clean PostgreSQL database, including the base `user` table. `DB_TYPEORM_SYNC=true` is rejected when `NODE_ENV=production`.
 
 ```bash
 npm run migration:show
@@ -160,15 +160,17 @@ Do not place passwords, JWTs, verification codes, cookie contents, or Authorizat
 
 ## CI
 
-The backend pull-request workflow runs:
+The backend workflow validates pushes to `develop`/`main` and pull requests targeting either branch. It runs:
 
 ```text
 npm ci
 npm audit --omit=dev
+TypeScript unused-symbol check
 ESLint
 build
+migrations against a clean PostgreSQL database
 unit tests
 e2e tests
 ```
 
-A change should not be deployed when the current commit has a failing security/audit/build/test check.
+A change should not be deployed when the current commit has a failing security/audit/migration/build/test check.

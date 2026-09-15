@@ -34,7 +34,7 @@ import { TokenType } from '../common/types/token-type.type';
 import { Role } from '../common/types/role.enum';
 import { JwtTokens } from '../common/types/jwt-tokens.type';
 
-export type SessionContext = {
+type SessionContext = {
   ipAddress?: string | null;
   userAgent?: string | null;
 };

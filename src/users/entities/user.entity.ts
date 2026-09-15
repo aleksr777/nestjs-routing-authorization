@@ -17,6 +17,7 @@ import {
   Min,
   Max,
   IsNumber,
+  MaxLength,
 } from 'class-validator';
 
 @Entity()
@@ -95,7 +96,7 @@ export class User {
 
   @IsNotEmpty()
   @IsString()
-  @Max(20)
+  @MaxLength(20)
   @Column({
     type: 'varchar',
     name: 'role',
@@ -156,9 +157,8 @@ export class User {
   @Min(0)
   @Max(200)
   @Column({
-    type: 'varchar',
+    type: 'smallint',
     name: 'age',
-    length: 200,
     nullable: true,
     default: null,
   })
