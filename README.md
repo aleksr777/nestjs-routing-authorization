@@ -41,6 +41,19 @@ Authentication and authorization are enforced by backend guards. Frontend route 
 
 Multi-factor authentication is intentionally not part of this base template. Add the MFA mechanism and recovery policy appropriate to each application separately.
 
+## Companion frontend authentication contract
+
+The companion `react-routing-authorization` template presents authentication as modal routes. No special modal-specific backend state is required; the existing HTTP contract supports the complete flow:
+
+- `POST /api/auth/login` — email/password authentication;
+- `POST /api/auth/registration/request` — create a pending registration and send a code;
+- `POST /api/auth/registration/resend` — resend the registration code;
+- `POST /api/auth/registration/confirm` — confirm the six-digit code and create an authenticated session;
+- `POST /api/auth/password-reset/request` — send a password-reset code;
+- `POST /api/auth/password-reset/confirm` — validate the code, set the new password, and create a new authenticated session.
+
+The frontend may move between request/code/password steps inside a modal without changing this API. Verification cooldowns, attempt limits, lockouts, session creation, and authorization remain backend-controlled.
+
 ## Requirements
 
 - Node.js 22+
