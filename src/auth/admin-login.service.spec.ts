@@ -102,6 +102,7 @@ describe('administrator email confirmation', () => {
       user.email,
       expect.any(String),
       expect.stringContaining(sentCode),
+      expect.stringContaining(sentCode),
     );
     const stored = read(`admin-login:challenge:${challenge.challenge_id}`)!;
     expect(stored).not.toContain(`:${sentCode}`);

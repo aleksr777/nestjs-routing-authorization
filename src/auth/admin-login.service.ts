@@ -122,10 +122,17 @@ export class AdminLoginService {
         EX: CODE_TTL,
       });
       if (previous) await this.redis.del(this.challengeKey(previous));
+      const text = `Hi, this is an automated message, please do not reply! You can confirm your administrator sign-in by using the code below (within ${CODE_TTL / 60} min): ${code}. If you didn’t request this, you can safely ignore this email.`;
+      const html = `
+        <p style="font-weight: bold; font-size: 17px;">Hi, this is an automated message, please do not reply!</p>
+        <p style="font-weight: bold; font-size: 17px;">You can confirm your administrator sign-in by using the code below (within ${CODE_TTL / 60} min):</p>
+        <p style="font-weight: bold; font-size: 30px;">${code}</p>
+        <p style="font-weight: bold; font-size: 17px;">If you didn’t request this, you can safely ignore this email.</p>`;
       await this.mail.send(
         user.email,
         'Confirm administrator sign-in',
-        `Your administrator sign-in code is ${code}. It expires in 5 minutes. If you did not request this sign-in, do not share the code.`,
+        text,
+        html,
       );
     } catch {
       await this.redis
