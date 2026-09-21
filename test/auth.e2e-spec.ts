@@ -8,6 +8,12 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { Server } from 'node:http';
 import request from 'supertest';
+import { ExecutionContext } from '@nestjs/common';
+import { Request } from 'express';
+import { LocalAuthGuard } from '../src/auth/guards/local-auth.guard';
+import { AdminLoginService } from '../src/auth/admin-login.service';
+import { Role } from '../src/common/types/role.enum';
+import { User } from '../src/users/entities/user.entity';
 import { AuthController } from '../src/auth/auth.controller';
 import { AuthService } from '../src/auth/auth.service';
 import { PasswordResetService } from '../src/auth/password-reset.service';
@@ -84,6 +90,12 @@ describe('AuthController (e2e)', () => {
     request: jest.fn(),
     confirm: jest.fn(),
   };
+  const adminLoginService = {
+    request: jest.fn(),
+    confirm: jest.fn(),
+    resend: jest.fn(),
+  };
+  let loginUser: User;
   const publicVerificationRateLimitService = {
     consume: jest.fn(),
   };
@@ -92,8 +104,15 @@ describe('AuthController (e2e)', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    loginUser = {
+      id: 1,
+      role: Role.ADMIN,
+      email: 'admin@example.test',
+      is_blocked: false,
+    } as User;
     for (const service of [
       authService,
+      adminLoginService,
       registrationService,
       passwordResetService,
       publicVerificationRateLimitService,
@@ -123,6 +142,7 @@ describe('AuthController (e2e)', () => {
         RefreshOriginGuard,
         { provide: EnvService, useValue: envService },
         { provide: AuthService, useValue: authService },
+        { provide: AdminLoginService, useValue: adminLoginService },
         { provide: RegistrationService, useValue: registrationService },
         { provide: PasswordResetService, useValue: passwordResetService },
         {
@@ -131,6 +151,13 @@ describe('AuthController (e2e)', () => {
         },
       ],
     })
+      .overrideGuard(LocalAuthGuard)
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          context.switchToHttp().getRequest<Request>().user = loginUser;
+          return true;
+        },
+      })
       .overrideGuard(RefreshTokenGuard)
       .useValue({
         canActivate: (context: {
@@ -366,5 +393,93 @@ describe('AuthController (e2e)', () => {
 
     expect(authService.loginNewSession).not.toHaveBeenCalled();
     expect(response.headers['set-cookie']).toBeUndefined();
+  });
+  it('does not issue access tokens or a refresh session before admin email confirmation', async () => {
+    const challenge = {
+      admin_confirmation_required: true,
+      challenge_id: 'a'.repeat(64),
+      expires_in: 300,
+      retry_after: 60,
+      max_attempts: 5,
+    };
+    adminLoginService.request.mockResolvedValue(challenge);
+    const response = await request(getServer())
+      .post('/api/auth/login')
+      .send({ email: loginUser.email, password: 'admin-password' })
+      .expect(201);
+    expect(response.body as object).toEqual(challenge);
+    expect(authService.loginNewSession).not.toHaveBeenCalled();
+    expect(response.headers['set-cookie']).toEqual([
+      expect.stringContaining('refresh_token=;'),
+    ]);
+    expect(publicVerificationRateLimitService.consume).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps ordinary password login working without email confirmation', async () => {
+    loginUser.role = Role.USER;
+    authService.loginNewSession.mockResolvedValue(refreshTokens);
+    const response = await request(getServer())
+      .post('/api/auth/login')
+      .send({ email: loginUser.email, password: 'user-password' })
+      .expect(201);
+    expect(response.body as object).toHaveProperty(
+      'access_token',
+      refreshTokens.access_token,
+    );
+    expect(adminLoginService.request).not.toHaveBeenCalled();
+  });
+
+  it('issues an HttpOnly refresh cookie only after a valid admin confirmation', async () => {
+    adminLoginService.confirm.mockResolvedValue(loginUser);
+    authService.loginNewSession.mockResolvedValue(refreshTokens);
+    const response = await request(getServer())
+      .post('/api/auth/login/admin/confirm')
+      .send({ challenge_id: 'a'.repeat(64), code: '123456' })
+      .expect(201);
+    expect(adminLoginService.confirm).toHaveBeenCalledWith(
+      'a'.repeat(64),
+      '123456',
+    );
+    expect(authService.loginNewSession).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ ipAddress: expect.any(String) as string }),
+    );
+    expect(response.body as object).not.toHaveProperty('refresh_token');
+    expect(response.headers['set-cookie'][0]).toContain('HttpOnly');
+  });
+
+  it('rejects invalid codes and malformed confirmation requests without issuing a session', async () => {
+    adminLoginService.confirm.mockRejectedValue(
+      new UnauthorizedException('Incorrect code'),
+    );
+    await request(getServer())
+      .post('/api/auth/login/admin/confirm')
+      .send({ challenge_id: 'a'.repeat(64), code: '000000' })
+      .expect(401);
+    await request(getServer())
+      .post('/api/auth/login/admin/confirm')
+      .send({ challenge_id: 'a'.repeat(64), code: '12345' })
+      .expect(400);
+    await request(getServer())
+      .post('/api/auth/login/admin/confirm')
+      .send({ email: 'admin@example.test', code: '123456' })
+      .expect(400);
+    expect(authService.loginNewSession).not.toHaveBeenCalled();
+  });
+
+  it('requires a pending challenge to resend and applies the public email rate limit', async () => {
+    adminLoginService.resend.mockResolvedValue({
+      challenge_id: 'b'.repeat(64),
+    });
+    await request(getServer())
+      .post('/api/auth/login/admin/resend')
+      .send({ challenge_id: 'a'.repeat(64) })
+      .expect(201);
+    expect(publicVerificationRateLimitService.consume).toHaveBeenCalledTimes(1);
+    expect(adminLoginService.resend).toHaveBeenCalledWith('a'.repeat(64));
+    await request(getServer())
+      .post('/api/auth/login/admin/resend')
+      .send({ email: loginUser.email })
+      .expect(400);
   });
 });

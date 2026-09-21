@@ -39,13 +39,15 @@ Authentication and authorization are enforced by backend guards. Frontend route 
 - health/liveness and dependency-readiness endpoints;
 - scheduled cleanup of stale sessions and old audit events.
 
-Multi-factor authentication is intentionally not part of this base template. Add the MFA mechanism and recovery policy appropriate to each application separately.
+Administrator password login requires an additional one-time email code. Ordinary user login is unchanged. Existing authenticated sessions continue to refresh normally. Public password recovery already verifies an email code before creating a session.
 
 ## Companion frontend authentication contract
 
 The companion `react-routing-authorization` template presents authentication as modal routes. No special modal-specific backend state is required; the existing HTTP contract supports the complete flow:
 
-- `POST /api/auth/login` — email/password authentication;
+- `POST /api/auth/login` — email/password authentication; administrators receive a pending challenge instead of tokens;
+- `POST /api/auth/login/admin/confirm` — submit `{ challenge_id, code }`, consume the challenge, and create the administrator session;
+- `POST /api/auth/login/admin/resend` — submit `{ challenge_id }` to send a new code after the cooldown;
 - `POST /api/auth/registration/request` — create a pending registration and send a code;
 - `POST /api/auth/registration/resend` — resend the registration code;
 - `POST /api/auth/registration/confirm` — confirm the six-digit code and create an authenticated session;
@@ -53,6 +55,18 @@ The companion `react-routing-authorization` template presents authentication as 
 - `POST /api/auth/password-reset/confirm` — validate the code, set the new password, and create a new authenticated session.
 
 The frontend may move between request/code/password steps inside a modal without changing this API. Verification cooldowns, attempt limits, lockouts, session creation, and authorization remain backend-controlled.
+
+## Administrator confirmation
+
+After valid administrator credentials, login returns `admin_confirmation_required: true`, an opaque `challenge_id`, `expires_in: 300`, `retry_after: 60`, `max_attempts: 5`, and a message. No access token or new refresh session is issued at this step. The frontend keeps the challenge only in memory.
+
+The six-digit code expires after 5 minutes. Codes are stored as challenge-bound hashes in Redis, are consumed atomically, and are invalidated by a replacement code. The account has at most 5 verification attempts per 15-minute window; a successful confirmation clears the counter. Resending and repeating password login do not reset this budget. Requests also use the existing IP limits. Confirmation rechecks account role, blocking, email and password changes. SMTP failures invalidate the undelivered challenge and allow retry. No database migration or extra environment variables are needed; existing Redis and SMTP settings are used.
+
+User management keeps the JWT/session and administrator-role guards:
+
+- `PATCH /api/admin/users/block/:id` accepts `{ blocked_reason?: string }` without a password and revokes the user's active sessions;
+- `PATCH /api/admin/users/unblock/:id` requires no body or administrator password;
+- `DELETE /api/admin/users/delete/:id` still requires `{ password }` and verifies it server-side.
 
 ## Requirements
 

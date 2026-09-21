@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { ActivityService } from '../../src/activity/activity.service';
 import { SecurityAuditService } from '../../src/audit/security-audit.service';
+import { AdminLoginService } from '../../src/auth/admin-login.service';
 import { AuthController } from '../../src/auth/auth.controller';
 import { AuthService } from '../../src/auth/auth.service';
 import { AuthSession } from '../../src/auth/entities/auth-session.entity';
@@ -172,6 +173,7 @@ export const createCredentialFixture = async (db: DataSource) => {
     reset,
     {} as PublicVerificationRateLimitService,
     security,
+    new AdminLoginService(users, redis, hash, mail, errors),
   );
   const usersController = new UsersController(
     new UsersService(db, users, auth, hash, errors),
